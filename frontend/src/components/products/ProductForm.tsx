@@ -1,0 +1,604 @@
+import React, { useState } from 'react';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { CURRENT_SWISS_TVA_RATES } from '../../config/swissTaxRates';
+
+interface ProductFormData {
+  name: string;
+  description?: string;
+  unitPrice: number;
+  tvaRate: number;
+  unit: string;
+  isActive: boolean;
+  discountValue?: number;
+  discountType?: 'PERCENT' | 'AMOUNT';
+  discountActive: boolean;
+}
+
+interface ProductFormProps {
+  initialData?: Partial<ProductFormData>;
+  onSubmit: (data: ProductFormData) => void;
+  onCancel?: () => void;
+  loading?: boolean;
+  mode?: 'create' | 'edit';
+  currency?: string;
+}
+
+export function ProductForm({
+  initialData,
+  onSubmit,
+  onCancel,
+  loading = false,
+  mode = 'create',
+  currency = 'CHF'
+}: ProductFormProps) {
+  const [formData, setFormData] = useState<ProductFormData>({
+    name: '',
+    description: '',
+    unitPrice: 0,
+    tvaRate: 8.1, // Default to normal Swiss TVA rate
+    unit: 'piece',
+    isActive: true,
+    discountValue: undefined,
+    discountType: 'PERCENT',
+    discountActive: false,
+    ...initialData
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Keep a string buffer for the unit price input to allow '.' and intermediate values
+  const [unitPriceInput, setUnitPriceInput] = useState<string>(() => {
+    const v = (initialData?.unitPrice ?? 0) as number;
+    return v > 0 ? String(v).replace('.', ',') : '';
+  });
+
+  // String buffer for discount value input
+  const [discountInput, setDiscountInput] = useState<string>(() => {
+    const v = (initialData?.discountValue ?? 0) as number;
+    return v > 0 ? String(v).replace('.', ',') : '';
+  });
+
+  // Common units in French
+  const UNITS = [
+    { value: 'piece', label: 'Pièce' },
+    { value: 'hour', label: 'Heure' },
+    { value: 'day', label: 'Jour' },
+    { value: 'month', label: 'Mois' },
+    { value: 'year', label: 'Année' },
+    { value: 'kg', label: 'Kilogramme' },
+    { value: 'liter', label: 'Litre' },
+    { value: 'meter', label: 'Mètre' },
+    { value: 'service', label: 'Service' },
+    { value: 'license', label: 'Licence' },
+    { value: 'consultation', label: 'Consultation' },
+    { value: 'project', label: 'Projet' }
+  ];
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('fr-CH', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  };
+
+  const updateFormData = (field: keyof ProductFormData, value: ProductFormData[keyof ProductFormData]) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear error when field is updated
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // Smart decimal input handler for Swiss format (accepts both comma and dot) and preserves intermediate typing
+  const handlePriceInput = (value: string) => {
+    // Accept only digits with optional one separator and up to 2 decimals
+    const valid = /^\d*(?:[.,]\d{0,2})?$/.test(value);
+    if (!valid) return;
+    setUnitPriceInput(value);
+    // Update numeric value if there is at least one digit
+    if (/\d/.test(value)) {
+      const normalizedValue = value.replace(',', '.');
+      const numericValue = parseFloat(normalizedValue);
+      if (!Number.isNaN(numericValue)) {
+        updateFormData('unitPrice', numericValue);
+      }
+    } else {
+      // Only separator or empty, keep numeric at 0
+      updateFormData('unitPrice', 0);
+    }
+  };
+
+  // Round to the nearest 0.05 on blur (Swiss 5 cents rule)
+  const handlePriceBlur = () => {
+    const rounded = Math.round(formData.unitPrice * 20) / 20; // 1/20 = 0.05
+    updateFormData('unitPrice', rounded);
+    // Normalize displayed input to two decimals with comma
+    setUnitPriceInput(rounded > 0 ? rounded.toFixed(2).replace('.', ',') : '');
+  };
+
+  // Removed unused formatPriceForDisplay helper
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Le nom du produit est requis';
+    }
+
+    if (formData.unitPrice < 0) {
+      newErrors.unitPrice = 'Le prix unitaire ne peut pas être négatif';
+    }
+
+    if (formData.unitPrice === 0) {
+      newErrors.unitPrice = 'Le prix unitaire doit être supérieur à zéro';
+    }
+
+    // Swiss pricing increments of 0.05 (5 cents)
+    const isMultipleOfFiveCents = Number.isFinite(formData.unitPrice) && Math.round(formData.unitPrice * 20) === formData.unitPrice * 20;
+    if (!newErrors.unitPrice && !isMultipleOfFiveCents) {
+      newErrors.unitPrice = 'Le prix doit être par pas de 0.05 (ex: 10.00, 10.05)';
+    }
+
+    if (!CURRENT_SWISS_TVA_RATES.some(rate => rate.value === formData.tvaRate)) {
+      newErrors.tvaRate = 'Taux de TVA invalide';
+    }
+
+    // Validate discount
+    if (formData.discountActive && formData.discountValue !== undefined) {
+      if (formData.discountValue < 0) {
+        newErrors.discountValue = 'Le rabais ne peut pas être négatif';
+      }
+      
+      if (formData.discountType === 'PERCENT' && formData.discountValue > 100) {
+        newErrors.discountValue = 'Le pourcentage ne peut pas dépasser 100%';
+      }
+      
+      if (formData.discountType === 'AMOUNT' && formData.discountValue > formData.unitPrice) {
+        newErrors.discountValue = 'Le montant du rabais ne peut pas dépasser le prix unitaire';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (validateForm()) {
+      // Filter out extra fields before submitting
+      const cleanData: ProductFormData = {
+        name: formData.name,
+        description: formData.description,
+        unitPrice: formData.unitPrice,
+        tvaRate: formData.tvaRate,
+        unit: formData.unit,
+        isActive: formData.isActive,
+        discountValue: formData.discountValue,
+        discountType: formData.discountType,
+        discountActive: formData.discountActive,
+      };
+      onSubmit(cleanData);
+    }
+  };
+
+  const calculatePriceWithTva = () => {
+    return formData.unitPrice * (1 + formData.tvaRate / 100);
+  };
+
+  const calculateTvaAmount = () => {
+    return formData.unitPrice * (formData.tvaRate / 100);
+  };
+
+  // Discount input handler
+  const handleDiscountInput = (value: string) => {
+    const valid = /^\d*(?:[.,]\d{0,2})?$/.test(value);
+    if (!valid) return;
+    setDiscountInput(value);
+    
+    if (/\d/.test(value)) {
+      const normalizedValue = value.replace(',', '.');
+      const numericValue = parseFloat(normalizedValue);
+      if (!Number.isNaN(numericValue)) {
+        updateFormData('discountValue', numericValue);
+      }
+    } else {
+      updateFormData('discountValue', 0);
+    }
+  };
+
+  const handleDiscountBlur = () => {
+    const rounded = formData.discountValue ? Math.round(formData.discountValue * 100) / 100 : 0;
+    updateFormData('discountValue', rounded);
+    setDiscountInput(rounded > 0 ? rounded.toFixed(2).replace('.', ',') : '');
+  };
+
+  const calculateDiscountedPrice = () => {
+    if (!formData.discountActive || !formData.discountValue) return formData.unitPrice;
+    
+    if (formData.discountType === 'PERCENT') {
+      return formData.unitPrice * (1 - formData.discountValue / 100);
+    } else {
+      return Math.max(0, formData.unitPrice - formData.discountValue);
+    }
+  };
+
+  const calculateDiscountAmount = () => {
+    return formData.unitPrice - calculateDiscountedPrice();
+  };
+
+  const getUnitLabel = (unit: string) => {
+    const unitObj = UNITS.find(u => u.value === unit);
+    return unitObj ? unitObj.label : unit;
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {mode === 'create' ? 'Nouveau produit' : 'Modifier le produit'}
+          </h1>
+          <p className="text-slate-600 mt-1">
+            {mode === 'create' 
+              ? 'Ajoutez un nouveau produit ou service à votre catalogue'
+              : 'Modifiez les informations de votre produit'
+            }
+          </p>
+        </div>
+        
+        <div className="flex space-x-3">
+          {onCancel && (
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Annuler
+            </Button>
+          )}
+          <Button type="submit" variant="primary" isLoading={loading}>
+            <span className="mr-2">💾</span>
+            {mode === 'create' ? 'Créer le produit' : 'Enregistrer'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main form */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Product Information */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Informations du produit
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nom du produit/service *
+                </label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => updateFormData('name', e.target.value)}
+                  placeholder="Consultation en développement web"
+                  error={errors.name}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Description (optionnel)
+                </label>
+                <textarea
+                  value={formData.description || ''}
+                  onChange={(e) => updateFormData('description', e.target.value)}
+                  placeholder="Description détaillée du produit ou service..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Pricing */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Tarification
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Prix unitaire HT *
+                </label>
+                <Input
+                  type="text"
+                  value={unitPriceInput}
+                  onChange={(e) => handlePriceInput(e.target.value)}
+                  onBlur={handlePriceBlur}
+                  placeholder="0,00"
+                  error={errors.unitPrice}
+                  pattern="[0-9]+([,.][0-9]{1,2})?"
+                  inputMode="decimal"
+                  title="Utilisez des pas de 0.05 (ex: 10,00 · 10,05 · 10,10)"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Prix hors taxes en {currency} (pas de 0.05)
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Unité
+                </label>
+                <select
+                  value={formData.unit}
+                  onChange={(e) => updateFormData('unit', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {UNITS.map((unit) => (
+                    <option key={unit.value} value={unit.value}>
+                      {unit.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </Card>
+
+          {/* Tax Settings */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Configuration TVA
+            </h2>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Taux de TVA *
+              </label>
+              <select
+                value={formData.tvaRate}
+                onChange={(e) => updateFormData('tvaRate', parseFloat(e.target.value))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {CURRENT_SWISS_TVA_RATES.map((rate) => (
+                  <option key={rate.value} value={rate.value}>
+                    {rate.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                Taux de TVA applicable selon la législation suisse
+              </p>
+              {errors.tvaRate && (
+                <p className="text-sm text-red-600 mt-1">{errors.tvaRate}</p>
+              )}
+            </div>
+
+            {/* Price breakdown */}
+            {formData.unitPrice > 0 && (
+              <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+                <h4 className="font-medium text-slate-900 mb-2">
+                  Calcul du prix par {getUnitLabel(formData.unit).toLowerCase()}
+                </h4>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Prix HT :</span>
+                    <span className="font-medium">{formatCurrency(formData.unitPrice)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">TVA ({formData.tvaRate}%) :</span>
+                    <span className="font-medium">{formatCurrency(calculateTvaAmount())}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold">
+                    <span>Prix TTC :</span>
+                    <span>{formatCurrency(calculatePriceWithTva())}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* Discount */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              💰 Rabais par défaut
+            </h2>
+            
+            <div className="space-y-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.discountActive}
+                  onChange={(e) => {
+                    updateFormData('discountActive', e.target.checked);
+                    if (!e.target.checked) {
+                      setErrors(prev => ({ ...prev, discountValue: '' }));
+                    }
+                  }}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm font-medium text-slate-700">
+                  Appliquer un rabais par défaut
+                </span>
+              </label>
+              
+              {formData.discountActive && (
+                <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Valeur
+                      </label>
+                      <Input
+                        type="text"
+                        value={discountInput}
+                        onChange={(e) => handleDiscountInput(e.target.value)}
+                        onBlur={handleDiscountBlur}
+                        placeholder="0,00"
+                        error={errors.discountValue}
+                        inputMode="decimal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Type
+                      </label>
+                      <select
+                        value={formData.discountType}
+                        onChange={(e) => updateFormData('discountType', e.target.value as 'PERCENT' | 'AMOUNT')}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="PERCENT">% Pourcentage</option>
+                        <option value="AMOUNT">{currency} Montant</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {formData.unitPrice > 0 && formData.discountValue && formData.discountValue > 0 && (
+                    <div className="p-3 bg-white rounded border border-blue-200">
+                      <p className="text-xs text-slate-600 mb-2">Aperçu du rabais :</p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Prix original :</span>
+                          <span className="font-medium">{formatCurrency(formData.unitPrice)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>Rabais :</span>
+                          <span className="font-medium">-{formatCurrency(calculateDiscountAmount())}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold text-green-600">
+                          <span>Prix après rabais :</span>
+                          <span>{formatCurrency(calculateDiscountedPrice())}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <p className="text-xs text-slate-500">
+                    Ce rabais sera automatiquement appliqué lors de l'ajout du produit à une facture
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Status */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Statut
+            </h2>
+            
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => updateFormData('isActive', e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm text-slate-700">
+                Produit actif
+              </span>
+            </label>
+            <p className="text-xs text-slate-500 mt-1">
+              Les produits inactifs n'apparaissent pas dans les sélecteurs de facture
+            </p>
+          </Card>
+        </div>
+
+        {/* Summary sidebar */}
+        <div className="space-y-6">
+          <Card className="p-6 sticky top-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+              Aperçu
+            </h3>
+            
+            <div className="space-y-4">
+              {/* Product preview */}
+              <div className="p-4 border border-slate-200 rounded-lg">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                    <span className="text-lg">📦</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-900">
+                      {formData.name || 'Nom du produit'}
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      {getUnitLabel(formData.unit)}
+                    </p>
+                  </div>
+                </div>
+                
+                {formData.description && (
+                  <p className="text-sm text-slate-600 mb-3 line-clamp-2">
+                    {formData.description}
+                  </p>
+                )}
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Prix HT :</span>
+                    <span className="font-medium">
+                      {formatCurrency(formData.unitPrice)}
+                    </span>
+                  </div>
+                  
+                  {formData.discountActive && formData.discountValue && formData.discountValue > 0 && (
+                    <>
+                      <div className="flex justify-between text-red-600">
+                        <span>Rabais :</span>
+                        <span className="font-medium">-{formatCurrency(calculateDiscountAmount())}</span>
+                      </div>
+                      <div className="flex justify-between text-green-600 font-medium">
+                        <span>Prix après rabais :</span>
+                        <span>{formatCurrency(calculateDiscountedPrice())}</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">TVA :</span>
+                    <span className="font-medium">
+                      {formData.tvaRate}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold">
+                    <span>Prix TTC :</span>
+                    <span>{formatCurrency(calculatePriceWithTva())}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">Statut :</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  formData.isActive 
+                    ? 'bg-green-100 text-green-600' 
+                    : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {formData.isActive ? 'Actif' : 'Inactif'}
+                </span>
+              </div>
+            </div>
+
+            {/* Tips */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">
+                💡 Conseils
+              </h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• Utilisez des noms descriptifs</li>
+                <li>• Vérifiez le taux de TVA applicable</li>
+                <li>• Ajoutez une description détaillée</li>
+                <li>• Choisissez l'unité appropriée</li>
+              </ul>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </form>
+  );
+}

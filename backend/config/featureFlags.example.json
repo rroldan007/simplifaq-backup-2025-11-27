@@ -1,0 +1,22 @@
+{
+  "newInvoiceSystem": {
+    "enabled": false,
+    "rolloutPercentage": 10,
+    "whitelistedUserIds": ["user1", "user2"]
+  },
+  "newInvoiceTemplates": {
+    "enabled": true,
+    "availableTemplates": ["modern", "corporate", "creative"],
+    "defaultTemplate": "modern"
+  },
+  "usePuppeteerForPdf": {
+    "enabled": false,
+    "fallbackToPdfKit": true
+  },
+  "features": {
+    "invoiceRecurring": true,
+    "invoiceDiscounts": true,
+    "multiCurrency": true,
+    "onlinePayments": false
+  }
+}

@@ -1,0 +1,148 @@
+import { PrismaClient, FrequenceRecurrence } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+/**
+ * Calcule la prochaine date de récurrence en fonction de la fréquence.
+ * @param startDate - La date de début pour le calcul.
+ * @param frequency - La fréquence (MENSUEL, TRIMESTRIEL, SEMESTRIEL).
+ * @returns La prochaine date de récurrence.
+ */
+function calculateNextRecurrence(startDate: Date, frequency: FrequenceRecurrence): Date {
+  const nextDate = new Date(startDate);
+  switch (frequency) {
+    case 'MENSUEL':
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      break;
+    case 'TRIMESTRIEL':
+      nextDate.setMonth(nextDate.getMonth() + 3);
+      break;
+    case 'SEMESTRIEL':
+      nextDate.setMonth(nextDate.getMonth() + 6);
+      break;
+  }
+  return nextDate;
+}
+
+async function processRecurringInvoices() {
+  console.log('Démarrage du processus de vérification des factures récurrentes...');
+
+  const now = new Date();
+
+  const recurringInvoices = await prisma.invoice.findMany({
+    where: {
+      estRecurrente: true,
+      statutRecurrence: 'actif',
+      prochaineDateRecurrence: {
+        lte: now,
+      },
+    },
+    include: {
+      items: true, // Inclure les lignes de la facture pour le clonage
+      client: true, // Inclure les informations du client
+      user: true, // Inclure l'utilisateur pour la numérotation
+    },
+  });
+
+  if (recurringInvoices.length === 0) {
+    console.log('Aucune facture récurrente à traiter aujourd\'tui.');
+    return;
+  }
+
+  console.log(`${recurringInvoices.length} facture(s) récurrente(s) à traiter.`);
+
+  for (const parentInvoice of recurringInvoices) {
+    console.log(`Traitement de la facture parente : ${parentInvoice.invoiceNumber}`);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 1. Obtenir le prochain numéro de facture et incrémenter le compteur de l'utilisateur
+        const user = await tx.user.update({
+          where: { id: parentInvoice.userId },
+          data: { nextInvoiceNumber: { increment: 1 } },
+        });
+
+        const newInvoiceNumber = `${user.invoicePrefix}${String(user.nextInvoiceNumber).padStart(user.invoicePadding, '0')}`;
+        const issueDate = new Date();
+        const dueDate = new Date(issueDate);
+        dueDate.setDate(issueDate.getDate() + parentInvoice.client.paymentTerms);
+
+        // 2. Créer la nouvelle facture (clone)
+        const newInvoice = await tx.invoice.create({
+          data: {
+            userId: parentInvoice.userId,
+            clientId: parentInvoice.clientId,
+            invoiceNumber: newInvoiceNumber,
+            status: 'draft', // ou 'sent' si l'envoi est automatisé
+            issueDate: issueDate,
+            dueDate: dueDate,
+            language: parentInvoice.language,
+            currency: parentInvoice.currency,
+            subtotal: parentInvoice.subtotal,
+            tvaAmount: parentInvoice.tvaAmount,
+            total: parentInvoice.total,
+            notes: parentInvoice.notes,
+            terms: parentInvoice.terms,
+            factureParenteId: parentInvoice.id, // Lier à la facture parente
+            items: {
+              create: parentInvoice.items.map(item => ({
+                productId: item.productId,
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                tvaRate: item.tvaRate,
+                total: item.total,
+                order: item.order,
+              })),
+            },
+          },
+        });
+
+        console.log(`Nouvelle facture créée : ${newInvoice.invoiceNumber}`);
+
+        // 3. Créer la notification pour l'utilisateur
+        await tx.notification.create({
+          data: {
+            userId: parentInvoice.userId,
+            invoiceId: newInvoice.id,
+            message: `La facture récurrente ${newInvoice.invoiceNumber} a été générée.`,
+          },
+        });
+
+        console.log(`Notification créée pour l'utilisateur ${parentInvoice.userId}`);
+
+        // 4. Mettre à jour la facture parente
+        const nextRecurrenceDate = calculateNextRecurrence(parentInvoice.prochaineDateRecurrence!, parentInvoice.frequence!);
+
+        let newStatus = parentInvoice.statutRecurrence;
+        if (parentInvoice.dateFinRecurrence && nextRecurrenceDate > parentInvoice.dateFinRecurrence) {
+          newStatus = 'termine';
+          console.log(`La série de factures ${parentInvoice.invoiceNumber} est terminée.`);
+        }
+
+        await tx.invoice.update({
+          where: { id: parentInvoice.id },
+          data: {
+            prochaineDateRecurrence: nextRecurrenceDate,
+            statutRecurrence: newStatus,
+          },
+        });
+
+        console.log(`Facture parente ${parentInvoice.invoiceNumber} mise à jour.`);
+      });
+    } catch (error) {
+      console.error(`Erreur lors du traitement de la facture ${parentInvoice.invoiceNumber}:`, error);
+      // La transaction est automatiquement annulée en cas d'erreur
+    }
+  }
+}
+
+processRecurringInvoices()
+  .catch((e) => {
+    console.error('Une erreur est survenue lors du traitement des factures récurrentes:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+    console.log('Processus terminé.');
+  });

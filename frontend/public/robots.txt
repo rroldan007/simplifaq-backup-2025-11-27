@@ -1,0 +1,15 @@
+# SimpliFaq - Swiss Invoicing & Business Management Platform
+# https://simplifaq.ch
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /uploads/
+
+# Sitemap
+Sitemap: https://test.simplifaq.ch/sitemap.xml
+
+# Contact
+# For security reports: security@simplifaq.ch
+# For general inquiries: contact@simplifaq.ch

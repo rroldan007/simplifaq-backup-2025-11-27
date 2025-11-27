@@ -1,0 +1,165 @@
+import { Request, Response } from 'express';
+import { prisma } from '../services/database';
+
+// Temporary: cast prisma to any to avoid TS errors if generated client typings
+// haven't picked up new models yet (Account, Expense). Runtime still works
+// because migration created the tables and Prisma client has the methods.
+// Once the dev server picks up regenerated @prisma/client, remove this cast.
+const db: any = prisma as any;
+
+// Ensure a minimal Swiss expense chart of accounts exists for the user
+async function ensureDefaultAccounts(userId: string) {
+  const count = await db.account.count({ where: { userId } });
+  if (count > 0) return;
+  const defaults = [
+    { code: '1300', name: "Charges payées d'avance", type: 'EXPENSE' },
+    { code: '2300', name: 'Charges à payer', type: 'EXPENSE' },
+    { code: '4200', name: 'Achats de marchandises', type: 'EXPENSE' },
+    { code: '5200', name: 'Salaires', type: 'EXPENSE' },
+    { code: '6000', name: 'Loyer', type: 'EXPENSE' },
+    { code: '6100', name: 'Entretien/Réparations', type: 'EXPENSE' },
+    { code: '6300', name: "Primes d'assurances", type: 'EXPENSE' },
+    { code: '6500', name: "Frais d'administration", type: 'EXPENSE' },
+    { code: '6600', name: 'Publicité', type: 'EXPENSE' },
+    { code: '6700', name: "Autres charges d'exploitation", type: 'EXPENSE' },
+    { code: '7510', name: "Charges d'immeuble", type: 'EXPENSE' },
+  ];
+  await db.account.createMany({
+    data: defaults.map(d => ({ ...d, userId, active: true })),
+  });
+}
+
+// List accounts (active)
+export async function listAccounts(req: Request, res: Response) {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Non autorisé' } });
+  // Seed defaults for first-time users to avoid empty selector in UI
+  await ensureDefaultAccounts(userId);
+  const accounts = await db.account.findMany({ where: { userId, active: true }, orderBy: { code: 'asc' } });
+  return res.json({ success: true, data: accounts });
+}
+
+// Create expense
+export async function createExpense(req: Request, res: Response) {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Non autorisé' } });
+  const { accountId, date, label, amount, currency, tvaRate, supplier, notes } = req.body || {};
+  if (!accountId || !date || !label || amount == null) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'Champs requis: accountId, date, label, amount' } });
+  }
+  // Ensure account belongs to user
+  const acc = await db.account.findFirst({ where: { id: accountId, userId } });
+  if (!acc) return res.status(400).json({ success: false, error: { code: 'ACCOUNT_NOT_FOUND', message: 'Compte inexistant' } });
+  const exp = await db.expense.create({
+    data: {
+      userId,
+      accountId,
+      date: new Date(date),
+      label: String(label),
+      amount: Number(amount),
+      currency: ['CHF','EUR','USD'].includes(String(currency)) ? String(currency) : 'CHF',
+      tvaRate: tvaRate != null ? Number(tvaRate) : null,
+      supplier: supplier ? String(supplier) : null,
+      notes: notes ? String(notes) : null,
+    },
+  });
+  return res.status(201).json({ success: true, data: exp });
+}
+
+// List expenses with filters
+export async function listExpenses(req: Request, res: Response) {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Non autorisé' } });
+  const { dateFrom, dateTo, accountId } = req.query as Record<string, string>;
+  const where: any = { userId };
+  if (accountId) where.accountId = accountId;
+  if (dateFrom || dateTo) {
+    where.date = {};
+    if (dateFrom) where.date.gte = new Date(dateFrom);
+    if (dateTo) where.date.lte = new Date(dateTo);
+  }
+  const expenses = await db.expense.findMany({ where, orderBy: { date: 'desc' }, include: { account: true } });
+  return res.json({ success: true, data: expenses });
+}
+
+// Update expense
+export async function updateExpense(req: Request, res: Response) {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Non autorisé' } });
+  const { id } = req.params;
+  const { accountId, date, label, amount, currency, tvaRate, supplier, notes } = req.body || {};
+  const existing = await db.expense.findFirst({ where: { id, userId } });
+  if (!existing) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Charge introuvable' } });
+  if (accountId) {
+    const acc = await db.account.findFirst({ where: { id: accountId, userId } });
+    if (!acc) return res.status(400).json({ success: false, error: { code: 'ACCOUNT_NOT_FOUND', message: 'Compte inexistant' } });
+  }
+  const updated = await db.expense.update({
+    where: { id },
+    data: {
+      ...(accountId ? { accountId } : {}),
+      ...(date ? { date: new Date(date) } : {}),
+      ...(label ? { label: String(label) } : {}),
+      ...(amount != null ? { amount: Number(amount) } : {}),
+      ...(currency ? { currency: ['CHF','EUR','USD'].includes(String(currency)) ? String(currency) : 'CHF' } : {}),
+      ...(tvaRate != null ? { tvaRate: Number(tvaRate) } : {}),
+      ...(supplier != null ? { supplier: supplier ? String(supplier) : null } : {}),
+      ...(notes != null ? { notes: notes ? String(notes) : null } : {}),
+    },
+  });
+  return res.json({ success: true, data: updated });
+}
+
+// Delete expense
+export async function deleteExpense(req: Request, res: Response) {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Non autorisé' } });
+  const { id } = req.params;
+  const existing = await db.expense.findFirst({ where: { id, userId } });
+  if (!existing) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Charge introuvable' } });
+  await db.expense.delete({ where: { id } });
+  return res.json({ success: true });
+}
+
+// P&L (Utilité) using paid invoices
+export async function getPnL(req: Request, res: Response) {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Non autorisé' } });
+  const { dateFrom, dateTo, currency = 'CHF' } = req.query as Record<string, string>;
+  const from = dateFrom ? new Date(dateFrom) : new Date('1970-01-01');
+  const to = dateTo ? new Date(dateTo) : new Date('2999-12-31');
+  const curr = ['CHF','EUR','USD'].includes(String(currency)) ? String(currency) : 'CHF';
+
+  // Revenue: align with dashboard KPI logic
+  // Include invoices with status 'paid' and either:
+  // - /* paidDate removed - use payments */ within range, or
+  // - /* paidDate removed - use payments */ is null but issueDate within range (fallback for legacy data)
+  const paidInvoices = await prisma.invoice.findMany({
+    where: {
+      userId,
+      currency: curr,
+      paymentStatus: 'PAID',
+      OR: [
+        { /* paidDate removed - use payments */: { gte: from, lte: to } },
+        { AND: [{ /* paidDate removed - use payments */: null }, { issueDate: { gte: from, lte: to } }] },
+      ],
+    },
+    select: { subtotal: true, tvaAmount: true },
+  });
+  const revenue = paidInvoices.reduce((s, i) => s + Number((i as any).subtotal), 0);
+  const tva = paidInvoices.reduce((s, i) => s + Number((i as any).tvaAmount || 0), 0);
+
+  // Charges: sum of expenses in range and currency
+  const expenses = await db.expense.findMany({
+    where: {
+      userId,
+      currency: curr,
+      date: { gte: from, lte: to },
+    },
+    select: { amount: true },
+  });
+  const charges = (expenses as Array<{ amount: any }>).reduce((s: number, e) => s + Number(e.amount), 0);
+
+  const utilite = revenue - charges;
+  return res.json({ success: true, data: { revenue, charges, utilite, tva, currency: curr, period: { from, to } } });
+}

@@ -1,0 +1,11 @@
+Contact: mailto:security@simplifaq.ch
+Contact: https://simplifaq.ch/contact
+Expires: 2026-12-31T23:59:59.000Z
+Preferred-Languages: fr, en
+Canonical: https://test.simplifaq.ch/.well-known/security.txt
+
+# SimpliFaq - Swiss Business Management Platform
+# We take security seriously. Please report any security issues to security@simplifaq.ch
+
+Policy: https://simplifaq.ch/security-policy
+Acknowledgments: https://simplifaq.ch/security-acknowledgments

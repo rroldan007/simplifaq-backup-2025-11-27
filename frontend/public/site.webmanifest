@@ -1,0 +1,21 @@
+{
+  "name": "SimpliFaq",
+  "short_name": "SimpliFaq",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/brand/app-icon.png",
+      "sizes": "300x137",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/logo-light.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

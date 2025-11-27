@@ -1,0 +1,133 @@
+import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { AppError } from '../types';
+
+const prisma = new PrismaClient();
+
+// GET /api/reports/export?format=csv|xlsx&dateFrom=...&dateTo=...&currency=CHF&granularity=monthly
+export async function exportDashboard(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id || (req as any).userId;
+    if (!userId) throw new AppError('Non autorisé', 401, 'UNAUTHORIZED');
+
+    const { format = 'csv', dateFrom, dateTo, currency = 'CHF', granularity = 'monthly' } = req.query as Record<string, string>;
+    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().getFullYear(), 0, 1);
+    const to = dateTo ? new Date(dateTo) : new Date(new Date().getFullYear(), 11, 31);
+
+    // Build periods
+    const periods: { key: string; start: Date; end: Date }[] = [];
+    const cursor = new Date(from);
+    const push = (start: Date, end: Date) => periods.push({ key: start.toISOString().substring(0, granularity === 'monthly' ? 7 : 10), start, end });
+    if (granularity === 'daily') {
+      while (cursor <= to) { const s = new Date(cursor); const e = new Date(cursor); push(s, e); cursor.setDate(cursor.getDate() + 1); }
+    } else if (granularity === 'weekly') {
+      while (cursor <= to) { const s = new Date(cursor); const e = new Date(cursor); e.setDate(e.getDate() + 6); push(s, e); cursor.setDate(cursor.getDate() + 7); }
+    } else { // monthly default
+      cursor.setDate(1);
+      while (cursor <= to) { const s = new Date(cursor.getFullYear(), cursor.getMonth(), 1); const e = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); periods.push({ key: s.toISOString().substring(0, 7), start: s, end: e }); cursor.setMonth(cursor.getMonth() + 1); }
+    }
+
+    // Series
+    const series: Array<{ period: string; caPaid: number; charges: number; utilite: number }> = [];
+    for (const p of periods) {
+      const paid = await prisma.invoice.findMany({ where: { userId, currency, paymentStatus: 'PAID', OR: [{ /* paidDate removed - use payments */: { gte: p.start, lte: p.end } }, { AND: [{ /* paidDate removed - use payments */: null }, { issueDate: { gte: p.start, lte: p.end } }] }] }, select: { total: true } });
+      const ca = paid.reduce((s, i) => s + Number(i.total), 0);
+      const exp = await (prisma as any).expense.findMany({ where: { userId, currency, date: { gte: p.start, lte: p.end } }, select: { amount: true } });
+      const ch = exp.reduce((s: number, e: any) => s + Number(e.amount), 0);
+      series.push({ period: p.key, caPaid: ca, charges: ch, utilite: ca - ch });
+    }
+
+    // Status breakdown in full range
+    const [draft, sent, paidCount, overdue] = await Promise.all([
+      prisma.invoice.count({ where: { userId, status: 'DRAFT', issueDate: { gte: from, lte: to } } }),
+      prisma.invoice.count({ where: { userId, status: 'SENT', issueDate: { gte: from, lte: to } } }),
+      prisma.invoice.count({ where: { userId, paymentStatus: 'PAID', issueDate: { gte: from, lte: to } } }),
+      prisma.invoice.count({ where: { userId, // TODO: status 'overdue' no existe, usar paymentStatus y dueDate, issueDate: { gte: from, lte: to } } }),
+    ]);
+
+    // PDF
+    if ((format || '').toLowerCase() === 'pdf') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const PDFDocument = require('pdfkit');
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="dashboard_${new Date().toISOString().slice(0,10)}.pdf"`);
+
+      doc.fontSize(18).text('Tableau de bord - Résumé', { align: 'left' });
+      doc.moveDown(0.5);
+      doc.fontSize(11).fillColor('#555555').text(`Période: ${from.toISOString().slice(0,10)} → ${to.toISOString().slice(0,10)}`);
+      doc.text(`Devise: ${currency}    Granularité: ${granularity}`);
+      doc.moveDown();
+
+      doc.fillColor('#111111').fontSize(13).text('Séries CA / Charges / Utilité');
+      doc.moveDown(0.5);
+      const colX = [40, 160, 280, 400];
+      doc.fontSize(11).fillColor('#333333');
+      doc.text('Période', colX[0], doc.y);
+      doc.text('CA', colX[1], doc.y);
+      doc.text('Charges', colX[2], doc.y);
+      doc.text('Utilité', colX[3], doc.y);
+      doc.moveDown(0.5);
+      series.forEach((row) => {
+        doc.fillColor('#000000');
+        const y = doc.y;
+        doc.text(row.period, colX[0], y);
+        doc.text(row.caPaid.toFixed(2), colX[1], y);
+        doc.text(row.charges.toFixed(2), colX[2], y);
+        doc.text(row.utilite.toFixed(2), colX[3], y);
+        doc.moveDown(0.3);
+      });
+
+      doc.moveDown(1);
+      doc.fillColor('#111111').fontSize(13).text('Statut des factures (sur la période)');
+      doc.moveDown(0.5);
+      doc.fontSize(11).fillColor('#333333');
+      doc.text(`Brouillon: ${draft}`);
+      doc.text(`Envoyée: ${sent}`);
+      doc.text(`Payée: ${paidCount}`);
+      doc.text(`En retard: ${overdue}`);
+
+      doc.end();
+      doc.pipe(res);
+      return;
+    }
+
+    // CSV/XLSX (CSV content)
+    const esc = (v: unknown) => {
+      const s = String(v ?? '');
+      if (s.includes(',') || s.includes('\n') || s.includes('"')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+
+    const lines: string[] = [];
+    lines.push(`Période,${from.toISOString()},${to.toISOString()}`);
+    lines.push(`Devise,${currency}`);
+    lines.push(`Granularité,${granularity}`);
+    lines.push('');
+    lines.push('Serie CA/Charges/Utilité');
+    lines.push('Période,CA,Charges,Utilité');
+    for (const row of series) {
+      lines.push([row.period, row.caPaid.toFixed(2), row.charges.toFixed(2), row.utilite.toFixed(2)].map(esc).join(','));
+    }
+    lines.push('');
+    lines.push('Statut factures');
+    lines.push('Draft,Sent,Paid,Overdue');
+    lines.push([draft, sent, paidCount, overdue].map(esc).join(','));
+
+    const csv = lines.join('\n');
+    const fileBase = `dashboard_${new Date().toISOString().slice(0,10)}`;
+    const isCsv = (format || 'csv').toLowerCase() === 'csv';
+
+    res.setHeader('Content-Type', isCsv ? 'text/csv; charset=utf-8' : 'application/vnd.ms-excel');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.${isCsv ? 'csv' : 'xlsx'}"`);
+    return res.send(csv);
+  } catch (err: any) {
+    console.error('exportDashboard error', err);
+    if (err instanceof AppError) {
+      return res.status(err.statusCode).json({ success: false, error: { code: err.code, message: err.message } });
+    }
+    return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur serveur' } });
+  }
+}

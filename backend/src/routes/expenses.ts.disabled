@@ -1,0 +1,21 @@
+import { Router } from 'express';
+import { authenticateToken } from '../middleware/auth';
+import { listAccounts, createExpense, listExpenses, updateExpense, deleteExpense, getPnL } from '../controllers/expensesController';
+
+const router = Router();
+
+router.use(authenticateToken);
+
+// Accounts
+router.get('/accounts', listAccounts);
+
+// Expenses CRUD
+router.get('/', listExpenses);
+router.post('/', createExpense);
+router.put('/:id', updateExpense);
+router.delete('/:id', deleteExpense);
+
+// Profit & Loss (Utilité)
+router.get('/pnl', getPnL);
+
+export default router;

@@ -1,0 +1,966 @@
+// This is your Prisma schema file for development (SQLite)
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User/Company Model - Swiss company with VAT number
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  companyName       String
+  firstName         String
+  lastName          String
+  vatNumber         String?  // Swiss VAT number (CHE-XXX.XXX.XXX)
+  phone             String?
+  website           String?
+  language          String   @default("fr") // Application in French only
+  currency          String   @default("CHF") // CHF or EUR
+  subscriptionPlan  String   @default("free") // free, basic, premium
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  logoUrl           String?
+
+  // Address fields
+  street       String
+  city         String
+  postalCode   String
+  country      String  @default("Switzerland")
+  canton       String? // Swiss canton
+
+  // Bank details for QR Bill
+  iban              String?  // Swiss IBAN for QR Bill generation
+  bankApiKey        String?  // Optional API key for bank integrations
+  bankApiProvider   String?  // e.g., 'postfinance', 'bexio', etc.
+  bankSyncEnabled   Boolean  @default(false)
+  bankSyncLastRun   DateTime?
+  bankSyncStatus    String?  // last sync status
+  qrReferenceMode   String   @default("auto") // auto, disabled, manual
+  qrReferencePrefix String?  // Optional prefix for QR references
+
+  // Invoice numbering preferences
+  invoicePrefix     String   @default("FAC")
+  nextInvoiceNumber Int      @default(1)
+  invoicePadding    Int      @default(3)
+
+  // Quote numbering preferences
+  quotePrefix       String   @default("DEV")
+  nextQuoteNumber   Int      @default(1)
+  quotePadding      Int      @default(3)
+
+  quantityDecimals  Int      @default(2)
+
+  // PDF Appearance Settings
+  pdfShowCompanyNameWithLogo Boolean  @default(true)   // Show company name even if logo exists
+  pdfPrimaryColor            String   @default("#4F46E5") // Primary color for header/accents
+  pdfTemplate                String   @default("swiss_classic") // Template: swiss_classic, european_minimal, swiss_blue, german_formal
+  
+  // Header Information Display Settings
+  pdfShowVAT                 Boolean  @default(true)   // Show VAT number in header
+  pdfShowPhone               Boolean  @default(true)   // Show phone in header
+  pdfShowEmail               Boolean  @default(true)   // Show email in header
+  pdfShowWebsite             Boolean  @default(true)   // Show website in header
+  pdfShowIBAN                Boolean  @default(false)  // Show IBAN in header (in addition to QR Bill)
+
+  // Relations
+  clients        Client[]
+  invoices       Invoice[]
+  quotes         Quote[]
+  products       Product[]
+  sessions       Session[]
+  subscription   Subscription?
+  userSmtpConfig UserSmtpConfig? // User's personal SMTP configuration
+  accounts       Account[]       @relation("UserAccounts")
+  expenses       Expense[]       @relation("UserExpenses")
+  assistantActions AssistantAction[]
+
+  @@map("users")
+}
+
+// Client Model - Invoice recipients with Swiss address support
+model Client {
+  id           String   @id @default(cuid())
+  userId       String
+  companyName  String?
+  firstName    String?
+  lastName     String?
+  email        String
+  phone        String?
+  vatNumber    String? // Client's VAT number
+  language     String   @default("fr") // de, fr, it, en for invoice generation
+  paymentTerms Int      @default(30) // Payment terms in days
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Address fields
+  street       String
+  addressLine2 String? // Additional address line for QR Bill
+  city         String
+  postalCode   String
+  country      String @default("Switzerland")
+  canton       String?
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+  quotes   Quote[]
+
+  @@map("clients")
+}
+
+// Product/Service Model - Reusable items with Swiss TVA rates
+model Product {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  unitPrice   Float    // SQLite uses Float instead of Decimal
+  tvaRate     Float    // Swiss TVA rates: 0.00, 3.50, 8.10
+  unit        String   @default("piece") // hour, piece, day, etc.
+  isActive    Boolean  @default(true)
+  
+  // Discount fields
+  discountValue  Float?  // Discount amount or percentage
+  discountType   String? // PERCENT or AMOUNT
+  discountActive Boolean @default(false) // Whether discount is enabled
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceItems InvoiceItem[]
+  quoteItems   QuoteItem[]
+
+  @@map("products")
+}
+
+// Invoice Model - Main invoice with Swiss QR Bill data
+model Invoice {
+  id            String   @id @default(cuid())
+  userId        String
+  clientId      String
+  invoiceNumber String   @unique // Sequential number per user
+  isQuote       Boolean  @default(false) // true for quotes, false for invoices
+  status        String   @default("draft") // draft, sent, paid, overdue, cancelled, accepted, rejected, expired
+  paymentStatus String   @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID - for API integration
+  issueDate     DateTime @default(now())
+  dueDate       DateTime
+  validUntil    DateTime? // For quotes
+  convertedInvoiceId String? // For quotes converted to invoices
+  language      String   @default("fr") // de, fr, it, en
+  currency      String   @default("CHF") // CHF, EUR
+
+  // Totals
+  subtotal  Float // SQLite uses Float instead of Decimal
+  tvaAmount Float
+  total     Float
+
+  // Discount fields
+  globalDiscountValue Float?
+  globalDiscountType  String? // PERCENT or AMOUNT
+  globalDiscountNote  String?
+
+  // Swiss QR Bill data
+  qrReference          String? // QR reference number
+  qrReferenceType      String  @default("NON") // QRR, SCOR, NON
+  qrUnstructuredMessage String?
+  qrBillInformation    String?
+
+  // Recurring invoice fields
+  estRecurrente           Boolean   @default(false)
+  frequence               String?   // MENSUEL, TRIMESTRIEL, SEMESTRIEL
+  prochaineDateRecurrence DateTime?
+  dateFinRecurrence       DateTime?
+  statutRecurrence        String?   @default("inactif") // actif, termine, inactif
+
+  // Additional info
+  notes String?
+  terms String?
+
+  // Email tracking
+  sentAt DateTime?
+  sentTo String?
+  emailSentAt DateTime?
+  emailSentTo String?
+  paidDate DateTime? // When the invoice was marked as paid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client   Client        @relation(fields: [clientId], references: [id])
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@map("invoices")
+}
+
+// Invoice Item Model - Individual line items with Swiss TVA
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  productId   String?
+  description String
+  quantity    Float   // SQLite uses Float instead of Decimal (supports 3 decimals via UI formatting)
+  unitPrice   Float
+  tvaRate     Float   // Swiss TVA rates: 0.00, 3.50, 8.10
+  total       Float
+  order       Int     @default(0) // For ordering items
+
+  // Line-level discount fields
+  lineDiscountValue      Float?  // Discount value (percentage or fixed amount)
+  lineDiscountType       String? // PERCENT or AMOUNT
+  lineDiscountSource     String  @default("NONE") // FROM_PRODUCT, MANUAL, or NONE
+  subtotalBeforeDiscount Float?  // Subtotal before applying line discount
+  discountAmount         Float?  // Calculated discount amount
+  subtotalAfterDiscount  Float?  // Subtotal after applying line discount
+
+  // Relations
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("invoice_items")
+}
+
+model Quote {
+  id            String   @id @default(cuid())
+  userId        String
+  clientId      String
+  quoteNumber   String   @unique
+  status        String   @default("draft")
+  issueDate     DateTime @default(now())
+  validUntil    DateTime?
+  language      String   @default("fr")
+  currency      String   @default("CHF")
+  convertedInvoiceId String?
+
+  subtotal  Float
+  tvaAmount Float
+  total     Float
+
+  notes String?
+  terms String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id])
+  items  QuoteItem[]
+
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  productId   String?
+  description String
+  quantity    Float
+  unitPrice   Float
+  tvaRate     Float
+  total       Float
+  order       Int     @default(0)
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("quote_items")
+}
+
+// Payment Model - Track payments for invoices
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  amount      Float    // SQLite uses Float instead of Decimal
+  paymentDate DateTime @default(now())
+  method      String   @default("bank_transfer") // bank_transfer, cash, card, other
+  reference   String?  // Payment reference
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model AssistantAction {
+  id                    String   @id @default(cuid())
+  userId                String
+  sessionId             String?
+  actionId              String   @unique
+  description           String
+  endpointMethod        String
+  endpointUrl           String
+  payload               Json?
+  requiresConfirmation  Boolean  @default(true)
+  status                String   @default("pending") // pending, confirmed, executed, cancelled, failed
+  lastError             Json?
+  confirmedAt           DateTime?
+  executedAt            DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_actions")
+}
+
+// Session Model - For JWT token management
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  token            String   @unique
+  expiresAt        String
+  createdAt        String
+  refreshExpiresAt String
+  refreshToken     String   @unique
+  updatedAt        String
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ===== SaaS ADMINISTRATION MODELS (Simplified for development) =====
+
+// Admin User Model - System administrators with role-based permissions
+model AdminUser {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String   // Hashed password
+  firstName   String
+  lastName    String
+  role        String   // super_admin, support_admin, billing_admin
+  permissions Json   // JSON for SQLite
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Two-factor authentication
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+
+  // Relations
+  adminSessions AdminSession[]
+  adminLogs     AdminLog[]
+
+  @@map("admin_users")
+}
+
+// Admin Session Model - For admin authentication
+model AdminSession {
+  id        String   @id @default(cuid())
+  adminId   String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_sessions")
+}
+
+// Subscription Plan Model - Define pricing tiers and feature limits
+model Plan {
+  id                  String            @id @default(cuid())
+  name                String            @unique // free, basic, premium
+  displayName         String            // "Plan Gratuit", "Plan Basique", "Plan Premium"
+  description         String?
+  price               Float             // Monthly price in CHF (SQLite uses Float)
+  currency            String            @default("CHF")
+  isActive            Boolean           @default(true)
+  // Feature limits
+  maxInvoicesPerMonth Int               @default(10)
+  maxClientsTotal     Int               @default(50)
+  maxProductsTotal    Int               @default(20)
+  hasEmailSupport     Boolean           @default(false)
+  hasPrioritySupport  Boolean           @default(false)
+  hasAdvancedReports  Boolean           @default(false)
+  hasApiAccess        Boolean           @default(false)
+  hasCustomBranding   Boolean           @default(false)
+  storageLimit        Int               @default(100) // MB
+  // Swiss-specific features
+  hasSwissQRBill      Boolean           @default(true)
+  hasMultiCurrency    Boolean           @default(false)
+  hasMultiLanguage    Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  // Relations
+  subscriptions       Subscription[]
+  entitlements        PlanEntitlement[]
+
+  @@map("plans")
+}
+
+// Subscription Model - User subscription details and billing
+model Subscription {
+  id                   String            @id @default(cuid())
+  userId               String            @unique
+  planId               String
+  status               String            @default("active") // active, cancelled, past_due, unpaid
+  currentPeriodStart   DateTime          @default(now())
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean           @default(false)
+  cancelledAt          DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  // Billing information
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  paymentMethod        String?           // card, bank_transfer, invoice
+  billingEmail         String?
+  // Usage tracking
+  invoicesThisMonth    Int               @default(0)
+  storageUsed          Int               @default(0) // MB
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  // Relations
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 Plan              @relation(fields: [planId], references: [id])
+  usageRecords         UsageRecord[]
+  billingLogs          BillingLog[]
+  billing_credits      billing_credits[]
+  refunds              refunds[]
+
+  @@map("subscriptions")
+}
+
+// Usage Record Model - Track user activity and resource consumption
+model UsageRecord {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  userId         String
+  resourceType   String   // invoices, clients, products, storage, api_calls
+  quantity       Int      // Amount used
+  period         String   // YYYY-MM format for monthly tracking
+  recordedAt     DateTime @default(now())
+
+  // Relations
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, resourceType, period])
+  @@map("usage_records")
+}
+
+// Billing Log Model - Track all billing events and transactions
+model BillingLog {
+  id              String       @id @default(cuid())
+  subscriptionId  String
+  userId          String
+  eventType       String       // subscription_created, payment_succeeded, payment_failed, plan_changed
+  amount          Float?       // SQLite uses Float instead of Decimal
+  currency        String       @default("CHF")
+  status          String       // success, failed, pending
+  // External payment provider data
+  stripeEventId   String?
+  stripeInvoiceId String?
+  stripePaymentId String?
+  // Additional data
+  metadata        Json?      // JSON for SQLite
+  errorMessage    String?
+  createdAt       DateTime     @default(now())
+
+  // Relations
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("billing_logs")
+}
+
+// Admin Log Model - Audit trail for administrative actions
+model AdminLog {
+  id           String    @id @default(cuid())
+  adminId      String
+  action       String    // user_created, subscription_changed, plan_updated, etc.
+  resourceType String    // user, subscription, plan, system
+  resourceId   String?   // ID of the affected resource
+  description  String    // Human-readable description
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?   // JSON for SQLite
+  createdAt    DateTime  @default(now())
+
+  // Relations
+  admin        AdminUser @relation(fields: [adminId], references: [id])
+
+  @@map("admin_logs")
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  isActive    Boolean  @default(true)
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+model EmailTemplate {
+  id              String          @id @default(cuid())
+  name            String          @unique
+  subject         String
+  htmlContent     String
+  textContent     String?
+  language        String          @default("fr")
+  isActive        Boolean         @default(true)
+  variables       Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  email_campaigns EmailCampaign[]
+  email_sends     EmailSend[]
+
+  @@map("email_templates")
+}
+
+model PlanEntitlement {
+  id            String   @id @default(cuid())
+  planId        String?
+  planName      String?
+  stripePriceId String?  @unique
+  features      Json?
+  limits        Json?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  plan          Plan?    @relation(fields: [planId], references: [id])
+
+  @@map("plan_entitlements")
+}
+
+model FeatureFlag {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  isEnabled         Boolean  @default(false)
+  rolloutPercentage Int      @default(0)
+  targetPlans       Json?
+  targetUsers       Json?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+model SupportTicket {
+  id           String            @id @default(cuid())
+  userId       String
+  subject      String
+  description  String
+  status       String            @default("open")
+  priority     String            @default("medium")
+  category     String            @default("general")
+  assignedTo   String?
+  contactEmail String
+  contactName  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  resolvedAt   DateTime?
+  responses    SupportResponse[]
+
+  @@map("support_tickets")
+}
+
+model SupportResponse {
+  id          String        @id @default(cuid())
+  ticketId    String
+  responderId String?
+  message     String
+  isInternal  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("support_responses")
+}
+
+model EmailCampaign {
+  id              String        @id @default(cuid())
+  name            String
+  subject         String
+  template_id     String
+  status          String        @default("draft")
+  scheduled_at    DateTime?
+  sent_at         DateTime?
+  created_by      String
+  target_segment  Json?
+  variables       Json?
+  stats           Json?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @default(now())
+  email_templates EmailTemplate @relation(fields: [template_id], references: [id])
+  email_sends     EmailSend[]
+
+  @@index([created_by])
+  @@index([scheduled_at])
+  @@index([status])
+  @@map("email_campaigns")
+}
+
+model EmailSend {
+  id              String         @id @default(cuid())
+  campaign_id     String?
+  user_id         String
+  email           String
+  template_id     String
+  subject         String
+  status          String         @default("queued")
+  sent_at         DateTime?
+  delivered_at    DateTime?
+  opened_at       DateTime?
+  clicked_at      DateTime?
+  bounced_at      DateTime?
+  complained_at   DateTime?
+  message_id      String?
+  error_message   String?
+  variables       Json?
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @default(now())
+  email_campaigns EmailCampaign? @relation(fields: [campaign_id], references: [id])
+  email_templates EmailTemplate  @relation(fields: [template_id], references: [id])
+
+  @@index([campaign_id])
+  @@index([sent_at])
+  @@index([status])
+  @@index([user_id])
+  @@map("email_sends")
+}
+
+model UserSegment {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  criteria    Json
+  user_count  Int?     @default(0)
+  is_dynamic  Boolean  @default(true)
+  created_by  String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+
+  @@index([created_by])
+  @@index([is_dynamic])
+  @@map("user_segments")
+}
+
+model AutomationRule {
+  id                    String                @id @default(cuid())
+  name                  String
+  description           String?
+  trigger_type          String
+  trigger_conditions    Json
+  actions               Json
+  is_active             Boolean               @default(true)
+  execution_count       Int                   @default(0)
+  last_executed_at      DateTime?
+  created_by            String
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @default(now())
+  automation_executions AutomationExecution[]
+
+  @@index([created_by])
+  @@index([is_active])
+  @@index([trigger_type])
+  @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id               String         @id @default(cuid())
+  rule_id          String
+  user_id          String
+  trigger_data     Json?
+  actions_executed Json?
+  status           String         @default("pending")
+  error_message    String?
+  executed_at      DateTime?
+  created_at       DateTime       @default(now())
+  automation_rules AutomationRule @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+
+  @@index([rule_id])
+  @@index([status])
+  @@index([user_id])
+  @@map("automation_executions")
+}
+
+model billing_credits {
+  id              String       @id
+  subscription_id String
+  user_id         String
+  amount          Float
+  currency        String       @default("CHF")
+  reason          String
+  applied_at      DateTime?
+  expires_at      DateTime?
+  is_active       Boolean      @default(true)
+  created_by      String
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @default(now())
+  subscriptions   Subscription @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([expires_at])
+  @@index([is_active])
+  @@index([subscription_id])
+  @@index([user_id])
+}
+
+model refunds {
+  id               String       @id
+  subscription_id  String
+  user_id          String
+  amount           Float
+  currency         String       @default("CHF")
+  reason           String
+  refund_type      String
+  stripe_refund_id String?
+  status           String       @default("pending")
+  processed_by     String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @default(now())
+  subscriptions    Subscription @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([subscription_id])
+  @@index([user_id])
+}
+
+// ===== GLOBAL SMTP CONFIGURATION FOR SYSTEM EMAILS =====
+
+// SMTP Global Config - Centralized email configuration for all transactional emails
+model SmtpConfig {
+  id              String   @id @default(cuid())
+  // SMTP Server Configuration
+  host            String   // e.g., smtp.gmail.com, smtp.office365.com
+  port            Int      @default(587) // 587 for TLS, 465 for SSL
+  secure          Boolean  @default(false) // true for SSL (port 465), false for TLS (port 587)
+  // Authentication
+  user            String   // SMTP username/email
+  password        String   // Encrypted password (AES-256)
+  // Sender Information
+  fromEmail       String   // Email address to send from
+  fromName        String   @default("SimpliFaq") // Display name for sender
+  replyTo         String?  // Optional reply-to address
+  // Provider-specific settings (for SendGrid, AWS SES, etc.)
+  provider        String   @default("smtp") // smtp, sendgrid, ses, mailgun
+  apiKey          String?  // For API-based providers (encrypted)
+  // Configuration Status
+  isActive        Boolean  @default(true)
+  isVerified      Boolean  @default(false) // Set to true after successful test
+  lastTestedAt    DateTime?
+  lastTestedBy    String?  // Admin user ID who tested
+  // Compliance & Features
+  includeUnsubscribe Boolean @default(true) // Add unsubscribe link (GDPR)
+  trackOpens      Boolean  @default(false) // Track email opens
+  trackClicks     Boolean  @default(false) // Track link clicks
+  // Retry Configuration
+  maxRetries      Int      @default(3) // Max retry attempts for failed emails
+  retryDelay      Int      @default(300) // Delay in seconds between retries (5 min)
+  // Metadata
+  createdBy       String   // Admin user ID
+  updatedBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  // Relations
+  smtpLogs        SmtpLog[]
+
+  @@map("smtp_config")
+}
+
+// SMTP Logs - Audit trail for all email sends (success, failures, bounces)
+model SmtpLog {
+  id             String      @id @default(cuid())
+  smtpConfigId   String?     // Reference to SMTP config used (nullable for fallback)
+  // Email Details
+  emailTo        String      // Recipient email
+  emailFrom      String      // Sender email used
+  subject        String      // Email subject
+  templateName   String?     // Template used (if any)
+  // Send Status
+  status         String      // queued, sent, delivered, failed, bounced, complained
+  provider       String      @default("smtp") // Which provider was used
+  messageId      String?     // Message ID from email provider
+  // Error Tracking
+  errorMessage   String?     // Error message if failed
+  errorCode      String?     // Error code from provider
+  retryCount     Int         @default(0) // Number of retry attempts
+  // Timing
+  queuedAt       DateTime    @default(now())
+  sentAt         DateTime?   // When actually sent
+  deliveredAt    DateTime?   // When confirmed delivered
+  bouncedAt      DateTime?   // When bounced
+  openedAt       DateTime?   // When opened (if tracking enabled)
+  clickedAt      DateTime?   // When link clicked (if tracking enabled)
+  // Metadata
+  userId         String?     // User ID if related to specific user action
+  invoiceId      String?     // Invoice ID if related to invoice
+  eventType      String?     // registration, password_reset, welcome, invoice_sent, etc.
+  ipAddress      String?     // IP from which send was initiated
+  userAgent      String?     // User agent if applicable
+  metadata       Json?       // Additional data
+  // Relations
+  smtpConfig     SmtpConfig? @relation(fields: [smtpConfigId], references: [id])
+
+  @@index([emailTo])
+  @@index([status])
+  @@index([eventType])
+  @@index([queuedAt])
+  @@index([userId])
+  @@map("smtp_logs")
+}
+
+// ===== USER-SPECIFIC SMTP CONFIGURATION (MULTI-TENANT) =====
+
+// User SMTP Config - Each registered user can configure their own SMTP for sending invoices/quotes
+model UserSmtpConfig {
+  id              String   @id @default(cuid())
+  userId          String   @unique // One config per user
+  // SMTP Server Configuration
+  host            String   // e.g., smtp.gmail.com, smtp.office365.com
+  port            Int      @default(587) // 587 for TLS, 465 for SSL
+  secure          Boolean  @default(false) // true for SSL (port 465), false for TLS (port 587)
+  // Authentication
+  smtpUser        String   // SMTP username/email
+  password        String   // Encrypted password (AES-256)
+  // Sender Information (personalized per user/company)
+  fromEmail       String   // User's business email
+  fromName        String   // e.g., "Votre Entreprise - Facturation"
+  replyTo         String?  // Optional reply-to address
+  // Provider
+  provider        String   @default("smtp") // smtp, sendgrid, ses, mailgun
+  apiKey          String?  // For API-based providers (encrypted)
+  // Configuration Status
+  isActive        Boolean  @default(true)
+  isVerified      Boolean  @default(false) // Set to true after successful test
+  lastTestedAt    DateTime?
+  // User Preferences
+  enableAutoSend  Boolean  @default(false) // Auto-send invoices when generated
+  includeFooter   Boolean  @default(true) // Include Swiss compliance footer
+  // Rate Limiting (per day, enforced by user's plan)
+  dailyLimit      Int      @default(1000) // Max emails per day (from plan)
+  emailsSentToday Int      @default(0) // Counter reset daily
+  lastResetAt     DateTime @default(now()) // Last time counter was reset
+  // 2FA Protection
+  requires2FA     Boolean  @default(true) // Require 2FA to modify config
+  last2FAVerified DateTime? // Last time 2FA was verified
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  smtpLogs        UserSmtpLog[]
+
+  @@map("user_smtp_configs")
+}
+
+// User SMTP Logs - Audit trail for user's email sends
+model UserSmtpLog {
+  id             String          @id @default(cuid())
+  userId         String          // Owner of the SMTP config
+  smtpConfigId   String?         // Reference to user's SMTP config used
+  // Email Details
+  emailTo        String          // Recipient email (client)
+  emailFrom      String          // Sender email used
+  subject        String          // Email subject
+  templateType   String          // invoice, quote, payment_reminder, delivery_confirmation
+  // Document Reference
+  invoiceId      String?         // If related to invoice
+  quoteId        String?         // If related to quote
+  documentNumber String?         // Invoice/Quote number for easy reference
+  // Attachments
+  hasAttachment  Boolean         @default(false)
+  attachmentType String?         // pdf, pdf_with_qr
+  attachmentSize Int?            // Size in bytes
+  // Send Status
+  status         String          // queued, sent, delivered, failed, bounced, opened, clicked
+  provider       String          @default("smtp") // Which provider was used
+  messageId      String?         // Message ID from email provider
+  // Error Tracking
+  errorMessage   String?         // Error message if failed
+  errorCode      String?         // Error code from provider
+  retryCount     Int             @default(0) // Number of retry attempts
+  usedFallback   Boolean         @default(false) // True if global SMTP was used as fallback
+  // Timing
+  queuedAt       DateTime        @default(now())
+  sentAt         DateTime?       // When actually sent
+  deliveredAt    DateTime?       // When confirmed delivered
+  bouncedAt      DateTime?       // When bounced
+  openedAt       DateTime?       // When opened (if tracking enabled)
+  clickedAt      DateTime?       // When link clicked (if tracking enabled)
+  // Compliance
+  includesQRBill Boolean         @default(false) // Swiss QR bill included
+  includesFooter Boolean         @default(true) // Compliance footer included
+  unsubscribeLink String?        // Unsubscribe link if applicable
+  // Metadata
+  ipAddress      String?         // IP from which send was initiated
+  userAgent      String?         // User agent if applicable
+  metadata       Json?           // Additional data (e.g., client info, amounts)
+  // Relations
+  userSmtpConfig UserSmtpConfig? @relation(fields: [smtpConfigId], references: [id])
+
+  @@index([userId])
+  @@index([emailTo])
+  @@index([status])
+  @@index([templateType])
+  @@index([queuedAt])
+  @@index([invoiceId])
+  @@index([quoteId])
+  @@map("user_smtp_logs")
+}
+
+model Account {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  name      String
+  type      String   @default("EXPENSE") // EXPENSE | REVENUE | OTHER
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation("UserAccounts", fields: [userId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([userId, code])
+  @@map("accounts")
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  userId    String
+  accountId String
+  date      DateTime
+  label     String
+  amount    Float    // TTC (SQLite uses Float instead of Decimal)
+  currency  String   @default("CHF") // CHF | EUR | USD
+  tvaRate   Float?   // (SQLite uses Float instead of Decimal)
+  supplier  String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation("UserExpenses", fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@index([userId, date])
+  @@map("expenses")
+}

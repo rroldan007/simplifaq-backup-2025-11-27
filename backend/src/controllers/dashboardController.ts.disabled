@@ -1,0 +1,202 @@
+import { Request, Response } from 'express';
+import prismaClient from '../services/database';
+import { convert as fxConvert } from '../services/fxService';
+import { AppError } from '../types';
+
+// Use prisma via shared service
+const prisma: any = prismaClient as any;
+
+// GET /api/reports/kpis
+export async function getDashboardKpis(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id || (req as any).userId;
+    if (!userId) throw new AppError('Non autorisé', 401, 'UNAUTHORIZED');
+    const { dateFrom, dateTo, currency = 'CHF', convert: convertFlag, baseCurrency } = req.query as Record<string, string>;
+    const now = new Date();
+    const from = dateFrom ? new Date(dateFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = dateTo ? new Date(dateTo) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const doConvert = convertFlag === '1' && !!baseCurrency;
+
+    // Current period
+    const paidInvoices = await prisma.invoice.findMany({
+      where: {
+        userId,
+        paymentStatus: 'PAID',
+        OR: [
+          { /* paidDate removed - use payments */: { gte: from, lte: to } },
+          { AND: [{ /* paidDate removed - use payments */: null }, { issueDate: { gte: from, lte: to } }] },
+        ],
+      },
+      select: { subtotal: true, tvaAmount: true, currency: true, /* paidDate removed - use payments */: true, issueDate: true },
+    });
+    const ca = await (async () => {
+      if (!doConvert) return paidInvoices.reduce((s: number, i: any) => s + Number(i.subtotal), 0);
+      let sum = 0;
+      for (const i of paidInvoices) {
+        const d = (i./* paidDate removed - use payments */ as Date) || (i.issueDate as Date) || to;
+        sum += await fxConvert(Number(i.subtotal), String(i.currency), String(baseCurrency), d);
+      }
+      return sum;
+    })();
+    const tva = paidInvoices.reduce((s: number, i: any) => s + Number(i.tvaAmount || 0), 0);
+    const expenses = await prisma.expense.findMany({ where: { userId, date: { gte: from, lte: to } }, select: { amount: true, currency: true, date: true } });
+    const charges = await (async () => {
+      if (!doConvert) return expenses.reduce((s: number, e: any) => s + Number(e.amount), 0);
+      let sum = 0;
+      for (const e of expenses) {
+        sum += await fxConvert(Number(e.amount), String(e.currency), String(baseCurrency), e.date as Date);
+      }
+      return sum;
+    })();
+    const utilite = ca - charges;
+
+    const invoicesIssued = await prisma.invoice.count({ where: { userId, issueDate: { gte: from, lte: to } } });
+    const issuedTotalAgg = await prisma.invoice.aggregate({ where: { userId, issueDate: { gte: from, lte: to } }, _sum: { total: true } });
+    const issuedTotal = Number(issuedTotalAgg._sum?.total) || 0;
+    const collectionRate = issuedTotal > 0 ? Math.round((ca / issuedTotal) * 10000) / 100 : 0;
+
+    const overdueAgg = await prisma.invoice.aggregate({ where: { userId, // TODO: status 'overdue' no existe, usar paymentStatus y dueDate }, _sum: { total: true } });
+    const overdueAmount = Number(overdueAgg._sum?.total) || 0;
+
+    // Previous period (same length)
+    const ms = to.getTime() - from.getTime() + 24*60*60*1000; // inclusive range length
+    const prevTo = new Date(from.getTime() - 24*60*60*1000);
+    const prevFrom = new Date(prevTo.getTime() - (ms - 24*60*60*1000));
+
+    const prevPaid = await prisma.invoice.findMany({
+      where: {
+        userId,
+        currency,
+        paymentStatus: 'PAID',
+        OR: [
+          { /* paidDate removed - use payments */: { gte: prevFrom, lte: prevTo } },
+          { AND: [{ /* paidDate removed - use payments */: null }, { issueDate: { gte: prevFrom, lte: prevTo } }] },
+        ],
+      },
+      select: { subtotal: true, tvaAmount: true },
+    });
+    const prevCA = prevPaid.reduce((s: number, i: any) => s + Number(i.subtotal), 0);
+    const prevExp = await prisma.expense.findMany({ where: { userId, currency, date: { gte: prevFrom, lte: prevTo } }, select: { amount: true } });
+    const prevCharges = prevExp.reduce((s: number, e: any) => s + Number(e.amount), 0);
+    const prevUtilite = prevCA - prevCharges;
+
+    const pct = (cur: number, prev: number) => {
+      if (prev === 0) return cur > 0 ? 100 : 0;
+      return Math.round(((cur - prev) / prev) * 10000) / 100;
+    };
+
+    return res.json({
+      success: true,
+      data: {
+        ca,
+        charges,
+        utilite,
+        tva,
+        invoicesIssued,
+        collectionRate,
+        overdueAmount,
+        currency: doConvert ? String(baseCurrency) : currency,
+        period: { from, to },
+        comparePrev: {
+          caDeltaPct: pct(ca, prevCA),
+          chargesDeltaPct: pct(charges, prevCharges),
+          utiliteDeltaPct: pct(utilite, prevUtilite),
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('getDashboardKpis error', err);
+    return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur serveur' } });
+  }
+}
+
+// GET /api/reports/revenue-series
+export async function getRevenueSeries(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id || (req as any).userId;
+    if (!userId) throw new AppError('Non autorisé', 401, 'UNAUTHORIZED');
+    const { dateFrom, dateTo, currency = 'CHF', granularity = 'monthly', convert: convertFlag2, baseCurrency: baseCurrency2 } = req.query as Record<string, string>;
+    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().getFullYear(), 0, 1);
+    const to = dateTo ? new Date(dateTo) : new Date(new Date().getFullYear(), 11, 31);
+    const doConvert = convertFlag2 === '1' && !!baseCurrency2;
+
+    const periods: { key: string; start: Date; end: Date }[] = [];
+    const cursor = new Date(from);
+    const push = (start: Date, end: Date) => periods.push({ key: start.toISOString().substring(0, granularity === 'monthly' ? 7 : 10), start, end });
+    if (granularity === 'daily') {
+      while (cursor <= to) { const start = new Date(cursor); const end = new Date(cursor); push(start, end); cursor.setDate(cursor.getDate() + 1); }
+    } else if (granularity === 'weekly') {
+      while (cursor <= to) { const start = new Date(cursor); const end = new Date(cursor); end.setDate(end.getDate() + 6); push(start, end); cursor.setDate(cursor.getDate() + 7); }
+    } else if (granularity === 'yearly') {
+      // group by month for yearly as well
+      cursor.setDate(1);
+      while (cursor <= to) { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1); const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); periods.push({ key: start.toISOString().substring(0, 7), start, end }); cursor.setMonth(cursor.getMonth() + 1); }
+    } else { // monthly
+      cursor.setDate(1);
+      while (cursor <= to) { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1); const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); periods.push({ key: start.toISOString().substring(0, 7), start, end }); cursor.setMonth(cursor.getMonth() + 1); }
+    }
+
+    const series = [] as Array<{ period: string; caPaid: number; charges: number; utilite: number }>;
+    for (const p of periods) {
+      const paid = await prisma.invoice.findMany({
+        where: {
+          userId,
+          paymentStatus: 'PAID',
+          OR: [
+            { /* paidDate removed - use payments */: { gte: p.start, lte: p.end } },
+            { AND: [{ /* paidDate removed - use payments */: null }, { issueDate: { gte: p.start, lte: p.end } }] },
+          ],
+        },
+        select: { subtotal: true, currency: true, /* paidDate removed - use payments */: true, issueDate: true },
+      });
+      const ca = await (async () => {
+        if (!doConvert) return paid.reduce((s: number, i: any) => s + Number(i.subtotal), 0);
+        let sum = 0;
+        for (const i of paid) {
+          const d = (i./* paidDate removed - use payments */ as Date) || (i.issueDate as Date) || p.end;
+          sum += await fxConvert(Number(i.subtotal), String(i.currency), String(baseCurrency2), d);
+        }
+        return sum;
+      })();
+      const exp = await prisma.expense.findMany({ where: { userId, date: { gte: p.start, lte: p.end } }, select: { amount: true, currency: true, date: true } });
+      const ch = await (async () => {
+        if (!doConvert) return exp.reduce((s: number, e: any) => s + Number(e.amount), 0);
+        let sum = 0;
+        for (const e of exp) {
+          sum += await fxConvert(Number(e.amount), String(e.currency), String(baseCurrency2), e.date as Date);
+        }
+        return sum;
+      })();
+      series.push({ period: p.key, caPaid: ca, charges: ch, utilite: ca - ch });
+    }
+
+    return res.json({ success: true, data: { series, currency: doConvert ? String(baseCurrency2) : currency, period: { from, to }, granularity } });
+  } catch (err: any) {
+    console.error('getRevenueSeries error', err);
+    return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur serveur' } });
+  }
+}
+
+// GET /api/reports/invoice-status-breakdown
+export async function getInvoiceStatusBreakdown(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id || (req as any).userId;
+    if (!userId) throw new AppError('Non autorisé', 401, 'UNAUTHORIZED');
+    const { dateFrom, dateTo } = req.query as Record<string, string>;
+    const now = new Date();
+    const from = dateFrom ? new Date(dateFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = dateTo ? new Date(dateTo) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const [draft, sent, paid, overdue] = await Promise.all([
+      prisma.invoice.count({ where: { userId, status: 'DRAFT', issueDate: { gte: from, lte: to } } }),
+      prisma.invoice.count({ where: { userId, status: 'SENT', issueDate: { gte: from, lte: to } } }),
+      prisma.invoice.count({ where: { userId, paymentStatus: 'PAID', issueDate: { gte: from, lte: to } } }),
+      prisma.invoice.count({ where: { userId, // TODO: status 'overdue' no existe, usar paymentStatus y dueDate, issueDate: { gte: from, lte: to } } }),
+    ]);
+
+    return res.json({ success: true, data: { draft, sent, paid, overdue, period: { from, to } } });
+  } catch (err: any) {
+    console.error('getInvoiceStatusBreakdown error', err);
+    return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur serveur' } });
+  }
+}

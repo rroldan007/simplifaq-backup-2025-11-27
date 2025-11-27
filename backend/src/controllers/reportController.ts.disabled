@@ -1,0 +1,795 @@
+import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
+import { ApiResponse, AppError } from '../types';
+
+const prisma = new PrismaClient();
+
+// Validation schemas
+const dateRangeSchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+});
+
+const periodSchema = z.object({
+  period: z.enum(['month', 'quarter', 'year']).optional().default('month'),
+  year: z.number().int().min(2020).max(2030).optional(),
+  month: z.number().int().min(1).max(12).optional(),
+});
+
+// GET /api/reports/financial-summary - Get financial summary
+export const getFinancialSummary = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    const adminId = (req as any).admin?.id; // From adminAuth middleware
+
+    if (!userId && !adminId) {
+      throw new AppError('Accès non autorisé', 401, 'UNAUTHORIZED');
+    }
+
+    // If an admin is connected, we don't filter by userId to get a global view.
+    const whereClause: { userId?: string } = adminId ? {} : { userId };
+
+    const { from, to } = req.query;
+    const currentDate = new Date();
+    
+    // Default to current month if no dates provided
+    const startDate = from ? new Date(from as string) : new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const endDate = to ? new Date(to as string) : new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+    // Get invoice statistics and client count
+    const [
+      totalInvoices,
+      draftInvoices,
+      sentInvoices,
+      paidInvoices,
+      overdueInvoices,
+      totalRevenue,
+      pendingRevenue,
+      overdueRevenue,
+      tvaByRate,
+      activeClients
+    ] = await Promise.all([
+      // Total invoices count
+      prisma.invoice.count({
+        where: {
+          ...whereClause,
+          issueDate: { gte: startDate, lte: endDate },
+        },
+      }),
+      
+      // Draft invoices
+      prisma.invoice.count({
+        where: {
+          ...whereClause,
+          status: 'DRAFT',
+          issueDate: { gte: startDate, lte: endDate },
+        },
+      }),
+      
+      // Sent invoices
+      prisma.invoice.count({
+        where: {
+          ...whereClause,
+          status: 'SENT',
+          issueDate: { gte: startDate, lte: endDate },
+        },
+      }),
+      
+      // Paid invoices
+      prisma.invoice.count({
+        where: {
+          ...whereClause,
+          paymentStatus: 'PAID',
+          issueDate: { gte: startDate, lte: endDate },
+        },
+      }),
+      
+      // Overdue invoices
+      prisma.invoice.count({
+        where: {
+          ...whereClause,
+          // TODO: status 'overdue' no existe, usar paymentStatus y dueDate,
+          issueDate: { gte: startDate, lte: endDate },
+        },
+      }),
+      
+      // Total revenue (paid invoices)
+      prisma.invoice.aggregate({
+        where: {
+          ...whereClause,
+          paymentStatus: 'PAID',
+          issueDate: { gte: startDate, lte: endDate },
+        },
+        _sum: { total: true },
+      }),
+      
+      // Pending revenue (sent invoices)
+      prisma.invoice.aggregate({
+        where: {
+          ...whereClause,
+          status: 'SENT',
+          issueDate: { gte: startDate, lte: endDate },
+        },
+        _sum: { total: true },
+      }),
+      
+      // Overdue revenue
+      prisma.invoice.aggregate({
+        where: {
+          ...whereClause,
+          // TODO: status 'overdue' no existe, usar paymentStatus y dueDate,
+          issueDate: { gte: startDate, lte: endDate },
+        },
+        _sum: { total: true },
+      }),
+      
+      // TVA breakdown by rate
+      prisma.invoiceItem.groupBy({
+        by: ['tvaRate'],
+        where: {
+          invoice: {
+            ...whereClause,
+            status: { in: ['SENT', 'paid', 'overdue'] },
+            issueDate: { gte: startDate, lte: endDate },
+          },
+        },
+        _sum: {
+          total: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+      
+      // Active clients count
+      prisma.client.count({
+        where: {
+          ...whereClause,
+          isActive: true,
+        },
+      }),
+    ]);
+
+    // Calculate TVA amounts by rate
+    const tvaBreakdown = tvaByRate.map(item => {
+      const netAmount = Number(item._sum.total) / (1 + Number(item.tvaRate) / 100);
+      const tvaAmount = Number(item._sum.total) - netAmount;
+      
+      return {
+        rate: Number(item.tvaRate),
+        netAmount: Math.round(netAmount * 100) / 100,
+        tvaAmount: Math.round(tvaAmount * 100) / 100,
+        totalAmount: Number(item._sum.total),
+        itemCount: item._count.id,
+      };
+    });
+
+    const summary = {
+      period: {
+        from: startDate.toISOString(),
+        to: endDate.toISOString(),
+      },
+      invoices: {
+        total: totalInvoices,
+        draft: draftInvoices,
+        sent: sentInvoices,
+        paid: paidInvoices,
+        overdue: overdueInvoices,
+      },
+      revenue: {
+        total: Number(totalRevenue._sum.total) || 0,
+        pending: Number(pendingRevenue._sum.total) || 0,
+        overdue: Number(overdueRevenue._sum.total) || 0,
+      },
+      activeClients: activeClients,
+      tva: {
+        breakdown: tvaBreakdown,
+        totalTva: tvaBreakdown.reduce((sum, item) => sum + item.tvaAmount, 0),
+        totalNet: tvaBreakdown.reduce((sum, item) => sum + item.netAmount, 0),
+      },
+    };
+
+    const response: ApiResponse = {
+      success: true,
+      data: summary,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error generating financial summary:', error);
+
+    if (error instanceof AppError) {
+      const response: ApiResponse = {
+        success: false,
+        error: { code: error.code, message: error.message },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(error.statusCode).json(response);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(response);
+  }
+};
+
+// GET /api/reports/tva-report - Get Swiss TVA report for tax declarations
+export const getTvaReport = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+    }
+
+    const { from, to } = req.query;
+    
+    if (!from || !to) {
+      throw new AppError('Période requise (from et to)', 400, 'MISSING_PERIOD');
+    }
+
+    const startDate = new Date(from as string);
+    const endDate = new Date(to as string);
+
+    // Validate date range
+    if (startDate >= endDate) {
+      throw new AppError('Date de début doit être antérieure à la date de fin', 400, 'INVALID_DATE_RANGE');
+    }
+
+    // Define where clause for user filtering
+    const whereClause = { userId };
+
+    // Get all invoice items for the period (only for invoices that are sent, paid, or overdue)
+    const invoiceItems = await prisma.invoiceItem.findMany({
+      where: {
+        invoice: {
+          ...whereClause,
+          status: { in: ['SENT', 'paid', 'overdue'] },
+          issueDate: { gte: startDate, lte: endDate },
+        },
+      },
+      include: {
+        invoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            issueDate: true,
+            status: true,
+            clientId: true,
+            currency: true,
+          },
+        },
+      },
+    });
+
+    // Group by TVA rate and calculate totals
+    const tvaRates = [0.00, 3.50, 8.10]; // Swiss TVA rates
+    const tvaReport = tvaRates.map(rate => {
+      const itemsForRate = invoiceItems.filter(item => Number(item.tvaRate) === rate);
+      
+      const totalNet = itemsForRate.reduce((sum, item) => {
+        const netAmount = Number(item.total) / (1 + Number(item.tvaRate) / 100);
+        return sum + netAmount;
+      }, 0);
+      
+      const totalTva = itemsForRate.reduce((sum, item) => {
+        const netAmount = Number(item.total) / (1 + Number(item.tvaRate) / 100);
+        const tvaAmount = Number(item.total) - netAmount;
+        return sum + tvaAmount;
+      }, 0);
+      
+      const totalGross = itemsForRate.reduce((sum, item) => sum + Number(item.total), 0);
+
+      return {
+        rate,
+        rateLabel: rate === 0 ? 'Exonéré TVA' : rate === 3.50 ? 'Taux réduit' : 'Taux normal',
+        itemCount: itemsForRate.length,
+        totalNet: Math.round(totalNet * 100) / 100,
+        totalTva: Math.round(totalTva * 100) / 100,
+        totalGross: Math.round(totalGross * 100) / 100,
+        invoices: Array.from(new Set(itemsForRate.map(item => item.invoice.invoiceNumber))),
+      };
+    });
+
+    // Calculate summary totals
+    const summary = {
+      totalNet: Math.round(tvaReport.reduce((sum, rate) => sum + rate.totalNet, 0) * 100) / 100,
+      totalTva: Math.round(tvaReport.reduce((sum, rate) => sum + rate.totalTva, 0) * 100) / 100,
+      totalGross: Math.round(tvaReport.reduce((sum, rate) => sum + rate.totalGross, 0) * 100) / 100,
+      totalInvoices: Array.from(new Set(invoiceItems.map(item => item.invoice.invoiceNumber))).length,
+      totalItems: invoiceItems.length,
+    };
+
+    // Get company information for the report
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        companyName: true,
+        firstName: true,
+        lastName: true,
+        vatNumber: true,
+        street: true,
+        city: true,
+        postalCode: true,
+        country: true,
+        canton: true,
+      },
+    });
+
+    const report = {
+      period: {
+        from: startDate.toISOString(),
+        to: endDate.toISOString(),
+        label: `${startDate.toLocaleDateString('fr-CH')} - ${endDate.toLocaleDateString('fr-CH')}`,
+      },
+      company: user,
+      tvaRates: tvaReport,
+      summary,
+      generatedAt: new Date().toISOString(),
+      currency: 'CHF', // Default Swiss currency
+    };
+
+    const response: ApiResponse = {
+      success: true,
+      data: report,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error generating TVA report:', error);
+
+    if (error instanceof AppError) {
+      const response: ApiResponse = {
+        success: false,
+        error: { code: error.code, message: error.message },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(error.statusCode).json(response);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(response);
+  }
+};
+
+// GET /api/reports/income-report - Get income report by period
+export const getIncomeReport = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+    }
+
+    const { period = 'month', year, month } = req.query;
+    const validatedQuery = periodSchema.parse({ period, year: year ? Number(year) : undefined, month: month ? Number(month) : undefined });
+
+    const currentDate = new Date();
+    let startDate: Date;
+    let endDate: Date;
+    let periodLabel: string;
+
+    // Calculate date range based on period
+    switch (validatedQuery.period) {
+      case 'month':
+        const targetYear = validatedQuery.year || currentDate.getFullYear();
+        const targetMonth = validatedQuery.month || (currentDate.getMonth() + 1);
+        startDate = new Date(targetYear, targetMonth - 1, 1);
+        endDate = new Date(targetYear, targetMonth, 0);
+        periodLabel = `${startDate.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' })}`;
+        break;
+        
+      case 'quarter':
+        const qYear = validatedQuery.year || currentDate.getFullYear();
+        const currentQuarter = Math.floor(currentDate.getMonth() / 3) + 1;
+        const quarter = validatedQuery.month ? Math.ceil(validatedQuery.month / 3) : currentQuarter;
+        startDate = new Date(qYear, (quarter - 1) * 3, 1);
+        endDate = new Date(qYear, quarter * 3, 0);
+        periodLabel = `T${quarter} ${qYear}`;
+        break;
+        
+      case 'year':
+        const yYear = validatedQuery.year || currentDate.getFullYear();
+        startDate = new Date(yYear, 0, 1);
+        endDate = new Date(yYear, 11, 31);
+        periodLabel = yYear.toString();
+        break;
+        
+      default:
+        throw new AppError('Période invalide', 400, 'INVALID_PERIOD');
+    }
+
+    // Get invoices for the period
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        userId,
+        issueDate: { gte: startDate, lte: endDate },
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            companyName: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        items: true,
+      },
+      orderBy: { issueDate: 'desc' },
+    });
+
+    // Group by status
+    const invoicesByStatus = {
+      draft: invoices.filter(inv => inv.status === 'DRAFT'),
+      sent: invoices.filter(inv => inv.status === 'SENT'),
+      paid: invoices.filter(inv => inv.status === 'paid'),
+      overdue: invoices.filter(inv => inv.status === 'overdue'),
+      cancelled: invoices.filter(inv => inv.status === 'cancelled'),
+    };
+
+    // Calculate revenue by status
+    const revenueByStatus = {
+      draft: invoicesByStatus.draft.reduce((sum, inv) => sum + Number(inv.total), 0),
+      sent: invoicesByStatus.sent.reduce((sum, inv) => sum + Number(inv.total), 0),
+      paid: invoicesByStatus.paid.reduce((sum, inv) => sum + Number(inv.total), 0),
+      overdue: invoicesByStatus.overdue.reduce((sum, inv) => sum + Number(inv.total), 0),
+      cancelled: invoicesByStatus.cancelled.reduce((sum, inv) => sum + Number(inv.total), 0),
+    };
+
+    // Group by client
+    const clientRevenue = invoices
+      .filter(inv => inv.status !== 'cancelled')
+      .reduce((acc, invoice) => {
+        const clientKey = invoice.clientId;
+        const clientName = invoice.client.companyName || 
+          `${invoice.client.firstName} ${invoice.client.lastName}`.trim();
+        
+        if (!acc[clientKey]) {
+          acc[clientKey] = {
+            clientId: clientKey,
+            clientName,
+            invoiceCount: 0,
+            totalRevenue: 0,
+            paidRevenue: 0,
+            pendingRevenue: 0,
+          };
+        }
+        
+        acc[clientKey].invoiceCount++;
+        acc[clientKey].totalRevenue += Number(invoice.total);
+        
+        if (invoice.status === 'paid') {
+          acc[clientKey].paidRevenue += Number(invoice.total);
+        } else if (invoice.status === 'SENT' || invoice.status === 'overdue') {
+          acc[clientKey].pendingRevenue += Number(invoice.total);
+        }
+        
+        return acc;
+      }, {} as Record<string, any>);
+
+    // Convert to array and sort by revenue
+    const topClients = Object.values(clientRevenue)
+      .sort((a: any, b: any) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 10); // Top 10 clients
+
+    // Monthly breakdown for trend analysis
+    const monthlyBreakdown = [];
+    if (validatedQuery.period === 'year') {
+      for (let month = 0; month < 12; month++) {
+        const monthStart = new Date(startDate.getFullYear(), month, 1);
+        const monthEnd = new Date(startDate.getFullYear(), month + 1, 0);
+        
+        const monthInvoices = invoices.filter(inv => 
+          inv.issueDate >= monthStart && inv.issueDate <= monthEnd
+        );
+        
+        monthlyBreakdown.push({
+          month: month + 1,
+          monthName: monthStart.toLocaleDateString('fr-CH', { month: 'long' }),
+          invoiceCount: monthInvoices.length,
+          totalRevenue: monthInvoices.reduce((sum, inv) => sum + Number(inv.total), 0),
+          paidRevenue: monthInvoices
+            .filter(inv => inv.status === 'paid')
+            .reduce((sum, inv) => sum + Number(inv.total), 0),
+        });
+      }
+    }
+
+    const report = {
+      period: {
+        type: validatedQuery.period,
+        from: startDate.toISOString(),
+        to: endDate.toISOString(),
+        label: periodLabel,
+      },
+      summary: {
+        totalInvoices: invoices.length,
+        totalRevenue: invoices.reduce((sum, inv) => sum + Number(inv.total), 0),
+        paidRevenue: revenueByStatus.paid,
+        pendingRevenue: revenueByStatus.sent + revenueByStatus.overdue,
+        averageInvoiceValue: invoices.length > 0 
+          ? Math.round((invoices.reduce((sum, inv) => sum + Number(inv.total), 0) / invoices.length) * 100) / 100
+          : 0,
+      },
+      invoicesByStatus: {
+        draft: { count: invoicesByStatus.draft.length, revenue: revenueByStatus.draft },
+        sent: { count: invoicesByStatus.sent.length, revenue: revenueByStatus.sent },
+        paid: { count: invoicesByStatus.paid.length, revenue: revenueByStatus.paid },
+        overdue: { count: invoicesByStatus.overdue.length, revenue: revenueByStatus.overdue },
+        cancelled: { count: invoicesByStatus.cancelled.length, revenue: revenueByStatus.cancelled },
+      },
+      topClients,
+      monthlyBreakdown: validatedQuery.period === 'year' ? monthlyBreakdown : undefined,
+      generatedAt: new Date().toISOString(),
+      currency: 'CHF',
+    };
+
+    const response: ApiResponse = {
+      success: true,
+      data: report,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error generating income report:', error);
+
+    if (error instanceof z.ZodError) {
+      const response: ApiResponse = {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Paramètres invalides', details: error.issues },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(400).json(response);
+      return;
+    }
+
+    if (error instanceof AppError) {
+      const response: ApiResponse = {
+        success: false,
+        error: { code: error.code, message: error.message },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(error.statusCode).json(response);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(response);
+  }
+};
+
+// GET /api/reports/client-report - Get client-specific report
+export const getClientReport = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+    }
+
+    const { from, to, clientId } = req.query;
+    
+    if (!from || !to) {
+      throw new AppError('Période requise (from et to)', 400, 'MISSING_PERIOD');
+    }
+
+    const startDate = new Date(from as string);
+    const endDate = new Date(to as string);
+
+    // Validate date range
+    if (startDate >= endDate) {
+      throw new AppError('Date de début doit être antérieure à la date de fin', 400, 'INVALID_DATE_RANGE');
+    }
+
+    // Build where clause for invoices
+    const invoiceWhere: any = {
+      userId,
+      issueDate: { gte: startDate, lte: endDate },
+    };
+
+    // Add client filter if specified
+    if (clientId) {
+      invoiceWhere.clientId = clientId as string;
+    }
+
+    // Get invoices for the period and client
+    const invoices = await prisma.invoice.findMany({
+      where: invoiceWhere,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        status: true,
+        issueDate: true,
+        dueDate: true,
+        /* paidDate removed - use payments */: true,
+        subtotal: true,
+        tvaAmount: true,
+        total: true,
+        currency: true,
+        client: {
+          select: {
+            id: true,
+            companyName: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            street: true,
+            city: true,
+            postalCode: true,
+            country: true,
+          },
+        },
+        items: true,
+      },
+      orderBy: { issueDate: 'desc' },
+    });
+
+    // Get client information if specific client is requested
+    let selectedClient = null;
+    if (clientId) {
+      const client = await prisma.client.findFirst({
+        where: { id: clientId as string, userId },
+        select: {
+          id: true,
+          companyName: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          street: true,
+          city: true,
+          postalCode: true,
+          country: true,
+        },
+      });
+
+      if (client) {
+        selectedClient = {
+          id: client.id,
+          name: client.companyName || `${client.firstName} ${client.lastName}`.trim(),
+          email: client.email,
+          address: `${client.street}, ${client.postalCode} ${client.city}`,
+        };
+      }
+    }
+
+    // Calculate summary statistics
+    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+    const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+    const pendingInvoices = invoices.filter(inv => inv.status === 'SENT');
+    const overdueInvoices = invoices.filter(inv => inv.status === 'overdue');
+    
+    const paidAmount = paidInvoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+    const pendingAmount = pendingInvoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+    const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+
+    // Calculate payment delays
+    const paidInvoicesWithDelay = paidInvoices.filter(inv => inv./* paidDate removed - use payments */).map(inv => {
+      const dueDate = new Date(inv.dueDate);
+      const /* paidDate removed - use payments */ = new Date(inv./* paidDate removed - use payments */!);
+      const delayDays = Math.floor((/* paidDate removed - use payments */.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      return { ...inv, paymentDelay: delayDays };
+    });
+
+    const averagePaymentDelay = paidInvoicesWithDelay.length > 0
+      ? Math.round(paidInvoicesWithDelay.reduce((sum, inv) => sum + inv.paymentDelay, 0) / paidInvoicesWithDelay.length)
+      : 0;
+
+    const onTimePayments = paidInvoicesWithDelay.filter(inv => inv.paymentDelay <= 0).length;
+    const latePayments = paidInvoicesWithDelay.filter(inv => inv.paymentDelay > 0).length;
+    const longestPaymentDelay = paidInvoicesWithDelay.length > 0
+      ? Math.max(...paidInvoicesWithDelay.map(inv => inv.paymentDelay))
+      : 0;
+
+    // Monthly activity breakdown
+    const monthlyActivity = [];
+    const monthsInPeriod = [];
+    
+    // Generate months between start and end date
+    const currentMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    
+    while (currentMonth <= endMonth) {
+      monthsInPeriod.push(new Date(currentMonth));
+      currentMonth.setMonth(currentMonth.getMonth() + 1);
+    }
+
+    for (const month of monthsInPeriod) {
+      const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+      const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+      
+      const monthInvoices = invoices.filter(inv => 
+        inv.issueDate >= monthStart && inv.issueDate <= monthEnd
+      );
+      
+      monthlyActivity.push({
+        month: monthStart.toISOString().substring(0, 7), // YYYY-MM format
+        revenue: monthInvoices.reduce((sum, inv) => sum + Number(inv.total), 0),
+        invoiceCount: monthInvoices.length,
+      });
+    }
+
+    // Prepare invoice history with payment information
+    const invoiceHistory = invoices.map(invoice => ({
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      date: invoice.issueDate.toISOString(),
+      dueDate: invoice.dueDate.toISOString(),
+      amount: Number(invoice.total),
+      status: invoice.status,
+      paymentDate: invoice./* paidDate removed - use payments */?.toISOString(),
+      paymentDelay: invoice./* paidDate removed - use payments */ ? 
+        Math.floor((new Date(invoice./* paidDate removed - use payments */).getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24)) : 
+        undefined,
+    }));
+
+    const report = {
+      period: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        label: `${startDate.toLocaleDateString('fr-CH')} - ${endDate.toLocaleDateString('fr-CH')}`,
+      },
+      selectedClient,
+      summary: {
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalInvoices: invoices.length,
+        averageInvoiceAmount: invoices.length > 0 ? Math.round((totalRevenue / invoices.length) * 100) / 100 : 0,
+        paidAmount: Math.round(paidAmount * 100) / 100,
+        pendingAmount: Math.round(pendingAmount * 100) / 100,
+        overdueAmount: Math.round(overdueAmount * 100) / 100,
+        paymentDelayAverage: averagePaymentDelay,
+      },
+      invoiceHistory,
+      paymentBehavior: {
+        onTimePayments,
+        latePayments,
+        averagePaymentDelay,
+        longestPaymentDelay,
+      },
+      monthlyActivity,
+      generatedAt: new Date().toISOString(),
+      currency: 'CHF',
+    };
+
+    const response: ApiResponse = {
+      success: true,
+      data: report,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error generating client report:', error);
+
+    if (error instanceof AppError) {
+      const response: ApiResponse = {
+        success: false,
+        error: { code: error.code, message: error.message },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(error.statusCode).json(response);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(response);
+  }
+};

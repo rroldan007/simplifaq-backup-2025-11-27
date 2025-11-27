@@ -1,0 +1,139 @@
+import React, { useState } from 'react';
+import { ArrowRight, Upload, Image as ImageIcon } from 'lucide-react';
+import { api } from '../../../services/api';
+
+interface LogoStepProps {
+  onComplete: () => void;
+  onSkip: () => void;
+}
+
+export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Veuillez sélectionner une image');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('L\'image ne doit pas dépasser 5MB');
+      return;
+    }
+
+    setError(null);
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+
+      const response = await api.post('/upload/logo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setPreview(response.data.data.logoUrl);
+      setUploading(false);
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Erreur lors du téléchargement');
+      setUploading(false);
+    }
+  };
+
+  const handleContinue = () => {
+    if (preview) {
+      onComplete();
+    } else {
+      onSkip();
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <p className="text-gray-600">
+        Ajoutez le logo de votre entreprise. Il apparaîtra sur vos factures et devis.
+        Vous pouvez passer cette étape et l'ajouter plus tard.
+      </p>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col items-center justify-center">
+        {preview ? (
+          <div className="relative">
+            <img
+              src={preview}
+              alt="Logo preview"
+              className="max-w-xs max-h-48 object-contain border-2 border-gray-200 rounded-lg p-4"
+            />
+            <button
+              onClick={() => setPreview(null)}
+              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors"
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <label className="w-full max-w-md cursor-pointer">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-indigo-500 transition-colors">
+              {uploading ? (
+                <div className="flex flex-col items-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                  <p className="mt-4 text-gray-600">Téléchargement...</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-2">
+                    Cliquez pour télécharger ou glissez-déposez
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    PNG, JPG, SVG jusqu'à 5MB
+                  </p>
+                </>
+              )}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+              disabled={uploading}
+            />
+          </label>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-3 pt-4">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="px-6 py-3 text-gray-600 hover:text-gray-900 transition-colors font-medium"
+        >
+          Passer cette étape
+        </button>
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={uploading}
+          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+        >
+          Continuer
+          <ArrowRight className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,41 @@
+name: Lint & Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/minimal-landing-page
+      - main
+  pull_request:
+    branches:
+      - feat/minimal-landing-page
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Test
+        working-directory: ./frontend
+        run: npm test

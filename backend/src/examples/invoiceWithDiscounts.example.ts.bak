@@ -1,0 +1,295 @@
+/**
+ * EJEMPLO: Cómo integrar descuentos en createInvoice y updateInvoice
+ * 
+ * Este archivo muestra cómo modificar el controlador de facturas
+ * para soportar el sistema completo de descuentos.
+ */
+
+import { processInvoiceItems, calculateInvoiceTotalsWithDiscount } from '../services/invoiceCalculations';
+import { DiscountType, LineDiscountSource } from '../types/discount';
+
+/**
+ * EJEMPLO 1: Crear factura con descuentos de línea
+ */
+async function createInvoiceExample(req: any, userId: string) {
+  // Los items vienen del frontend con descuentos opcionales
+  const items = req.body.items; // Array de InvoiceItemInput
+  
+  // Ejemplo de item con descuento manual:
+  // {
+  //   productId: "xxx",
+  //   description: "Producto A",
+  //   quantity: 2,
+  //   unitPrice: 100,
+  //   tvaRate: 7.7,
+  //   lineDiscountValue: 10,        // 10% de descuento
+  //   lineDiscountType: "PERCENT",
+  //   lineDiscountSource: "MANUAL"
+  // }
+
+  // Paso 1: Procesar items (aplica descuentos de producto automáticamente si corresponde)
+  const processedItems = await processInvoiceItems(items, userId);
+  
+  // processedItems ahora tiene:
+  // - subtotalBeforeDiscount
+  // - discountAmount
+  // - subtotalAfterDiscount
+  // - lineDiscountSource (FROM_PRODUCT, MANUAL, o NONE)
+
+  // Paso 2: Calcular totales con descuento global (si existe)
+  const globalDiscountValue = req.body.globalDiscountValue;
+  const globalDiscountType = req.body.globalDiscountType as DiscountType | undefined;
+  
+  const totals = calculateInvoiceTotalsWithDiscount(
+    processedItems,
+    globalDiscountValue,
+    globalDiscountType
+  );
+
+  // totals contiene:
+  // - subtotal (después de todos los descuentos)
+  // - tvaAmount
+  // - total
+  // - globalDiscountAmount
+
+  // Paso 3: Crear factura con los datos calculados
+  const invoice = await prisma.invoice.create({
+    data: {
+      userId,
+      clientId: req.body.clientId,
+      invoiceNumber: await generateInvoiceNumber(userId),
+      status: 'DRAFT',
+      issueDate: new Date(),
+      dueDate: new Date(req.body.dueDate),
+      language: 'fr',
+      currency: 'CHF',
+      subtotal: totals.subtotal,
+      tvaAmount: totals.tvaAmount,
+      total: totals.total,
+      // Descuento global
+      globalDiscountValue: globalDiscountValue || null,
+      globalDiscountType: globalDiscountType || null,
+      globalDiscountNote: req.body.globalDiscountNote || null,
+      notes: req.body.notes,
+      terms: req.body.terms,
+      // Crear líneas con descuentos
+      items: {
+        create: processedItems.map((item) => ({
+          productId: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          tvaRate: item.tvaRate,
+          total: item.total,
+          order: item.order,
+          // Campos de descuento
+          lineDiscountValue: item.lineDiscountValue || null,
+          lineDiscountType: item.lineDiscountType || null,
+          lineDiscountSource: item.lineDiscountSource,
+          subtotalBeforeDiscount: item.subtotalBeforeDiscount || null,
+          discountAmount: item.discountAmount || null,
+          subtotalAfterDiscount: item.subtotalAfterDiscount || null,
+        })),
+      },
+    },
+    include: {
+      items: true,
+      client: true,
+    },
+  });
+
+  return invoice;
+}
+
+/**
+ * EJEMPLO 2: Actualizar factura recalculando descuentos
+ */
+async function updateInvoiceExample(req: any, invoiceId: string, userId: string) {
+  // Verificar que la factura existe y pertenece al usuario
+  const existingInvoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, userId },
+    include: { items: true },
+  });
+
+  if (!existingInvoice) {
+    throw new Error('Factura no encontrada');
+  }
+
+  // Si hay nuevos items, procesarlos
+  let processedItems;
+  if (req.body.items) {
+    processedItems = await processInvoiceItems(req.body.items, userId);
+  }
+
+  // Recalcular totales si cambiaron items o descuento global
+  let totals;
+  if (processedItems || req.body.globalDiscountValue !== undefined) {
+    const itemsToUse = processedItems || existingInvoice.items.map(item => ({
+      subtotalAfterDiscount: Number(item.subtotalAfterDiscount || item.total),
+      tvaRate: Number(item.tvaRate),
+    }));
+
+    totals = calculateInvoiceTotalsWithDiscount(
+      itemsToUse,
+      req.body.globalDiscountValue ?? Number(existingInvoice.globalDiscountValue || 0),
+      req.body.globalDiscountType ?? (existingInvoice.globalDiscountType as DiscountType | undefined)
+    );
+  }
+
+  // Actualizar factura
+  const updatedInvoice = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      ...(req.body.dueDate && { dueDate: new Date(req.body.dueDate) }),
+      ...(req.body.notes !== undefined && { notes: req.body.notes }),
+      ...(req.body.terms !== undefined && { terms: req.body.terms }),
+      ...(totals && {
+        subtotal: totals.subtotal,
+        tvaAmount: totals.tvaAmount,
+        total: totals.total,
+      }),
+      ...(req.body.globalDiscountValue !== undefined && {
+        globalDiscountValue: req.body.globalDiscountValue,
+        globalDiscountType: req.body.globalDiscountType,
+        globalDiscountNote: req.body.globalDiscountNote || null,
+      }),
+      // Si hay nuevos items, eliminar los antiguos y crear nuevos
+      ...(processedItems && {
+        items: {
+          deleteMany: {},
+          create: processedItems.map((item) => ({
+            productId: item.productId,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            tvaRate: item.tvaRate,
+            total: item.total,
+            order: item.order,
+            lineDiscountValue: item.lineDiscountValue || null,
+            lineDiscountType: item.lineDiscountType || null,
+            lineDiscountSource: item.lineDiscountSource,
+            subtotalBeforeDiscount: item.subtotalBeforeDiscount || null,
+            discountAmount: item.discountAmount || null,
+            subtotalAfterDiscount: item.subtotalAfterDiscount || null,
+          })),
+        },
+      }),
+    },
+    include: {
+      items: true,
+      client: true,
+    },
+  });
+
+  return updatedInvoice;
+}
+
+/**
+ * EJEMPLO 3: Endpoint para aplicar descuento de producto a línea existente
+ */
+async function applyProductDiscountToLine(invoiceId: string, lineId: string) {
+  const line = await prisma.invoiceItem.findFirst({
+    where: { id: lineId, invoiceId },
+    include: { product: true },
+  });
+
+  if (!line || !line.product) {
+    throw new Error('Línea o producto no encontrado');
+  }
+
+  // Verificar si el producto tiene descuento activo
+  if (!line.product.discountActive || !line.product.discountValue || !line.product.discountType) {
+    throw new Error('El producto no tiene descuento activo');
+  }
+
+  // Aplicar descuento del producto
+  const { subtotalBeforeDiscount, discountAmount, subtotalAfterDiscount } = 
+    calculateLineDiscount(
+      Number(line.unitPrice),
+      Number(line.quantity),
+      Number(line.product.discountValue),
+      line.product.discountType as DiscountType
+    );
+
+  // Actualizar línea
+  await prisma.invoiceItem.update({
+    where: { id: lineId },
+    data: {
+      lineDiscountValue: line.product.discountValue,
+      lineDiscountType: line.product.discountType,
+      lineDiscountSource: 'FROM_PRODUCT',
+      subtotalBeforeDiscount,
+      discountAmount,
+      subtotalAfterDiscount,
+      total: subtotalAfterDiscount,
+    },
+  });
+
+  // Recalcular totales de la factura
+  await recalculateInvoice(invoiceId);
+}
+
+/**
+ * EJEMPLO 4: Endpoint para quitar descuento solo de esta línea
+ */
+async function removeLineDiscount(invoiceId: string, lineId: string) {
+  const line = await prisma.invoiceItem.findFirst({
+    where: { id: lineId, invoiceId },
+  });
+
+  if (!line) {
+    throw new Error('Línea no encontrada');
+  }
+
+  // Calcular sin descuento
+  const subtotal = Number(line.unitPrice) * Number(line.quantity);
+
+  // Actualizar línea sin descuento
+  await prisma.invoiceItem.update({
+    where: { id: lineId },
+    data: {
+      lineDiscountValue: null,
+      lineDiscountType: null,
+      lineDiscountSource: 'NONE',
+      subtotalBeforeDiscount: subtotal,
+      discountAmount: 0,
+      subtotalAfterDiscount: subtotal,
+      total: subtotal,
+    },
+  });
+
+  // Recalcular totales de la factura
+  await recalculateInvoice(invoiceId);
+}
+
+/**
+ * EJEMPLO 5: Endpoint para desactivar descuento en el producto
+ */
+async function disableProductDiscount(productId: string, invoiceId: string, lineId: string) {
+  // 1. Desactivar descuento en el producto
+  await prisma.product.update({
+    where: { id: productId },
+    data: { discountActive: false },
+  });
+
+  // 2. Quitar descuento de esta línea
+  await removeLineDiscount(invoiceId, lineId);
+}
+
+// Helpers para importar
+import { calculateLineDiscount } from '../utils/discountCalculations';
+import { recalculateInvoice } from '../services/invoiceCalculations';
+import { prisma } from '../services/database';
+
+async function generateInvoiceNumber(userId: string): Promise<string> {
+  // Implementación existente
+  return 'FAC-2025-001';
+}
+
+export {
+  createInvoiceExample,
+  updateInvoiceExample,
+  applyProductDiscountToLine,
+  removeLineDiscount,
+  disableProductDiscount,
+};

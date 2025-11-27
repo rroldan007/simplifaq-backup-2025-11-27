@@ -1,0 +1,350 @@
+import { Request, Response } from 'express';
+import { prisma } from '../services/database';
+import { ApiResponse, AppError } from '../types';
+import { generateQuotePDF as renderQuotePDF } from '../utils/quotePDFPdfkit';
+
+// GET /api/quotes - Get all quotes for authenticated user
+export const getQuotes = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+    }
+
+    const where = { userId };
+    const include = {
+      client: {
+        select: { id: true, companyName: true, firstName: true, lastName: true, email: true },
+      },
+      items: { orderBy: { order: 'asc' as const } },
+    } as const;
+    const orderBy = { createdAt: 'desc' as const };
+
+    const quotes = await prisma.quote.findMany({ where, include, orderBy });
+
+    const response: ApiResponse = {
+      success: true,
+      data: quotes,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching quotes:', error);
+    
+    if (error instanceof AppError) {
+      const response: ApiResponse = {
+        success: false,
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+        timestamp: new Date().toISOString(),
+      };
+      res.status(error.statusCode).json(response);
+      return;
+    }
+
+    const response: ApiResponse = {
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Erreur interne du serveur',
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.status(500).json(response);
+  }
+};
+
+// POST /api/quotes - Create new quote
+export const createQuote = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+
+    const { clientId, validUntil, items, notes, terms, language, currency } = req.body;
+    
+    if (!clientId || !Array.isArray(items) || items.length === 0) {
+      throw new AppError('Données requises manquantes', 400, 'MISSING_DATA');
+    }
+
+    let parsedValidUntil: Date | undefined;
+    if (validUntil) {
+      parsedValidUntil = new Date(validUntil);
+      if (isNaN(parsedValidUntil.getTime())) {
+        throw new AppError('Date de validité invalide', 400, 'INVALID_VALID_UNTIL');
+      }
+    }
+
+    const sanitizeNumber = (val: any): number => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') {
+        const normalized = val.replace(',', '.').replace(/[^\d.-]/g, '');
+        const parsed = parseFloat(normalized);
+        return isNaN(parsed) ? NaN : parsed;
+      }
+      return NaN;
+    };
+
+    let subtotal = 0;
+    let tvaAmount = 0;
+
+    const calculatedItems = items.map((item: any, index: number) => {
+      const quantity = sanitizeNumber(item.quantity);
+      const unitPrice = sanitizeNumber(item.unitPrice);
+      const tvaRate = sanitizeNumber(item.tvaRate);
+
+      if (!isFinite(quantity) || quantity < 0 || !isFinite(unitPrice) || unitPrice < 0 || !isFinite(tvaRate) || tvaRate < 0) {
+        throw new AppError('Données de ligne de devis invalides', 400, 'INVALID_QUOTE_ITEM');
+      }
+
+      const itemTotal = quantity * unitPrice;
+      const itemTva = itemTotal * (tvaRate / 100);
+      subtotal += itemTotal;
+      tvaAmount += itemTva;
+
+      return {
+        productId: item.productId || undefined,
+        description: String(item.description || ''),
+        quantity,
+        unitPrice,
+        tvaRate,
+        total: itemTotal,
+        order: index + 1,
+      };
+    });
+
+    const total = subtotal + tvaAmount;
+    const client = await prisma.client.findFirst({ where: { id: clientId, userId } });
+    if (!client) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'CLIENT_NOT_FOUND', message: "Le client sélectionné est introuvable pour votre compte." },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const quote = await prisma.$transaction(async (tx) => {
+      const userCfg = await tx.user.findUnique({
+        where: { id: userId },
+        select: { quotePrefix: true, quotePadding: true, nextQuoteNumber: true },
+      });
+      if (!userCfg) throw new AppError('Utilisateur introuvable', 404, 'USER_NOT_FOUND');
+
+      const makeNumber = (prefix: string | null | undefined, next: number, padding: number): string => {
+        const pad = Math.max(0, Number(padding || 0));
+        const numeric = String(next);
+        const padded = pad > 0 ? numeric.padStart(pad, '0') : numeric;
+        const pref = (prefix || '').trim();
+        return pref ? `${pref}-${padded}` : padded;
+      };
+
+      let attempts = 0;
+      while (attempts < 3) {
+        attempts++;
+        const numberStr = makeNumber(userCfg.quotePrefix, userCfg.nextQuoteNumber, userCfg.quotePadding);
+        try {
+          const created = await tx.quote.create({
+            data: {
+              userId, clientId, quoteNumber: numberStr, status: 'draft', issueDate: new Date(),
+              validUntil: parsedValidUntil, language: 'fr', currency: 'CHF',
+              subtotal, tvaAmount, total, notes, terms,
+              items: { create: calculatedItems },
+            },
+            include: { client: true, items: { orderBy: { order: 'asc' } } },
+          });
+          await tx.user.update({ where: { id: userId }, data: { nextQuoteNumber: { increment: 1 } } });
+          return created;
+        } catch (e: any) {
+          if (e && e.code === 'P2002') {
+            await tx.user.update({ where: { id: userId }, data: { nextQuoteNumber: { increment: 1 } } });
+            const reloaded = await tx.user.findUnique({ where: { id: userId }, select: { nextQuoteNumber: true, quotePrefix: true, quotePadding: true } });
+            if (!reloaded) throw new AppError('Utilisateur introuvable', 404, 'USER_NOT_FOUND');
+            userCfg.nextQuoteNumber = reloaded.nextQuoteNumber;
+            userCfg.quotePrefix = reloaded.quotePrefix;
+            userCfg.quotePadding = reloaded.quotePadding;
+            continue;
+          }
+          throw e;
+        }
+      }
+      throw new AppError('Échec de génération du numéro de devis après plusieurs tentatives', 500, 'QUOTE_NUMBERING_FAILED');
+    });
+
+    res.status(201).json({ success: true, data: quote, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Error creating quote:', error);
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: { code: error.code, message: error.message }, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' }, timestamp: new Date().toISOString() });
+  }
+};
+
+// GET /api/quotes/:id
+export const getQuote = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+
+    const { id } = req.params;
+    const quote = await prisma.quote.findFirst({
+      where: { id, userId },
+      include: { client: true, items: { orderBy: { order: 'asc' } } },
+    });
+
+    if (!quote) throw new AppError('Devis non trouvé', 404, 'QUOTE_NOT_FOUND');
+    res.json({ success: true, data: quote, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Error fetching quote:', error);
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: { code: error.code, message: error.message }, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' }, timestamp: new Date().toISOString() });
+  }
+};
+
+// DELETE /api/quotes/:id
+export const deleteQuote = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+
+    const { id } = req.params;
+    const existing = await prisma.quote.findFirst({ where: { id, userId } });
+    if (!existing) throw new AppError('Devis non trouvé', 404, 'QUOTE_NOT_FOUND');
+    if (existing.convertedInvoiceId) {
+      throw new AppError('Impossible de supprimer un devis converti en facture', 400, 'QUOTE_ALREADY_CONVERTED');
+    }
+
+    await prisma.quote.delete({ where: { id } });
+    res.json({ success: true, data: { message: 'Devis supprimé avec succès' }, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Error deleting quote:', error);
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: { code: error.code, message: error.message }, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' }, timestamp: new Date().toISOString() });
+  }
+};
+
+// GET /api/quotes/:id/pdf
+export const generateQuotePDF = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+
+    const { id } = req.params;
+    const quote = await prisma.quote.findFirst({
+      where: { id, userId },
+      include: { client: true, items: { orderBy: { order: 'asc' } }, user: true },
+    });
+
+    if (!quote) throw new AppError('Devis non trouvé', 404, 'QUOTE_NOT_FOUND');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="devis-${quote.quoteNumber}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+
+    await renderQuotePDF({
+      quote: quote as any,
+      client: quote.client,
+      accentColor: (req.query.accentColor as string) || undefined,
+      template: (req.query.template as string) || undefined,
+      lang: quote.language || 'fr',
+      showHeader: true,
+    }, res);
+  } catch (error) {
+    console.error('Error generating quote PDF:', error);
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: { code: error.code, message: error.message }, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' }, timestamp: new Date().toISOString() });
+  }
+};
+
+// POST /api/quotes/:id/convert
+export const convertQuoteToInvoice = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
+
+    const { id } = req.params;
+    const created = await prisma.$transaction(async (tx) => {
+      const quote = await tx.quote.findFirst({ where: { id, userId }, include: { items: true } });
+      if (!quote) throw new AppError('Devis introuvable', 404, 'QUOTE_NOT_FOUND');
+      if (quote.convertedInvoiceId) throw new AppError('Ce devis a déjà été converti en facture', 400, 'QUOTE_ALREADY_CONVERTED');
+
+      let userCfg = await tx.user.findUnique({
+        where: { id: userId },
+        select: { invoicePrefix: true, invoicePadding: true, nextInvoiceNumber: true },
+      });
+      if (!userCfg) throw new AppError('Utilisateur introuvable', 404, 'USER_NOT_FOUND');
+
+      const makeNumber = (prefix: string | null | undefined, next: number, padding: number): string => {
+        const pad = Math.max(0, Number(padding || 0));
+        const numeric = String(next);
+        const padded = pad > 0 ? numeric.padStart(pad, '0') : numeric;
+        const pref = (prefix || '').trim();
+        return pref ? `${pref}-${padded}` : padded;
+      };
+
+      let attempts = 0;
+      let newInvoice;
+      while (attempts < 3) {
+        attempts++;
+        const numberStr = makeNumber(userCfg.invoicePrefix, userCfg.nextInvoiceNumber, userCfg.invoicePadding);
+        try {
+          newInvoice = await tx.invoice.create({
+            data: {
+              userId, clientId: quote.clientId, invoiceNumber: numberStr, status: 'draft',
+              issueDate: new Date(), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              language: quote.language, currency: quote.currency,
+              subtotal: quote.subtotal, tvaAmount: quote.tvaAmount, total: quote.total,
+              notes: quote.notes || undefined, terms: quote.terms || undefined,
+              items: {
+                create: (quote.items || []).sort((a, b) => a.order - b.order).map((it) => ({
+                  productId: it.productId || undefined,
+                  description: it.description,
+                  quantity: it.quantity,
+                  unitPrice: it.unitPrice,
+                  tvaRate: it.tvaRate,
+                  total: it.total,
+                  order: it.order,
+                })),
+              },
+            },
+          });
+          await tx.user.update({ where: { id: userId }, data: { nextInvoiceNumber: { increment: 1 } } });
+          await tx.quote.update({ where: { id }, data: { convertedInvoiceId: newInvoice.id, status: 'accepted' } });
+          return newInvoice;
+        } catch (e: any) {
+          if (e && e.code === 'P2002') {
+            await tx.user.update({ where: { id: userId }, data: { nextInvoiceNumber: { increment: 1 } } });
+            const reloadedUserCfg = await tx.user.findUnique({ where: { id: userId }, select: { nextInvoiceNumber: true, invoicePrefix: true, invoicePadding: true } });
+            if (!reloadedUserCfg) throw new AppError('Utilisateur introuvable', 404, 'USER_NOT_FOUND');
+            userCfg = reloadedUserCfg;
+            continue;
+          }
+          throw e;
+        }
+      }
+      throw new AppError('Échec de conversion du devis en facture', 500, 'QUOTE_CONVERT_FAILED');
+    });
+
+    res.json({ success: true, data: created, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Error converting quote to invoice:', error);
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: { code: error.code, message: error.message }, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Erreur interne du serveur' }, timestamp: new Date().toISOString() });
+  }
+};

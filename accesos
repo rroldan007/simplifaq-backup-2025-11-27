@@ -1,0 +1,151 @@
+# 🇨🇭 SimpliFaq - Credenciales de Acceso
+# Generado automáticamente el 8/4/2025 15:30:00
+
+## ADMINISTRACIÓN SAAS
+# Panel de administración: http://localhost:3000/admin
+
+### Super Administrador (Acceso completo)
+Email: admin@simplifaq.ch
+Password: AdminSimpliFaq2024!
+[AdminAuth] Reducer action: SET_LOADING 
+Object { type: "SET_LOADING", payload: false }
+AdminAuthContext.tsx:48:11
+[AdminAuth] Current state: 
+Object { isAuthenticated: false, admin: false, token: false }
+AdminAuthContext.tsx:49:11
+[AdminAuth] Reducer action: SET_LOADING 
+Object { type: "SET_LOADING", payload: false }
+AdminAuthContext.tsx:48:11
+[AdminAuth] Current state: 
+Object { isAuthenticated: false, admin: false, token: false }
+AdminAuthContext.tsx:49:11
+[AdminAuth] Reducer action: SET_LOADING 
+Object { type: "SET_LOADING", payload: false }
+AdminAuthContext.tsx:48:11
+[AdminAuth] Current state: 
+Object { isAuthenticated: false, admin: false, token: false }
+AdminAuthContext.tsx:49:11
+[AdminAuth] Reducer action: SET_LOADING 
+Object { type: "SET_LOADING", payload: false }
+AdminAuthContext.tsx:48:11
+[AdminAuth] Current state: 
+Object { isAuthenticated: false, admin: false, token: false }
+AdminAuthContext.tsx:49:11
+
+​
+
+
+Rol: super_admin
+Permisos: Todos los permisos del sistema
+
+### Administrador de Soporte
+Email: support@simplifaq.ch
+Password: SupportSimpliFaq2024!
+Rol: support_admin
+Permisos: Gestión de usuarios y tickets de soporte
+
+### Administrador de Facturación
+Email: billing@simplifaq.ch
+Password: BillingSimpliFaq2024!
+Rol: billing_admin
+Permisos: Gestión de suscripciones y facturación
+
+## APLICACIÓN REGULAR
+# Aplicación principal: http://localhost:5173
+
+### Usuario Demo 1 - Chocolaterie
+Email: demo@chocolaterie-suisse.ch
+Password: DemoUser2024!
+Empresa: Chocolaterie Suisse SA
+Plan: Gratuito
+Datos: Incluye clientes y productos de demostración
+
+### Usuario Demo 2 - Consulting
+Email: contact@consulting-geneve.ch
+Password: ConsultDemo2024!
+Empresa: Consulting Genève Sàrl
+Plan: Gratuito
+Datos: Incluye clientes y productos de demostración
+
+### Usuario Demo 3 - Tech Solutions
+Email: info@tech-lausanne.ch
+Password: TechDemo2024!
+Empresa: Tech Solutions Lausanne SA
+Plan: Gratuito
+Datos: Incluye clientes y productos de demostración
+
+## NOTAS IMPORTANTES
+- Todos los usuarios tienen datos de demostración preconfigurados
+- Los usuarios regulares tienen clientes, productos y pueden crear facturas
+- Los administradores pueden gestionar todos los aspectos del SaaS
+- Las contraseñas siguen las políticas de seguridad (8+ caracteres, mayúsculas, números, símbolos)
+- Los números de IVA, IBAN y teléfonos son ficticios pero con formato suizo válido
+
+## FUNCIONALIDADES DISPONIBLES
+### Para Usuarios Regulares:
+- Crear y gestionar facturas con QR Bills suizos
+- Gestionar clientes y productos
+- Generar reportes TVA
+- Enviar facturas por email
+- Dashboard financiero
+
+### Para Administradores:
+- Dashboard con métricas SaaS
+- Gestión completa de usuarios
+- Gestión de suscripciones y planes
+- Analytics y reportes avanzados
+- Configuración del sistema
+- Auditoría de acciones
+
+## ACCESO RÁPIDO
+1. Iniciar el backend: cd backend && npm run dev
+2. Iniciar el frontend: cd frontend && npm run dev
+3. Acceder a la app: http://localhost:5173
+4. Acceder al admin: http://localhost:5173/admin
+
+## COMANDOS PARA CREAR USUARIOS
+# Opción 1: Usando SQL directo (RECOMENDADO)
+cd backend
+npx prisma db push  # Asegura que la DB esté actualizada
+psql -d heidi_clone_dev -f demo-data.sql  # O usa tu cliente SQL preferido
+
+# Opción 2: Usando script Node.js
+cd backend
+npm install
+npx prisma generate
+node create-users.js
+
+# Opción 3: Usando el script TypeScript avanzado
+cd backend
+npm install
+npx prisma generate
+npx ts-node src/scripts/create-demo-users.ts
+
+## ESTRUCTURA DE BASE DE DATOS
+- Los usuarios admin se crean en la tabla 'admin_users'
+- Los usuarios regulares se crean en la tabla 'users'
+- Cada usuario regular tiene una suscripción gratuita automática
+- Los planes (free, basic, premium) se crean automáticamente
+
+¡Sistema completamente operativo y listo para usar!
+
+## TESTING RÁPIDO
+### Para probar la administración:
+1. Ve a http://localhost:5173/admin
+2. Usa admin@simplifaq.ch / AdminSimpliFaq2024!
+3. Explora el dashboard y métricas
+
+### Para probar la aplicación:
+1. Ve a http://localhost:5173
+2. Usa demo@chocolaterie-suisse.ch / DemoUser2024!
+3. Crea facturas, gestiona clientes, genera QR Bills
+
+### Funcionalidades clave a probar:
+- ✅ Login con 2FA (opcional para admins)
+- ✅ Dashboard con métricas en tiempo real
+- ✅ Gestión de usuarios y suscripciones
+- ✅ Creación de facturas con QR Bills suizos
+- ✅ Reportes TVA y analytics
+- ✅ Sistema de permisos granulares
+- ✅ Interfaz completamente en francés
+- ✅ Compliance suizo (TVA, IBAN, códigos postales)

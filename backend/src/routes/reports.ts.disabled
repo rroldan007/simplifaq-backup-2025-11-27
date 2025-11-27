@@ -1,0 +1,40 @@
+import { Router } from 'express';
+import { authenticateToken } from '../middleware/auth';
+import { getFinancialSummary, getTvaReport, getIncomeReport, getClientReport } from '../controllers/reportController';
+import { getDashboardKpis, getRevenueSeries, getInvoiceStatusBreakdown } from '../controllers/dashboardController';
+import { exportDashboard } from '../controllers/exportController';
+import { exportInvoices, exportExpenses } from '../controllers/exports';
+
+const router = Router();
+
+// All report routes require authentication
+router.use(authenticateToken);
+
+// GET /api/reports/financial-summary - Get financial summary
+router.get('/financial-summary', getFinancialSummary);
+
+// GET /api/reports/tva-report - Get Swiss TVA report for tax declarations
+router.get('/tva-report', getTvaReport);
+
+// GET /api/reports/income-report - Get income report by period
+router.get('/income-report', getIncomeReport);
+
+// GET /api/reports/client-report - Get client-specific report
+router.get('/client-report', getClientReport);
+
+// --- Dashboard report routes ---
+// Dashboard endpoints
+router.get('/kpis', getDashboardKpis);
+router.get('/revenue-series', getRevenueSeries);
+router.get('/invoice-status-breakdown', getInvoiceStatusBreakdown);
+router.get('/export', exportDashboard);
+router.get('/export/invoices', exportInvoices);
+router.get('/export/expenses', exportExpenses);
+
+// Protected health check (verifies token is valid)
+router.get('/health', (req, res) => {
+  const userId = (req as any).user?.id || (req as any).userId || null;
+  return res.json({ success: true, data: { userId, time: new Date().toISOString() } });
+});
+
+export default router;

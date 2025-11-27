@@ -1,0 +1,264 @@
+# 🇨🇭 SimpliFaq - Prometheus Alert Rules
+# Alert rules for Swiss invoicing system monitoring
+
+groups:
+  # System Health Alerts
+  - name: system_health
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 5 minutes on {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Disk space is running low"
+          description: "Disk space is below 10% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+  # Application Health Alerts
+  - name: application_health
+    rules:
+      - alert: SimpliFaqBackendDown
+        expr: up{job="simplifaq-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "SimpliFaq backend is down"
+          description: "SimpliFaq backend service is not responding"
+
+      - alert: SimpliFaqFrontendDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: frontend
+        annotations:
+          summary: "SimpliFaq frontend is down"
+          description: "SimpliFaq frontend service is not responding"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for the last 5 minutes"
+
+      - alert: SlowResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Slow response time detected"
+          description: "95th percentile response time is above 2 seconds"
+
+  # Database Alerts
+  - name: database_health
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL has too many connections"
+          description: "PostgreSQL connection usage is above 80%"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_database_tup_returned[5m]) / rate(pg_stat_database_tup_fetched[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "PostgreSQL query efficiency is below 10%"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache service is not responding"
+
+  # Swiss Business Logic Alerts
+  - name: swiss_business_alerts
+    rules:
+      - alert: QRBillGenerationFailure
+        expr: rate(qr_bill_generation_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: qr-bill
+        annotations:
+          summary: "Swiss QR Bill generation failures"
+          description: "QR Bill generation failure rate is above 10%"
+
+      - alert: TVACalculationErrors
+        expr: rate(tva_calculation_errors_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: tva
+        annotations:
+          summary: "Swiss TVA calculation errors"
+          description: "TVA calculation errors detected - this affects Swiss compliance"
+
+      - alert: InvoiceGenerationBacklog
+        expr: invoice_generation_queue_size > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: invoicing
+        annotations:
+          summary: "Invoice generation backlog"
+          description: "Invoice generation queue has more than 100 pending items"
+
+  # SaaS Business Alerts
+  - name: saas_business_alerts
+    rules:
+      - alert: HighChurnRate
+        expr: saas_churn_rate_monthly > 0.05
+        for: 1h
+        labels:
+          severity: warning
+          service: saas
+        annotations:
+          summary: "High customer churn rate"
+          description: "Monthly churn rate is above 5%"
+
+      - alert: BillingFailures
+        expr: rate(billing_failures_total[1h]) > 0.02
+        for: 30m
+        labels:
+          severity: warning
+          service: billing
+        annotations:
+          summary: "High billing failure rate"
+          description: "Billing failure rate is above 2%"
+
+      - alert: UsageLimitExceeded
+        expr: saas_usage_limit_exceeded_total > 10
+        for: 5m
+        labels:
+          severity: info
+          service: saas
+        annotations:
+          summary: "Users exceeding usage limits"
+          description: "More than 10 users are exceeding their plan limits"
+
+      - alert: RevenueDropAlert
+        expr: (saas_monthly_revenue - saas_monthly_revenue offset 1d) / saas_monthly_revenue offset 1d * 100 < -10
+        for: 2h
+        labels:
+          severity: warning
+          service: business
+        annotations:
+          summary: "Significant revenue drop detected"
+          description: "Monthly revenue has dropped by more than 10% compared to yesterday"
+
+  # Security Alerts
+  - name: security_alerts
+    rules:
+      - alert: SuspiciousLoginActivity
+        expr: rate(failed_login_attempts_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "Suspicious login activity detected"
+          description: "High rate of failed login attempts detected"
+
+      - alert: UnauthorizedAPIAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High rate of unauthorized API access"
+          description: "High rate of 401 responses detected"
+
+      - alert: SQLInjectionAttempt
+        expr: rate(sql_injection_attempts_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: security
+        annotations:
+          summary: "SQL injection attempt detected"
+          description: "Potential SQL injection attempts detected"
+
+  # Backup and Compliance Alerts
+  - name: backup_compliance_alerts
+    rules:
+      - alert: BackupFailure
+        expr: time() - last_successful_backup_timestamp > 86400
+        for: 1m
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: "Database backup failure"
+          description: "No successful backup in the last 24 hours"
+
+      - alert: ComplianceAuditLogGap
+        expr: time() - last_audit_log_entry_timestamp > 3600
+        for: 5m
+        labels:
+          severity: warning
+          service: compliance
+        annotations:
+          summary: "Audit log gap detected"
+          description: "No audit log entries in the last hour - compliance may be affected"
+
+      - alert: DataRetentionViolation
+        expr: expired_data_not_deleted_count > 0
+        for: 1h
+        labels:
+          severity: warning
+          service: compliance
+        annotations:
+          summary: "Data retention policy violation"
+          description: "Expired data has not been deleted according to retention policy"

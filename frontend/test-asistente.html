@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Asistente ADM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 3px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        .info {
+            background: #e3f2fd;
+            border-left-color: #2196F3;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.success { background: #4CAF50; color: white; }
+        .status.error { background: #f44336; color: white; }
+        .status.pending { background: #ff9800; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Test Asistente ADM</h1>
+        
+        <div class="test-section">
+            <h2>1. Vérifier l'authentification</h2>
+            <p>Vous devez être connecté pour utiliser l'assistant.</p>
+            <button onclick="checkAuth()">Vérifier Token</button>
+            <div id="auth-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Tester l'assistant</h2>
+            <input type="text" id="message" placeholder="Tapez votre message ici..." value="Bonjour, comment ça va?">
+            <button onclick="testChat()">Envoyer</button>
+            <div id="chat-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Tests prédéfinis</h2>
+            <button onclick="testPredefined('Bonjour')">Test: Salutation</button>
+            <button onclick="testPredefined('Combien de clients ai-je?')">Test: Clients</button>
+            <button onclick="testPredefined('Montre mes factures')">Test: Factures</button>
+            <div id="predefined-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://test.simplifaq.ch';
+
+        function getToken() {
+            return localStorage.getItem('token');
+        }
+
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+
+        async function checkAuth() {
+            const token = getToken();
+            
+            if (!token) {
+                showResult('auth-result', '❌ Aucun token trouvé. Veuillez vous connecter d\'abord à https://test.simplifaq.ch', 'error');
+                return;
+            }
+
+            showResult('auth-result', '🔍 Vérification du token...', 'info');
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('auth-result', 
+                        `✅ Authentifié!\n\nUtilisateur: ${data.data.name || data.data.email}\nEmail: ${data.data.email}\nID: ${data.data.id}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('auth-result', 
+                        `❌ Token invalide ou expiré (${response.status})\n\nVeuillez vous reconnecter à https://test.simplifaq.ch`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('auth-result', `❌ Erreur: ${error.message}`, 'error');
+            }
+        }
+
+        async function testChat() {
+            const token = getToken();
+            const message = document.getElementById('message').value;
+
+            if (!token) {
+                showResult('chat-result', '❌ Veuillez d\'abord vérifier votre authentification', 'error');
+                return;
+            }
+
+            if (!message.trim()) {
+                showResult('chat-result', '❌ Veuillez entrer un message', 'error');
+                return;
+            }
+
+            showResult('chat-result', '⏳ Envoi du message...', 'info');
+
+            try {
+                const response = await fetch(`${API_URL}/api/asistente/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        sessionId: 'test-' + Date.now(),
+                        locale: 'fr-FR',
+                        channel: 'web-test'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showResult('chat-result', 
+                        `✅ Réponse reçue!\n\n${data.data.reply}\n\n${JSON.stringify(data, null, 2)}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('chat-result', 
+                        `❌ Erreur (${response.status})\n\n${JSON.stringify(data, null, 2)}`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('chat-result', `❌ Erreur: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPredefined(message) {
+            document.getElementById('message').value = message;
+            await testChat();
+            
+            // Copier le résultat dans la section des tests prédéfinis
+            const chatResult = document.getElementById('chat-result').innerHTML;
+            document.getElementById('predefined-result').innerHTML = chatResult;
+        }
+
+        // Vérifier l'auth au chargement
+        window.addEventListener('load', () => {
+            const token = getToken();
+            if (token) {
+                showResult('auth-result', '<span class="status pending">Token trouvé - Cliquez sur "Vérifier Token" pour valider</span>', 'info');
+            } else {
+                showResult('auth-result', '<span class="status error">Aucun token - Connectez-vous d\'abord</span>', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

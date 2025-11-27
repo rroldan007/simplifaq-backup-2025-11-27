@@ -1,0 +1,31 @@
+import { User } from '@prisma/client';
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: (Omit<User, 'password'> & {
+        isAdmin: boolean;
+      }) | null;
+      subscription?: {
+        id: string;
+        planId: string;
+        status: string;
+        currentPeriodEnd: Date;
+        // Add other subscription properties as needed
+      };
+      featureFlags?: {
+        isNewInvoiceSystemEnabled: boolean;
+        getInvoiceTemplate: (preferredTemplate?: string) => string;
+        shouldUsePuppeteer: boolean;
+        features: {
+          recurringInvoices: boolean;
+          invoiceDiscounts: boolean;
+          multiCurrency: boolean;
+          onlinePayments: boolean;
+        };
+        isEnabled: (path: string) => boolean;
+        getValue: <T>(path: string, defaultValue: T) => T;
+      };
+    }
+  }
+}

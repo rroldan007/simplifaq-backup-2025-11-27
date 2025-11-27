@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import { adminAuth } from '../../middleware/adminAuth';
+import { getFinancialSummary } from '../../controllers/reportController';
+
+const router = Router();
+
+// Protect all admin report routes
+router.use(adminAuth);
+
+// Route for admins to get a global financial summary
+router.get('/financial-summary', getFinancialSummary);
+
+export default router;
