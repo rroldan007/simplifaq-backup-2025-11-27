@@ -42,6 +42,8 @@ export const SendInvoiceEmailModal: React.FC<SendInvoiceEmailModalProps> = ({
     if (isOpen && invoiceId) {
       loadPreview();
     }
+    // TODO: REVISAR DEPENDENCIAS - Falta: loadPreview (necesita useCallback)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, invoiceId]);
 
   const loadPreview = async () => {

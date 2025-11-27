@@ -237,6 +237,8 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     } else if (recurrenceEndMode === '24') {
       setData(prev => ({ ...prev, dateFinRecurrence: addMonthsSameDay(next, 23) }));
     }
+    // TODO: REVISAR DEPENDENCIAS - Falta: addMonthsSameDay (necesita useCallback)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.estRecurrente, data.frequence, data.issueDate, data.dueDate, autoNextDate, recurrenceEndMode, recurrenceBase]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});

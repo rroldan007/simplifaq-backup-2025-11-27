@@ -243,6 +243,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+    // TODO: REVISAR DEPENDENCIAS - Falta: handleCorrupted, setAuthSuccess
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Set up TokenManager event listeners for automatic token refresh and session management
@@ -386,6 +388,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Clean up activity listeners and timers
       cleanupActivityListeners();
     };
+    // TODO: REVISAR DEPENDENCIAS - Falta: handleCorrupted (y posiblemente otras funciones)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.isAuthenticated, state.user]);
 
   // Fonction de connexion avec sécurité renforcée

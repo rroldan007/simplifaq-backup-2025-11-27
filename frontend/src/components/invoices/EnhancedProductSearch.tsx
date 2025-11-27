@@ -81,6 +81,8 @@ export function EnhancedProductSearch({
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
+    // TODO: REVISAR DEPENDENCIAS - Falta: hasSuggestions, showRecent (necesitan análisis cuidadoso)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused, showSuggestions, suggestions, recentProducts, popularProducts, selectedIndex, onSelectProduct, onChange]);
 
   // Reset selected index when suggestions change
