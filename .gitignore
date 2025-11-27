@@ -59,7 +59,3 @@ ssl/
 # Backup files
 backups/
 *.backup
-
-# Lock files
-package-lock.json
-*/package-lock.json
