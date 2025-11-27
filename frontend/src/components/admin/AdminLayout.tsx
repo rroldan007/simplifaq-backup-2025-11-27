@@ -20,6 +20,21 @@ export const AdminLayout: React.FC = () => {
     console.log('[AdminLayout] Component mounted, isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
   }, [isAuthenticated, isLoading]);
 
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Auto-collapse sidebar on mobile
+      if (mobile) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
   // Show loading while checking auth
   if (isLoading) {
     console.log('[AdminLayout] Showing loading spinner');
@@ -37,21 +52,6 @@ export const AdminLayout: React.FC = () => {
   }
 
   console.log('[AdminLayout] Authenticated, rendering layout');
-
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      // Auto-collapse sidebar on mobile
-      if (mobile) {
-        setIsSidebarCollapsed(true);
-      }
-    };
-
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);

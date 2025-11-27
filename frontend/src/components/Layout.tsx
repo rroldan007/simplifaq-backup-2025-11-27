@@ -7,7 +7,23 @@ import { AIAssistant } from './ai/AIAssistant';
 import { useFeature } from '../hooks/useFeatureFlags';
 import { cn } from '../utils/cn';
 
-const navigation = [
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+interface NavigationChild {
+  name: string;
+  href: string;
+  icon?: IconComponent;
+}
+
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: IconComponent;
+  description: string;
+  children?: NavigationChild[];
+}
+
+const navigation: NavigationItem[] = [
   { 
     name: 'Tableau de bord', 
     href: '/dashboard', 
@@ -60,7 +76,7 @@ const navigation = [
     icon: SettingsIcon,
     description: 'Configuration du compte'
   },
-] as const;
+];
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -159,9 +175,9 @@ export function Layout() {
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
-              const hasChildren = Array.isArray((item as any).children) && (item as any).children.length > 0;
+              const hasChildren = Array.isArray(item.children) && item.children.length > 0;
               const isSectionActive = location.pathname.startsWith(item.href);
-              const IconComponent = item.icon as any;
+              const IconComponent = item.icon;
 
               if (!hasChildren) {
                 const isActive = location.pathname === item.href || (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
@@ -220,9 +236,9 @@ export function Layout() {
                     </div>
                     <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{isOpen ? '▾' : '▸'}</span>
                   </button>
-                  {isOpen && (
+                  {isOpen && item.children && (
                     <div className="mt-1 ml-8 space-y-1">
-                      {((item as any).children as Array<{ name: string; href: string; icon?: any }>).map((child) => {
+                      {item.children.map((child) => {
                         const ChildIcon = child.icon || IconComponent;
                         const active = location.pathname === child.href || location.pathname.startsWith(child.href + '/');
                         return (

@@ -17,7 +17,6 @@ import { WelcomePage } from './pages/WelcomePageSimple';
 import { DashboardPage } from './pages/DashboardPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { QuotesPage } from './pages/QuotesPage';
-import { QuotesPageSimple } from './pages/QuotesPageSimple';
 import QuoteDetailPage from './pages/QuoteDetailPage';
 import NewQuotePage from './pages/NewQuotePage';
 import { ClientsPage } from './pages/ClientsPage';
@@ -41,7 +40,6 @@ import { SettingsPage as AdminSettingsPage } from './pages/admin/SettingsPage';
 import { BackupsPage } from './pages/admin/BackupsPage';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
-import { BillingPage as UserBillingPage } from './pages/settings/BillingPage';
 import { PlansPage } from './pages/admin/PlansPage';
 
 // Compact global theme toggle (only for authenticated pages)
