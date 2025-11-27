@@ -134,7 +134,6 @@ class AdminService {
         orderBy: { [sortBy]: sortOrder },
         include: {
           subscription: true,
-          stats: true,
         },
       }),
       prisma.user.count({ where }),
@@ -156,7 +155,6 @@ class AdminService {
       where: { id },
       include: {
         subscription: true,
-        stats: true,
       },
     });
   }
@@ -179,13 +177,12 @@ class AdminService {
       data: updateData,
       include: {
         subscription: true,
-        stats: true,
       },
     });
   }
 
   async createUser(userData: Record<string, any>) {
-    const { email, firstName, lastName, company, subscriptionPlan = 'free' } = userData;
+    const { email, firstName, lastName, company, subscriptionPlan = 'free', password = 'temp123', street = '', city = '', postalCode = '' } = userData;
 
     return await prisma.user.create({
       data: {
@@ -196,17 +193,19 @@ class AdminService {
         subscriptionPlan,
         isActive: true,
         emailConfirmed: false,
+        password,
+        street,
+        city,
+        postalCode,
       },
       include: {
         subscription: true,
-        stats: true,
       },
     });
   }
 
   async deleteUserPermanently(id: string) {
-    // Delete related records first
-    await prisma.userStats.deleteMany({ where: { userId: id } });
+    // Delete related records first (cascade delete will handle sessions)
     await prisma.subscription.deleteMany({ where: { userId: id } });
     
     // Delete the user
@@ -221,8 +220,8 @@ class AdminService {
       where: { key: 'smtp_config' },
     });
 
-    if (config) {
-      const { password, ...configWithoutPassword } = JSON.parse(config.value);
+    if (config && config.value) {
+      const { password, ...configWithoutPassword } = JSON.parse(config.value as string);
       return configWithoutPassword;
     }
 

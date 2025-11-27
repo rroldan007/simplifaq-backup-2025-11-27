@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Server, Send, CheckCircle, XCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { useAdminAuthRefactored } from '../../hooks/useAdminAuthRefactored';
+import { useAdminAuth } from '../../hooks/useAdminAuthRefactored';
 import { adminApiService } from '../../services/adminApiServiceRefactored';
 import { adminConfigService, type SmtpConfig } from '../../services/adminConfigService';
 
@@ -13,7 +13,7 @@ interface SmtpStats {
 }
 
 export const SmtpConfigPage: React.FC = () => {
-  const { isAuthenticated, hasPermission } = useAdminAuthRefactored();
+  const { isAuthenticated, hasPermission } = useAdminAuth();
   const [config, setConfig] = useState<SmtpConfig>({
     ...adminConfigService.getSmtpConfig().defaultConfig,
     password: '',
