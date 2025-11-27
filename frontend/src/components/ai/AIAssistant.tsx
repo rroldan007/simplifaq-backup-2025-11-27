@@ -6,26 +6,47 @@ import {
   X, 
   Minimize2, 
   Maximize2,
-  Sparkles,
   Loader2,
-  MessageSquare,
   Check,
   XCircle
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { asistenteApi } from '../../services/asistenteApi';
 
+interface ActionParameters {
+  [key: string]: unknown;
+}
+
+interface ActionEndpoint {
+  method?: string;
+  path?: string;
+}
+
+interface MessageAction {
+  id?: string;
+  type?: string;
+  parameters?: ActionParameters;
+  requiresConfirmation?: boolean;
+  confirmationMessage?: string;
+  endpoint?: ActionEndpoint;
+  messageId?: string;
+  description?: string;
+  endpointMethod?: string;
+  endpointUrl?: string;
+  payload?: Record<string, unknown> | null;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  executedAt?: string | null;
+  [key: string]: unknown; // Allow additional properties
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  action?: {
-    type: string;
-    parameters: any;
-    requiresConfirmation: boolean;
-    confirmationMessage: string;
-  };
+  action?: MessageAction;
 }
 
 export function AIAssistant() {
@@ -41,7 +62,7 @@ export function AIAssistant() {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState<any>(null);
+  const [pendingAction, setPendingAction] = useState<MessageAction | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
