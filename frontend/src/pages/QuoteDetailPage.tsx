@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Edit, Trash2, ArrowRight, FileText, Mail, CheckCircle, XCircle, Clock, Sparkles } from 'lucide-react';
 import { quotesApi, type Quote } from '../services/quotesApi';
@@ -40,7 +40,7 @@ const QuoteDetailPage: React.FC = () => {
     quoteNumber: '',
   });
 
-  const fetchQuote = async () => {
+  const fetchQuote = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
@@ -55,11 +55,11 @@ const QuoteDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchQuote();
-  }, [id]);
+  }, [fetchQuote]);
 
   const handleDownloadPdf = async () => {
     if (!id || actionLoading.download) return;

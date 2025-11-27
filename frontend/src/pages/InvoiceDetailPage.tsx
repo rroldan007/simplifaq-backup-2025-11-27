@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -49,7 +49,7 @@ const InvoiceDetailPage: React.FC = () => {
     cancelRecurrence: false,
   });
 
-  const fetchInvoice = async () => {
+  const fetchInvoice = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
@@ -64,11 +64,11 @@ const InvoiceDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchInvoice();
-  }, [id]);
+  }, [fetchInvoice]);
 
   const handlePaymentAdded = async () => {
     console.log('[Payment] Payment added, refreshing invoice...');

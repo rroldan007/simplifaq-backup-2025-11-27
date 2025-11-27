@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface WelcomeModalProps {
@@ -11,6 +11,14 @@ export function WelcomeModal({ firstName, companyName, onClose }: WelcomeModalPr
   const navigate = useNavigate();
   const [show, setShow] = useState(false);
   const [countdown, setCountdown] = useState(5);
+
+  const handleContinue = useCallback(() => {
+    setShow(false);
+    setTimeout(() => {
+      if (onClose) onClose();
+      navigate('/dashboard');
+    }, 300);
+  }, [navigate, onClose]);
 
   useEffect(() => {
     // Trigger animation
@@ -29,15 +37,7 @@ export function WelcomeModal({ firstName, companyName, onClose }: WelcomeModalPr
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
-
-  const handleContinue = () => {
-    setShow(false);
-    setTimeout(() => {
-      if (onClose) onClose();
-      navigate('/dashboard');
-    }, 300);
-  };
+  }, [handleContinue]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
