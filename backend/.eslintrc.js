@@ -11,6 +11,7 @@ module.exports = {
     'prettier',
     'plugin:prettier/recommended',
   ],
+  ignorePatterns: ['dist', 'node_modules', '**/*_OLD.*', '**/*.OLD.*'],
   rules: {
     'prettier/prettier': 'error',
     '@typescript-eslint/no-unused-vars': 'error',
