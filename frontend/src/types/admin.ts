@@ -22,6 +22,7 @@ export interface UsageData {
 export interface OverviewData {
   totalUsers: number;
   activeUsers: number;
+  connectedUsers?: number;
   newUsersInPeriod: number;
   userGrowthRate: number;
   totalSubscriptions: number;

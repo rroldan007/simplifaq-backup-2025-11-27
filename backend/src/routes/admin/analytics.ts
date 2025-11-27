@@ -72,6 +72,7 @@ router.get('/dashboard', requirePermission('analytics', 'read'), async (req: Adm
       totalSubscriptions,
       activeSubscriptions,
       mrr, // Monthly Recurring Revenue
+      connectedUsers,
       
       // Invoice metrics
       totalInvoices,
@@ -104,6 +105,13 @@ router.get('/dashboard', requirePermission('analytics', 'read'), async (req: Adm
       }).then(subs => 
         subs.reduce((total, sub) => total + Number(sub.plan.price), 0)
       ),
+      prisma.session.count({
+        where: {
+          expiresAt: {
+            gt: new Date().toISOString() as any,
+          },
+        },
+      }),
       
       // Invoice metrics
       prisma.invoice.count(),
@@ -215,6 +223,7 @@ router.get('/dashboard', requirePermission('analytics', 'read'), async (req: Adm
           activeUsers,
           newUsersInPeriod,
           userGrowthRate: Math.round(userGrowthRate * 100) / 100,
+          connectedUsers,
           
           totalSubscriptions,
           activeSubscriptions,

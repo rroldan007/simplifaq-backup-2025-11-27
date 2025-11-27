@@ -9,7 +9,8 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
-import { useAdminAuth } from '../../hooks/useAdminAuth';
+import { useAdminAuth as useAdminAuthRefactored } from '../../hooks/useAdminAuthRefactored';
+import { adminApiService } from '../../services/adminApiServiceRefactored';
 
 interface User {
   id: string;
@@ -29,8 +30,16 @@ interface User {
   emailConfirmedAt?: string;
 }
 
+interface AdminUsersResponse {
+  users: any[];
+  pagination?: {
+    totalPages?: number;
+    totalCount?: number;
+  };
+}
+
 export const UserManagementPage: React.FC = () => {
-  const { token: adminToken } = useAdminAuth();
+  const { isAuthenticated, hasPermission } = useAdminAuthRefactored();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,73 +58,78 @@ export const UserManagementPage: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const usersPerPage = 20;
   
-  const availablePlans = ['free', 'basic', 'premium', 'Beta'];
+  const [availablePlans, setAvailablePlans] = useState<{ id: string; name: string; price?: number; displayName?: string; currency?: string }[]>([]);
 
   // Fetch users from API
   useEffect(() => {
     fetchUsers();
   }, [filterRole, filterStatus, searchTerm, currentPage]);
 
+  useEffect(() => {
+    const loadPlans = async () => {
+      try {
+        const response = await adminApiService.getPlans();
+        if (!response.success || !response.data) return;
+
+        const rawData = response.data as { plans?: any[] } | any[];
+        const plansArray = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData.plans)
+            ? rawData.plans
+            : [];
+
+        setAvailablePlans(plansArray.map((plan: any) => ({
+          id: plan.id || plan.name,
+          name: plan.name,
+          price: plan.price,
+          currency: plan.currency,
+          displayName: plan.displayName,
+        })));
+      } catch (err) {
+        console.error('Error loading plans:', err);
+      }
+    };
+
+    loadPlans();
+  }, []);
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const API_BASE = import.meta.env.VITE_API_URL || '/api';
-      console.log('[UserManagement] API_BASE:', API_BASE);
-      console.log('[UserManagement] adminToken exists:', !!adminToken);
-      
-      const params = new URLSearchParams();
-      params.append('page', currentPage.toString());
-      params.append('limit', usersPerPage.toString());
-      
-      if (searchTerm) params.append('search', searchTerm);
-      // NOTE: Backend no acepta 'role', solo 'plan' y 'status'
-      // if (filterRole !== 'all') params.append('role', filterRole);
-      if (filterStatus !== 'all') params.append('status', filterStatus);
-
-      // Get admin token from context
-      if (!adminToken) {
+      // Check authentication and permissions
+      if (!isAuthenticated) {
         setError('Non authentifié. Veuillez vous reconnecter.');
         setLoading(false);
         return;
       }
 
-      const url = `${API_BASE}/admin/users?${params.toString()}`;
-      console.log('[UserManagement] Fetching URL:', url);
-      console.log('[UserManagement] Using token:', adminToken ? adminToken.substring(0, 20) + '...' : 'null');
-
-      const response = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`,
-        },
-      });
-
-      console.log('[UserManagement] Response status:', response.status);
-      console.log('[UserManagement] Response headers:', response.headers.get('content-type'));
-      
-      // Log response text for debugging
-      const responseText = await response.text();
-      console.log('[UserManagement] Response text (first 200 chars):', responseText.substring(0, 200));
-      
-      // Try to parse as JSON
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (error) {
-        console.error('[UserManagement] JSON parse error:', error);
-        console.error('[UserManagement] Response was:', responseText);
-        throw new Error('Invalid JSON response from server');
+      if (!hasPermission('users', 'read')) {
+        setError('Permissions insuffisantes pour cette action.');
+        setLoading(false);
+        return;
       }
       
-      console.log('[UserManagement] Parsed data:', result);
-      
-      if (result.success && result.data) {
-        // Map backend data to frontend User interface
-        const mappedUsers: User[] = result.data.users.map((u: any) => ({
+      const params = {
+        page: currentPage,
+        limit: usersPerPage,
+        ...(searchTerm && { search: searchTerm }),
+        ...(filterStatus !== 'all' && { status: filterStatus }),
+      };
+
+      console.log('[UserManagement] Fetching users with params:', params);
+
+      const response = await adminApiService.getUsers(params);
+
+      if (response.success && response.data) {
+        const data = response.data as AdminUsersResponse;
+        if (!data.users || !Array.isArray(data.users)) {
+          setError('Format de réponse invalide pour les utilisateurs');
+          return;
+        }
+
+        const mappedUsers: User[] = data.users.map((u: any) => ({
           id: u.id,
           email: u.email,
           firstName: u.firstName || '',
@@ -123,23 +137,24 @@ export const UserManagementPage: React.FC = () => {
           company: u.companyName || '',
           role: u.subscriptionPlan === 'premium' ? 'premium' : u.subscriptionPlan === 'admin' ? 'admin' : 'user',
           status: u.isActive ? 'active' : 'inactive',
-          plan: u.subscriptionPlan || 'free', // PLAN ACTUAL DEL USUARIO
+          plan: u.subscriptionPlan || 'free',
           createdAt: u.createdAt,
           lastLogin: u.lastLogin || undefined,
           subscriptionStatus: u.subscription?.status || (u.subscriptionPlan !== 'free' ? 'active' : 'inactive'),
           totalInvoices: u.stats?.invoiceCount || 0,
-          totalRevenue: 0, // This would need to be calculated from invoices
+          totalRevenue: 0,
           emailConfirmed: u.emailConfirmed || false,
           emailConfirmedAt: u.emailConfirmedAt || undefined,
         }));
         
         setUsers(mappedUsers);
         
-        // Usar paginación del backend
-        if (result.data.pagination) {
-          setTotalPages(result.data.pagination.totalPages || 1);
-          setTotalCount(result.data.pagination.totalCount || 0);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages || 1);
+          setTotalCount(data.pagination.totalCount || 0);
         }
+      } else {
+        setError(response.error?.message || 'Erreur lors du chargement des utilisateurs');
       }
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -277,48 +292,67 @@ export const UserManagementPage: React.FC = () => {
   // Usar directamente los usuarios filtrados (el backend ya paginó)
   const paginatedUsers = filteredUsers;
 
-  const handleCreateUser = () => {
+  const handleCreateUser = async () => {
     if (!formData.email || !formData.firstName || !formData.lastName) {
       alert('Veuillez remplir tous les champs requis.');
       return;
     }
 
-    const newUser: User = {
-      id: (users.length + 1).toString(),
-      email: formData.email!,
-      firstName: formData.firstName!,
-      lastName: formData.lastName!,
-      company: formData.company || '',
-      role: formData.role || 'user',
-      status: 'active',
-      plan: 'free', // Plan por defecto para nuevos usuarios
-      createdAt: new Date().toISOString(),
-      subscriptionStatus: 'trial',
-      totalInvoices: 0,
-      totalRevenue: 0,
-      emailConfirmed: false, // Nuevo usuario no tiene email confirmado por defecto
-      emailConfirmedAt: undefined,
-    };
+    try {
+      const userData = {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        company: formData.company || '',
+        subscriptionPlan: formData.plan || 'free',
+      };
 
-    setUsers(prev => [...prev, newUser]);
-    setShowCreateModal(false);
-    setFormData({});
+      const response = await adminApiService.createUser(userData);
+      
+      if (response.success) {
+        setShowCreateModal(false);
+        setFormData({});
+        fetchUsers(); // Refresh the list
+        alert('Utilisateur créé avec succès');
+      } else {
+        alert(response.error?.message || 'Erreur lors de la création');
+      }
+    } catch (error) {
+      console.error('Create user error:', error);
+      alert('Erreur lors de la création');
+    }
   };
 
-  const handleEditUser = () => {
+  const handleEditUser = async () => {
     if (!selectedUser || !formData.firstName || !formData.lastName) {
       alert('Veuillez remplir tous les champs requis.');
       return;
     }
 
-    setUsers(prev => prev.map(user =>
-      user.id === selectedUser.id
-        ? { ...user, ...formData }
-        : user
-    ));
-    setShowEditModal(false);
-    setSelectedUser(null);
-    setFormData({});
+    try {
+      const userData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        company: formData.company || '',
+        subscriptionPlan: formData.plan || selectedUser.plan,
+        isActive: formData.status === 'active',
+      };
+
+      const response = await adminApiService.updateUser(selectedUser.id, userData);
+      
+      if (response.success) {
+        setShowEditModal(false);
+        setSelectedUser(null);
+        setFormData({});
+        fetchUsers(); // Refresh the list
+        alert('Utilisateur mis à jour avec succès');
+      } else {
+        alert(response.error?.message || 'Erreur lors de la mise à jour');
+      }
+    } catch (error) {
+      console.error('Update user error:', error);
+      alert('Erreur lors de la mise à jour');
+    }
   };
 
   const handleViewUser = (user: User) => {
@@ -335,14 +369,10 @@ export const UserManagementPage: React.FC = () => {
   const handleDeleteUser = async (userId: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.')) {
       try {
-        // Import AdminApiService and use the singleton
-        const { adminApi } = await import('../../services/adminApi');
-        
-        const response = await adminApi.deleteUserPermanently(userId);
+        const response = await adminApiService.deleteUserPermanently(userId);
         
         if (response.success) {
-          // Remove user from the list permanently
-          setUsers(prev => prev.filter(user => user.id !== userId));
+          fetchUsers(); // Refresh the list
           alert('Utilisateur supprimé définitivement avec succès!');
         } else {
           alert('Erreur lors de la suppression: ' + (response.error?.message || 'Erreur inconnue'));
@@ -354,12 +384,26 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  const handleToggleStatus = (userId: string) => {
-    setUsers(prev => prev.map(user =>
-      user.id === userId
-        ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
-        : user
-    ));
+  const handleToggleStatus = async (userId: string) => {
+    try {
+      const user = users.find(u => u.id === userId);
+      if (!user) return;
+
+      const newStatus = user.status === 'active' ? 'inactive' : 'active';
+      
+      const response = await adminApiService.updateUser(userId, {
+        isActive: newStatus === 'active',
+      });
+      
+      if (response.success) {
+        fetchUsers(); // Refresh the list
+      } else {
+        alert('Erreur lors du changement de statut: ' + (response.error?.message || 'Erreur inconnue'));
+      }
+    } catch (error) {
+      console.error('Toggle status error:', error);
+      alert('Erreur lors du changement de statut');
+    }
   };
 
   return (
@@ -924,10 +968,15 @@ export const UserManagementPage: React.FC = () => {
                 onChange={(e) => setSelectedPlan(e.target.value)}
                 className="w-full px-3 py-2 rounded-md input-theme focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="free">Gratuit</option>
-                <option value="basic">Basique - CHF 29/mois</option>
-                <option value="premium">Premium - CHF 79/mois</option>
-                <option value="Beta">Beta (Accès anticipé)</option>
+                <option value="">Sélectionner un plan</option>
+                {availablePlans.map(plan => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.displayName || plan.name}
+                    {plan.price != null
+                      ? ` - ${new Intl.NumberFormat('fr-CH', { style: 'currency', currency: plan.currency || 'CHF' }).format(plan.price)}/mois`
+                      : ''}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -945,30 +994,38 @@ export const UserManagementPage: React.FC = () => {
               <Button 
                 onClick={async () => {
                   try {
-                    const API_BASE = import.meta.env.VITE_API_URL || '/api';
-                    
-                    const response = await fetch(`${API_BASE}/admin/users/${selectedUser.id}`, {
-                      method: 'PUT',
-                      credentials: 'include',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${adminToken}`,
-                      },
-                      body: JSON.stringify({
-                        subscriptionPlan: selectedPlan,
-                      }),
+                    if (!selectedPlan) {
+                      alert('Veuillez sélectionner un plan.');
+                      return;
+                    }
+
+                    const selectedPlanDetails = availablePlans.find(p => p.id === selectedPlan);
+                    const planId = selectedPlan;
+                    const planName = selectedPlanDetails?.name || selectedPlan;
+
+                    // New endpoint using SubscriptionManagementService (preferred)
+                    const response = await adminApiService.changeUserPlan(selectedUser.id, {
+                      planId,
+                      immediate: true,
                     });
 
-                    if (response.ok) {
-                      // Actualizar localmente
-                      const updatedUsers = users.map(u => 
-                        u.id === selectedUser.id ? { ...u, plan: selectedPlan } : u
-                      );
-                      setUsers(updatedUsers);
-                      alert('Plan mis à jour avec succès!');
-                    } else {
-                      alert('Erreur lors de la mise à jour du plan');
+                    if (!response.success) {
+                      // _old fallback: legacy user update route (remove when new endpoint is stable)
+                      const legacyResponse = await adminApiService.updateUser(selectedUser.id, {
+                        subscriptionPlan: planName,
+                      });
+
+                      if (!legacyResponse.success) {
+                        alert(legacyResponse.error?.message || 'Erreur lors de la mise à jour du plan');
+                        return;
+                      }
                     }
+
+                    const updatedUsers = users.map(u => 
+                      u.id === selectedUser.id ? { ...u, plan: planName } : u
+                    );
+                    setUsers(updatedUsers);
+                    alert('Plan mis à jour avec succès!');
                   } catch (error) {
                     console.error('Error updating plan:', error);
                     alert('Erreur lors de la mise à jour du plan');
@@ -979,7 +1036,7 @@ export const UserManagementPage: React.FC = () => {
                   }
                 }}
               >
-                Changer le plan
+                Confirmer
               </Button>
             </div>
           </div>

@@ -373,6 +373,57 @@ router.put('/:id',
   }
 );
 
+// POST /api/admin/subscriptions/users/:userId/change-plan - Change plan by user
+router.post('/users/:userId/change-plan',
+  requirePermission('subscriptions', 'write'),
+  auditLog('subscription_plan_changed', 'subscription', (req) => req.params.userId),
+  async (req: AdminRequest, res: Response): Promise<Response> => {
+    try {
+      const { userId } = req.params;
+      const planChangeData = planChangeSchema.parse(req.body);
+
+      const updatedSubscription = await SubscriptionManagementService.changeUserPlan(
+        userId,
+        planChangeData.planId,
+        {
+          immediate: planChangeData.immediate,
+          scheduledDate: planChangeData.scheduledDate ? new Date(planChangeData.scheduledDate) : undefined,
+          prorated: planChangeData.prorated,
+          reason: planChangeData.reason,
+        }
+      );
+
+      return res.json({
+        success: true,
+        data: updatedSubscription,
+        message: planChangeData.immediate
+          ? 'Plan changé avec succès'
+          : 'Changement de plan programmé',
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Données invalides',
+            details: error.issues,
+          },
+        });
+      }
+
+      console.error('Change user plan error:', error);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Erreur interne du serveur',
+        },
+      });
+    }
+  }
+);
+
 // POST /api/admin/subscriptions/:id/cancel - Cancel subscription
 router.post('/:id/cancel', 
   requirePermission('subscriptions', 'write'), 

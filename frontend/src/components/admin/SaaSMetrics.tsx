@@ -5,6 +5,7 @@ interface SaaSMetricsProps {
   overview: {
     totalUsers: number;
     activeUsers: number;
+    connectedUsers?: number;
     newUsersInPeriod: number;
     userGrowthRate: number;
     totalSubscriptions: number;
@@ -86,6 +87,17 @@ export function SaaSMetrics({ overview, period, formatCurrency, formatNumber, fo
       icon: (
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Utilisateurs connectés',
+      value: formatNumber(overview.connectedUsers ?? 0),
+      subtitle: 'En ce moment',
+      color: 'red' as const,
+      icon: (
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A2 2 0 0122 9.618v4.764a2 2 0 01-2.447 1.894L15 14m0-4l-4.553 2.276A2 2 0 008 9.618V4.382a2 2 0 012.447-1.894L15 4m0 6v4m-6-2H4m0 0L5.5 9.5M4 12l1.5 2.5" />
         </svg>
       ),
     },

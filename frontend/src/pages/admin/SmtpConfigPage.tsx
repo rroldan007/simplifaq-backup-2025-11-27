@@ -1,26 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Server, Send, CheckCircle, XCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
-
-interface SmtpConfig {
-  id?: string;
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  password?: string;
-  fromEmail: string;
-  fromName: string;
-  replyTo?: string;
-  provider: 'smtp' | 'sendgrid' | 'ses' | 'mailgun';
-  isActive?: boolean;
-  isVerified?: boolean;
-  lastTestedAt?: string;
-  includeUnsubscribe: boolean;
-  trackOpens: boolean;
-  trackClicks: boolean;
-  maxRetries: number;
-  retryDelay: number;
-}
+import { useAdminAuthRefactored } from '../../hooks/useAdminAuthRefactored';
+import { adminApiService } from '../../services/adminApiServiceRefactored';
+import { adminConfigService, type SmtpConfig } from '../../services/adminConfigService';
 
 interface SmtpStats {
   totalSent: number;
@@ -31,21 +13,12 @@ interface SmtpStats {
 }
 
 export const SmtpConfigPage: React.FC = () => {
+  const { isAuthenticated, hasPermission } = useAdminAuthRefactored();
   const [config, setConfig] = useState<SmtpConfig>({
-    host: '',
-    port: 587,
-    secure: false,
-    user: '',
+    ...adminConfigService.getSmtpConfig().defaultConfig,
     password: '',
-    fromEmail: '',
-    fromName: 'SimpliFaq',
     replyTo: '',
     provider: 'smtp',
-    includeUnsubscribe: true,
-    trackOpens: false,
-    trackClicks: false,
-    maxRetries: 3,
-    retryDelay: 300,
   });
 
   const [stats, setStats] = useState<SmtpStats | null>(null);
@@ -56,37 +29,8 @@ export const SmtpConfigPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Common SMTP providers presets
-  const providers = {
-    gmail: {
-      name: 'Gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      info: 'Utilisez un mot de passe d\'application Google',
-    },
-    outlook: {
-      name: 'Outlook/Office365',
-      host: 'smtp.office365.com',
-      port: 587,
-      secure: false,
-      info: 'Compte Microsoft avec authentification moderne',
-    },
-    sendgrid: {
-      name: 'SendGrid',
-      host: 'smtp.sendgrid.net',
-      port: 587,
-      secure: false,
-      info: 'Utilisez votre clé API comme mot de passe',
-    },
-    custom: {
-      name: 'Personnalisé',
-      host: '',
-      port: 587,
-      secure: false,
-      info: 'Configurez votre propre serveur SMTP',
-    },
-  };
+  // Common SMTP providers presets from centralized config
+  const providers = adminConfigService.getSmtpConfig().providers;
 
   useEffect(() => {
     loadConfig();
@@ -95,20 +39,19 @@ export const SmtpConfigPage: React.FC = () => {
 
   const loadConfig = async () => {
     try {
-      const response = await fetch('/api/admin/smtp/config', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-        },
-      });
-      const data = await response.json();
+      if (!isAuthenticated || !hasPermission('smtp', 'read')) {
+        setMessage({ type: 'error', text: 'Permissions insuffisantes' });
+        return;
+      }
+
+      const response = await adminApiService.getSmtpConfig();
       
-      if (data.success && data.data.config) {
-        const { password, ...configWithoutPassword } = data.data.config;
-        setConfig({ ...config, ...configWithoutPassword });
+      if (response.success && response.data) {
+        setConfig(response.data);
       }
     } catch (error) {
-      console.error('Error loading config:', error);
-      showMessage('error', 'Erreur lors du chargement de la configuration');
+      console.error('Error loading SMTP config:', error);
+      setMessage({ type: 'error', text: 'Erreur lors du chargement de la configuration' });
     } finally {
       setLoading(false);
     }
@@ -116,15 +59,14 @@ export const SmtpConfigPage: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      const response = await fetch('/api/admin/smtp/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-        },
-      });
-      const data = await response.json();
+      if (!isAuthenticated || !hasPermission('smtp', 'read')) {
+        return;
+      }
+
+      const response = await adminApiService.getSmtpStats();
       
-      if (data.success) {
-        setStats(data.data.stats);
+      if (response.success && response.data) {
+        setStats(response.data);
       }
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -132,65 +74,60 @@ export const SmtpConfigPage: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!isAuthenticated || !hasPermission('smtp', 'write')) {
+      setMessage({ type: 'error', text: 'Permissions insuffisantes' });
+      return;
+    }
+
+    // Validate config using centralized service
+    const validation = adminConfigService.validateSmtpConfig(config);
+    if (!validation.isValid) {
+      setMessage({ type: 'error', text: validation.errors.join(', ') });
+      return;
+    }
+
     setSaving(true);
     try {
-      const response = await fetch('/api/admin/smtp/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-        },
-        body: JSON.stringify(config),
-      });
-
-      const data = await response.json();
+      const response = await adminApiService.updateSmtpConfig(config);
       
-      if (data.success) {
-        showMessage('success', 'Configuration SMTP enregistrée avec succès');
+      if (response.success) {
+        setMessage({ type: 'success', text: 'Configuration SMTP enregistrée avec succès' });
         await loadConfig();
       } else {
-        showMessage('error', data.error?.message || 'Erreur lors de l\'enregistrement');
+        setMessage({ type: 'error', text: response.error?.message || 'Erreur lors de l\'enregistrement' });
       }
     } catch (error) {
       console.error('Error saving config:', error);
-      showMessage('error', 'Erreur lors de l\'enregistrement');
+      setMessage({ type: 'error', text: 'Erreur lors de l\'enregistrement' });
     } finally {
       setSaving(false);
     }
   };
 
   const handleTest = async () => {
+    if (!isAuthenticated || !hasPermission('smtp', 'test')) {
+      setMessage({ type: 'error', text: 'Permissions insuffisantes' });
+      return;
+    }
+
     if (!testEmail) {
-      showMessage('error', 'Veuillez entrer un email de test');
+      setMessage({ type: 'error', text: 'Veuillez entrer une adresse email de test' });
       return;
     }
 
     setTesting(true);
     try {
-      const response = await fetch('/api/admin/smtp/config/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-        },
-        body: JSON.stringify({
-          testEmail,
-          configId: config.id,
-        }),
-      });
-
-      const data = await response.json();
+      const response = await adminApiService.testSmtpConfig(testEmail);
       
-      if (data.success) {
-        showMessage('success', `Email de test envoyé à ${testEmail} !`);
-        await loadConfig();
-        await loadStats();
+      if (response.success) {
+        setMessage({ type: 'success', text: 'Email de test envoyé avec succès' });
+        await loadStats(); // Refresh stats
       } else {
-        showMessage('error', data.error?.message || 'Échec du test');
+        setMessage({ type: 'error', text: response.error?.message || 'Erreur lors de l\'envoi' });
       }
     } catch (error) {
       console.error('Error testing config:', error);
-      showMessage('error', 'Erreur lors du test');
+      setMessage({ type: 'error', text: 'Erreur lors de l\'envoi' });
     } finally {
       setTesting(false);
     }
@@ -201,14 +138,16 @@ export const SmtpConfigPage: React.FC = () => {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  const applyPreset = (presetKey: keyof typeof providers) => {
+  const applyPreset = (presetKey: string) => {
     const preset = providers[presetKey];
-    setConfig({
-      ...config,
-      host: preset.host,
-      port: preset.port,
-      secure: preset.secure,
-    });
+    if (preset) {
+      setConfig({
+        ...config,
+        host: preset.host || '',
+        port: preset.port || 587,
+        secure: preset.secure || false,
+      });
+    }
   };
 
   if (loading) {

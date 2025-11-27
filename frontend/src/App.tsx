@@ -35,13 +35,14 @@ import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { UserSubscriptionsPage } from './pages/admin/UserSubscriptionsPage';
 import { InvoicesPage as AdminInvoicesPage } from './pages/admin/InvoicesPage';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage';
-import { BillingPage } from './pages/admin/BillingPage';
+import { BillingPage as AdminBillingPage } from './pages/admin/BillingPage';
 import { SupportPage } from './pages/admin/SupportPage';
 import { SettingsPage as AdminSettingsPage } from './pages/admin/SettingsPage';
 import { BackupsPage } from './pages/admin/BackupsPage';
-import { PlansPage } from './pages/admin/PlansPage';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
+import { BillingPage as UserBillingPage } from './pages/settings/BillingPage';
+import { PlansPage } from './pages/admin/PlansPage';
 
 // Compact global theme toggle (only for authenticated pages)
 const GlobalThemeToggle: React.FC = () => {
@@ -134,11 +135,10 @@ function App() {
                       <Route path="subscriptions" element={<UserSubscriptionsPage />} />
                       <Route path="invoices" element={<AdminInvoicesPage />} />
                       <Route path="analytics" element={<AnalyticsPage />} />
-                      <Route path="billing" element={<BillingPage />} />
+                      <Route path="billing" element={<AdminBillingPage />} />
                       <Route path="support" element={<SupportPage />} />
                       <Route path="settings" element={<AdminSettingsPage />} />
                       <Route path="backup-manager" element={<BackupsPage />} />
-                      <Route path="plans" element={<PlansPage />} />
                     </Route>
                   </Routes>
                   <GlobalThemeToggle />
@@ -210,6 +210,21 @@ function App() {
             </AuthProvider>
           } >
             <Route index element={<ClientsPage />} />
+          </Route>
+
+          <Route path="/plans" element={
+            <AuthProvider>
+              <AdminAuthProvider>
+                <div className="App min-h-screen" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                  <GlobalThemeToggle />
+                </div>
+              </AdminAuthProvider>
+            </AuthProvider>
+          } >
+            <Route index element={<PlansPage />} />
           </Route>
 
           <Route path="/products" element={

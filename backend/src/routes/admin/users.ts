@@ -1,13 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { adminAuth, requirePermission, auditLog, AdminAuthRequest } from '../../middleware/adminAuth';
-import { UserManagementService } from '../../services/userManagementService';
-import { AnalyticsService } from '../../services/analyticsService';
-import { CommunicationService, EmailVariables } from '../../services/communicationService';
+import { adminService } from '../../services/adminService';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Apply admin authentication to all routes
 router.use(adminAuth);
@@ -79,61 +75,42 @@ router.get('/', requirePermission('users', 'read'), async (req: AdminAuthRequest
   try {
     const filters = userSearchSchema.parse(req.query);
     
-    const pagination = {
+    const result = await adminService.getUsers({
       page: filters.page,
       limit: filters.limit,
-      sortBy: filters.sortBy,
-      sortOrder: filters.sortOrder,
-    };
-
-    const userFilters = {
       search: filters.search,
       status: filters.status,
-      plan: filters.plan,
-      registrationDateFrom: filters.registrationDateFrom ? new Date(filters.registrationDateFrom) : undefined,
-      registrationDateTo: filters.registrationDateTo ? new Date(filters.registrationDateTo) : undefined,
-      lastLoginFrom: filters.lastLoginFrom ? new Date(filters.lastLoginFrom) : undefined,
-      lastLoginTo: filters.lastLoginTo ? new Date(filters.lastLoginTo) : undefined,
-      riskLevel: filters.riskLevel,
-      tags: filters.tags,
-      hasSubscription: filters.hasSubscription,
-      subscriptionStatus: filters.subscriptionStatus,
-      companySize: filters.companySize,
-    };
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+    });
 
-    const result = await UserManagementService.getUsers(userFilters, pagination);
+    // Log action for audit
+    await adminService.logAction(req, 'LIST_USERS', 'user', undefined, {
+      filters,
+      resultCount: result.users.length,
+    });
 
     return res.json({
       success: true,
       data: result,
     });
-  } catch (error: unknown) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Données invalides',
-          details: error.issues,
-        },
-      });
-    }
-    console.error('Get users error:', error);
+  } catch (error) {
+    console.error('Error fetching users:', error);
     return res.status(500).json({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Erreur interne du serveur',
+        code: 'FETCH_USERS_ERROR',
+        message: 'Erreur lors de la récupération des utilisateurs',
       },
     });
   }
 });
 
-// GET /api/admin/users/:id - Get detailed user information
+    // GET /api/admin/users/:id - Get detailed user information
 router.get('/:id', requirePermission('users', 'read'), async (req: AdminAuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { id } = req.params;
-    const user = await UserManagementService.getUserDetails(id);
+    const user = await adminService.getUserById(id);
 
     if (!user) {
       return res.status(404).json({
@@ -142,8 +119,11 @@ router.get('/:id', requirePermission('users', 'read'), async (req: AdminAuthRequ
       });
     }
 
+    // Log action for audit
+    await adminService.logAction(req, 'VIEW_USER', 'user', id);
+
     return res.json({ success: true, data: user });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Get user details error:', error);
     return res.status(500).json({
       success: false,
@@ -160,20 +140,12 @@ router.put('/:id',
     try {
       const { id } = req.params;
       const updateData = updateUserSchema.parse(req.body);
-      const updatedUser = await UserManagementService.updateUser(id, updateData);
+      const updatedUser = await adminService.updateUser(id, updateData);
+      // Log action for audit
+      await adminService.logAction(req, 'UPDATE_USER', 'user', id);
       return res.json({ success: true, data: updatedUser });
-    } catch (error: unknown) {
-      const now = new Date();
-      const thirtyDaysAgo = new Date(new Date().setDate(now.getDate() - 30));
-
-            const [revenueMetrics, totalUsers, newUsers, activeUsers] = await Promise.all([
-        AnalyticsService.getRevenueAnalytics({ start: thirtyDaysAgo, end: now }),
-        UserManagementService.getUsers({}, { page: 1, limit: 1, sortBy: 'createdAt', sortOrder: 'desc' }).then(r => r.pagination.totalCount),
-        UserManagementService.getUsers({ registrationDateFrom: thirtyDaysAgo }, { page: 1, limit: 1, sortBy: 'createdAt', sortOrder: 'desc' }).then(r => r.pagination.totalCount),
-        UserManagementService.getUsers({ lastLoginFrom: thirtyDaysAgo }, { page: 1, limit: 1, sortBy: 'createdAt', sortOrder: 'desc' }).then(r => r.pagination.totalCount),
-      ]);
-
-            if (error instanceof z.ZodError) {
+    } catch (error) {
+      if (error instanceof z.ZodError) {
         return res.status(400).json({
           success: false,
           error: {
@@ -450,7 +422,7 @@ router.delete('/:id/permanent',
       const { id } = req.params;
       
       // Check if user exists
-      const user = await UserManagementService.getUserById(id);
+      const user = await adminService.getUserById(id);
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -459,13 +431,16 @@ router.delete('/:id/permanent',
       }
       
       // Perform hard delete
-      await UserManagementService.deleteUserPermanently(id);
+      await adminService.deleteUserPermanently(id);
+      
+      // Log action for audit
+      await adminService.logAction(req, 'DELETE_USER_PERMANENT', 'user', id);
       
       return res.json({ 
         success: true, 
         message: 'Utilisateur supprimé définitivement avec succès!' 
       });
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('Delete user permanently error:', error);
       return res.status(500).json({
         success: false,

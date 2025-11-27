@@ -36,6 +36,12 @@ const navigation = [
     icon: ProductIcon,
     description: 'Catalogue de produits et services'
   },
+  {
+    name: 'Plans',
+    href: '/plans',
+    icon: ProductIcon,
+    description: 'Choisissez ou modifiez votre abonnement'
+  },
   { 
     name: 'Charges', 
     href: '/expenses', 
