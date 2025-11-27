@@ -2,7 +2,7 @@
  * 🇨🇭 SimpliFaq - Admin Analytics Page (Real Data Only)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Users, TrendingUp, DollarSign, Activity, RefreshCw } from 'lucide-react';
 
 interface AnalyticsData {
@@ -36,7 +36,7 @@ export const AnalyticsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState('30d');
 
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -60,11 +60,11 @@ export const AnalyticsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
 
   useEffect(() => {
     loadAnalytics();
-  }, [period]);
+  }, [loadAnalytics]);
 
   const StatCard = ({ title, value, change, icon: Icon, color }: any) => (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
