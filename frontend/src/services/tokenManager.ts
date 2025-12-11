@@ -305,8 +305,8 @@ export class TokenManager {
         return null;
       }
 
-      const { token, refreshToken, expiresIn } = data.data;
-      const expiresAt = Date.now() + (expiresIn * 1000);
+      const { token, refreshToken, expiresAt: expiresAtString } = data.data;
+      const expiresAt = new Date(expiresAtString).getTime();
 
       // Store new token information
       this.storeTokenInfo({

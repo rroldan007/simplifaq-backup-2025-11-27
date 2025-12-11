@@ -10,7 +10,7 @@ import {
   Eye,
   EyeOff,
   BarChart3,
-  Clock,
+  // Clock, // Reserved for future use
   Zap,
   Shield,
 } from 'lucide-react';
@@ -150,9 +150,9 @@ export default function SmtpSettingsPage() {
       }
 
       console.log('[SmtpSettingsPage] Configuration loaded successfully');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[SmtpSettingsPage] Unexpected error:', err);
-      setError(err.message || 'Erreur lors du chargement de la configuration');
+      setError(err instanceof Error ? err.message : 'Erreur lors du chargement de la configuration');
     } finally {
       setLoading(false);
     }
@@ -171,7 +171,7 @@ export default function SmtpSettingsPage() {
       host: preset.host,
       port: preset.port,
       secure: preset.secure,
-      provider: preset.provider as any,
+      provider: preset.provider,
     }));
   };
 
@@ -182,7 +182,7 @@ export default function SmtpSettingsPage() {
     setSaving(true);
 
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         host: formData.host,
         port: formData.port,
         secure: formData.secure,
@@ -212,8 +212,8 @@ export default function SmtpSettingsPage() {
       setTimeout(() => {
         loadConfig();
       }, 1000);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la sauvegarde');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -230,7 +230,7 @@ export default function SmtpSettingsPage() {
     setTesting(true);
 
     try {
-      const res = await api.testUserSmtpConfig(formData.testEmail);
+      await api.testUserSmtpConfig(formData.testEmail);
 
       setTestSuccess(true);
       setSuccessMessage(`Email de test envoyé avec succès à ${formData.testEmail}`);
@@ -239,9 +239,9 @@ export default function SmtpSettingsPage() {
       setTimeout(() => {
         loadConfig();
       }, 1000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestSuccess(false);
-      setError(err.message || 'Échec du test SMTP');
+      setError(err instanceof Error ? err.message : 'Échec du test SMTP');
     } finally {
       setTesting(false);
     }

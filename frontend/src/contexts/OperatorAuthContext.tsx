@@ -154,8 +154,8 @@ export function OperatorAuthProvider({ children }: { children: React.ReactNode }
         dispatch({ type: 'SET_ERROR', payload: errorMessage });
         return { success: false, error: errorMessage };
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'An error occurred during login';
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during login';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
       return { success: false, error: errorMessage };
     }
@@ -191,6 +191,7 @@ export function OperatorAuthProvider({ children }: { children: React.ReactNode }
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useOperatorAuth(): OperatorAuthContextType {
   const context = useContext(OperatorAuthContext);
   if (context === undefined) {

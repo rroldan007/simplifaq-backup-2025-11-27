@@ -17,7 +17,7 @@ export function RegisterPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-blue-600 mb-2">
-            Simplifaq
+            SimpliFaq
           </h1>
           <p style={{ color: 'var(--color-text-secondary)' }}>
             Simplifiez votre facturation suisse
@@ -33,7 +33,7 @@ export function RegisterPage() {
 
       <div className="mt-8 text-center">
         <p className="text-xs text-gray-500">
-          © 2024 Simplifaq. Tous droits réservés.
+          © 2024 SimpliFaq. Tous droits réservés.
         </p>
       </div>
     </div>

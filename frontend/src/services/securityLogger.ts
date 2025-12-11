@@ -50,6 +50,18 @@ export interface SecurityMetrics {
   auditTrail: AuditTrail[];
 }
 
+// Events that are too frequent to log in development console
+const QUIET_EVENTS = [
+  'FORM_DATA_PRESERVED',
+  'FORM_DATA_RETRIEVED',
+  'FORM_DATA_REMOVED',
+  'API_REQUEST_SUCCESS',
+  'TOKEN_REFRESH_SCHEDULED',
+  'CROSS_TAB_EVENT_BROADCASTED',
+  'CROSS_TAB_EVENTS_CLEANED',
+  'CROSS_TAB_COORDINATOR_INITIALIZED',
+];
+
 class SecurityLogger {
   private isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -65,8 +77,8 @@ class SecurityLogger {
       category: 'security',
     };
 
-    // In development, log to console
-    if (this.isDevelopment) {
+    // In development, log to console (but skip frequent events to reduce noise)
+    if (this.isDevelopment && !QUIET_EVENTS.includes(event)) {
       const logMethod = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
       logMethod(`[SECURITY] ${event}:`, data || {});
     }

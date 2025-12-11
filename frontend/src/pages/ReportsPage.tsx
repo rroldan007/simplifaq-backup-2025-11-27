@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, DollarSign, FileText, Timer, AlertTriangle, TrendingUp, PieChart, Download, FileSpreadsheet, ReceiptText } from 'lucide-react';
+import { ArrowLeft, DollarSign, FileText, Timer, AlertTriangle, TrendingUp, PieChart, FileSpreadsheet, ReceiptText } from 'lucide-react';
 import { expensesApi, type Currency } from '../services/expensesApi';
 
 export function ReportsPage() {
@@ -225,6 +225,7 @@ export function ReportsPage() {
 }
 
 // --- PnL Widget (Utilité) ---
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function PnLWidget() {
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -241,8 +242,8 @@ function PnLWidget() {
       setError(null);
       const res = await expensesApi.getPnL({ dateFrom, dateTo, currency });
       setData({ revenue: res.revenue, charges: res.charges, utilite: res.utilite });
-    } catch (e: any) {
-      setError(e?.message || 'Erreur P&L');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur P&L');
     } finally {
       setLoading(false);
     }

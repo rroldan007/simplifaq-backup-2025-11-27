@@ -76,9 +76,9 @@ export const BackupsPage: React.FC = () => {
       } else {
         throw new Error(data.error || 'Error creating backup');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create backup:', err);
-      setError(err.message || 'Error al crear respaldo');
+      setError(err instanceof Error ? err.message : 'Error al crear respaldo');
     } finally {
       setCreating(false);
     }

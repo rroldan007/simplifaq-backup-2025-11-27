@@ -137,10 +137,10 @@ export class AIDataService {
 
       if (name) {
         where.OR = [
-          { companyName: { contains: name, mode: 'insensitive' } },
-          { firstName: { contains: name, mode: 'insensitive' } },
-          { lastName: { contains: name, mode: 'insensitive' } },
-          { email: { contains: name, mode: 'insensitive' } }
+          { companyName: { contains: name } },
+          { firstName: { contains: name } },
+          { lastName: { contains: name } },
+          { email: { contains: name } }
         ];
       }
 
@@ -191,8 +191,8 @@ export class AIDataService {
 
       if (name) {
         where.OR = [
-          { name: { contains: name, mode: 'insensitive' } },
-          { description: { contains: name, mode: 'insensitive' } }
+          { name: { contains: name } },
+          { description: { contains: name } }
         ];
       }
 
@@ -309,10 +309,10 @@ export class AIDataService {
         where: {
           userId,
           OR: [
-            { companyName: { contains: clientName, mode: 'insensitive' } },
-            { companyName: { equals: clientName, mode: 'insensitive' } },
-            { firstName: { contains: clientName, mode: 'insensitive' } },
-            { lastName: { contains: clientName, mode: 'insensitive' } }
+            { companyName: { contains: clientName } },
+            { companyName: { equals: clientName } },
+            { firstName: { contains: clientName } },
+            { lastName: { contains: clientName } }
           ]
         },
         select: {
@@ -345,9 +345,9 @@ export class AIDataService {
         where: {
           userId,
           OR: [
-            { name: { contains: productName, mode: 'insensitive' } },
-            { name: { equals: productName, mode: 'insensitive' } },
-            { description: { contains: productName, mode: 'insensitive' } }
+            { name: { contains: productName } },
+            { name: { equals: productName } },
+            { description: { contains: productName } }
           ]
         },
         select: {
@@ -376,8 +376,8 @@ export class AIDataService {
         where: {
           userId,
           OR: [
-            { name: { contains: productName, mode: 'insensitive' } },
-            { description: { contains: productName, mode: 'insensitive' } }
+            { name: { contains: productName } },
+            { description: { contains: productName } }
           ]
         },
         take: limit,

@@ -40,7 +40,7 @@ export function RecentInvoices({
   };
 
   const getStatusBadge = (status: Invoice['status']) => {
-    const statusLower = status?.toLowerCase() as any;
+    const statusLower = status?.toLowerCase() as string;
     
     const statusConfig: Record<string, { label: string; variant: 'secondary' | 'info' | 'success' | 'error' }> = {
       draft: {
@@ -78,7 +78,7 @@ export function RecentInvoices({
   };
 
   const getStatusIcon = (status: Invoice['status']) => {
-    const statusLower = status?.toLowerCase() as any;
+    const statusLower = status?.toLowerCase() as string;
     const icons: Record<string, string> = {
       draft: '📝',
       sent: '📤',

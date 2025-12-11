@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
-  Filter, 
   Download, 
   LayoutGrid, 
   List, 
@@ -11,12 +10,7 @@ import {
   Building2,
   User,
   RefreshCw,
-  Sparkles,
   Upload,
-  FileText,
-  Mail,
-  Phone,
-  MapPin,
   XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -59,7 +53,7 @@ interface ModernClientListProps {
   onRefresh?: () => void;
   onImportCsv?: (file: File) => void;
   onExport?: () => void;
-  onFilterChange?: (filters: any) => void;
+  onFilterChange?: (filters: Record<string, unknown>) => void;
   currentFilters?: {
     status?: 'active' | 'inactive' | undefined;
     type?: 'company' | 'individual' | undefined;
@@ -87,9 +81,9 @@ export function ModernClientList({
   onImportCsv,
   onExport,
   onFilterChange,
-  currentFilters,
-  operationLoading
+  currentFilters
 }: ModernClientListProps) {
+  // Note: operationLoading is available in props but not currently used
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<ClientStatus>('all');
   const [sortBy, setSortBy] = useState<'name' | 'email' | 'city' | 'created'>('name');
@@ -97,11 +91,10 @@ export function ModernClientList({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
     (localStorage.getItem('clients_view_mode') as 'grid' | 'list') || 'grid'
   );
-  const [showFilters, setShowFilters] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('clients_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('clients_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Initialize/sync local filters from parent-provided currentFilters
@@ -418,7 +411,7 @@ export function ModernClientList({
               <span className="text-sm text-slate-600">Trier par:</span>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as 'name' | 'email' | 'city' | 'created')}
                 className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               >
                 <option value="name">Nom</option>

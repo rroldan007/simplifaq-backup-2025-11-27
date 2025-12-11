@@ -35,8 +35,10 @@ export function OperatorDashboardPage() {
       const usersResponse = await adminApi.getUsers({ page: 1, limit: 1 });
       
       // Set basic stats from available data
-      const totalUsers = (usersResponse.data as any)?.pagination?.totalCount || 0;
-      const activeUsers = (usersResponse.data as any)?.users?.filter((u: any) => u.isActive).length || 0;
+      type UsersResponseData = { pagination?: { totalCount?: number }; users?: { isActive?: boolean }[] };
+      const respData = usersResponse.data as UsersResponseData;
+      const totalUsers = respData?.pagination?.totalCount || 0;
+      const activeUsers = respData?.users?.filter((u) => u.isActive).length || 0;
       
       setStats({
         totalUsers,
@@ -47,9 +49,9 @@ export function OperatorDashboardPage() {
         monthlyRevenue: 0,
         growthRate: 0
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Dashboard stats error:', err);
-      setError(err.message || 'Failed to load dashboard data');
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }

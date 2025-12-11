@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { expensesApi, type Account, type Expense, type Currency, type TvaSummary } from '../../services/expensesApi';
 import { ModernExpensesList } from '../../components/expenses/ModernExpensesList';
@@ -27,7 +27,7 @@ const ExpensesListPage: React.FC = () => {
   }));
 
   useEffect(() => {
-    const params: any = { 
+    const params: Record<string, string> = { 
       from: filters.dateFrom, 
       to: filters.dateTo, 
       ccy: filters.currency 
@@ -51,8 +51,8 @@ const ExpensesListPage: React.FC = () => {
       ]);
       setAccounts(accs);
       setExpenses(exps);
-    } catch (e: any) {
-      setError(e?.message || 'Erreur lors du chargement');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du chargement');
     } finally {
       setLoading(false);
     }
@@ -72,7 +72,7 @@ const ExpensesListPage: React.FC = () => {
         utilite: res.utilite, 
         tva: res.tva 
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Error loading P&L:', e);
     } finally {
       setPnlLoading(false);
@@ -88,7 +88,7 @@ const ExpensesListPage: React.FC = () => {
         currency: filters.currency 
       });
       setTvaSummary(res);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Error loading TVA summary:', e);
     } finally {
       setTvaLoading(false);
@@ -123,8 +123,8 @@ const ExpensesListPage: React.FC = () => {
     try {
       await expensesApi.deleteExpense(expenseId);
       await handleRefresh();
-    } catch (e: any) {
-      alert(e?.message || 'Erreur lors de la suppression');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Erreur lors de la suppression');
     }
   }, [handleRefresh]);
 

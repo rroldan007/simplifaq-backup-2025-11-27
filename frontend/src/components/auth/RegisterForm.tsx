@@ -27,25 +27,25 @@ interface RegisterFormData {
   confirmPassword: string;
   firstName: string;
   lastName: string;
-  
+
   // Informations de l'entreprise
   companyName: string;
   vatNumber: string;
-  
+
   // Adresse
   street: string;
   postalCode: string;
   city: string;
   canton: string;
   country: string;
-  
+
   // Informations de contact
   phone: string;
   website: string;
-  
+
   // Acceptation des conditions
   acceptTerms: boolean;
-  
+
   // Newsletter (optionnel)
   subscribeNewsletter: boolean;
 }
@@ -178,7 +178,7 @@ export function RegisterForm({
   // Gestion de la soumission du formulaire
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -201,7 +201,7 @@ export function RegisterForm({
         website: formData.website.trim() || undefined,
         subscribeNewsletter: formData.subscribeNewsletter,
       });
-      
+
       // Si el registro requiere confirmación de email, mostrar mensaje específico
       // El AuthContext se encargará de la redirección apropiada
     } catch (error) {
@@ -216,7 +216,7 @@ export function RegisterForm({
   ) => {
     const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Effacer l'erreur du champ modifié
     if (errors[field]) {
       setErrors(prev => {
@@ -246,7 +246,7 @@ export function RegisterForm({
           Créer un compte
         </h1>
         <p className="text-secondary">
-          Rejoignez Simplifaq et simplifiez votre facturation
+          Rejoignez SimpliFaq et simplifiez votre facturation
         </p>
       </div>
 
@@ -377,7 +377,7 @@ export function RegisterForm({
           <div className="space-y-4">
             <Input
               label="Nom de l'entreprise"
-              placeholder="Simplifaq SA"
+              placeholder="SimpliFaq SA"
               value={formData.companyName}
               onChange={handleInputChange('companyName')}
               error={errors.companyName}

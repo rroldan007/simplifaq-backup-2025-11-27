@@ -50,7 +50,7 @@ export const RoleManagementPage: React.FC = () => {
   const [showAssignRoleModal, setShowAssignRoleModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [formData, setFormData] = useState<any>({});
+  const [formData, setFormData] = useState<Record<string, string | string[]>>({});
 
   // Mock data generation
   const generateMockPermissions = (): Permission[] => [

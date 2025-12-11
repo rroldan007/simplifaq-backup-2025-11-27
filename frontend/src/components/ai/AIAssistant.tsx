@@ -1,44 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Bot, 
-  Send, 
-  X, 
-  Minimize2, 
+import {
+  Bot,
+  X,
+  Minimize2,
   Maximize2,
   Loader2,
   Check,
-  XCircle
+  XCircle,
+  Send
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { asistenteApi } from '../../services/asistenteApi';
 
-interface ActionParameters {
-  [key: string]: unknown;
-}
-
-interface ActionEndpoint {
-  method?: string;
-  path?: string;
-}
-
 interface MessageAction {
-  id?: string;
-  type?: string;
-  parameters?: ActionParameters;
-  requiresConfirmation?: boolean;
-  confirmationMessage?: string;
-  endpoint?: ActionEndpoint;
-  messageId?: string;
-  description?: string;
-  endpointMethod?: string;
-  endpointUrl?: string;
+  id: string;
+  description: string;
+  endpointMethod: string;
+  endpointUrl: string;
   payload?: Record<string, unknown> | null;
-  status?: string;
+  requiresConfirmation: boolean;
+  status?: 'pending' | 'confirmed' | 'executed' | 'cancelled' | 'failed';
+  lastError?: unknown;
   createdAt?: string;
-  updatedAt?: string;
+  confirmedAt?: string | null;
   executedAt?: string | null;
-  [key: string]: unknown; // Allow additional properties
+  cancelledAt?: string | null;
+  parameters?: Record<string, unknown>;
+  messageId?: string;
+  confirmationMessage?: string;
 }
 
 interface Message {
@@ -56,7 +46,7 @@ export function AIAssistant() {
     {
       id: '1',
       role: 'assistant',
-      content: '👋 Bonjour ! Je suis votre Assistant ADM de Simplifaq. En quoi puis-je vous aider avec la gestion de vos factures, clients et comptabilité ?',
+      content: '👋 Bonjour ! Je suis votre Assistant ADM de SimpliFaq. En quoi puis-je vous aider avec la gestion de vos factures, clients et comptabilité ?',
       timestamp: new Date()
     }
   ]);
@@ -118,21 +108,20 @@ export function AIAssistant() {
         content: replyText,
         timestamp: new Date(),
         action: Array.isArray(response.actions) && response.actions.length > 0 ? {
-          type: response.actions[0].endpointMethod || 'unknown',
+          ...response.actions[0],
           parameters: response.actions[0].payload || {},
-          requiresConfirmation: response.actions[0].requiresConfirmation || false,
           confirmationMessage: response.actions[0].description || '¿Confirmas esta acción?'
         } : undefined
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      
+
       // If there's a pending action, set it
       if (Array.isArray(response.actions) && response.actions.length > 0) {
         const action = response.actions[0];
-        
+
         // Auto-execute actions that don't require confirmation and are data retrieval
-        if (!action.requiresConfirmation && action.endpoint?.method === 'GET') {
+        if (!action.requiresConfirmation && action.endpointMethod === 'GET') {
           try {
             await executeActionAutomatically(action);
           } catch (autoError) {
@@ -151,7 +140,7 @@ export function AIAssistant() {
           });
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -172,12 +161,13 @@ export function AIAssistant() {
     }
   };
 
-  const handleConfirmAction = async () => {
+  const handleConfirmAction = async (): Promise<void> => {
     if (!pendingAction) return;
-    
+
     setIsLoading(true);
     try {
-      const response = await asistenteApi.confirmAction({
+      // Usamos void ya que no necesitamos la respuesta
+      await asistenteApi.confirmAction({
         actionId: pendingAction.id,
         confirmation: true
       });
@@ -191,7 +181,7 @@ export function AIAssistant() {
 
       setMessages(prev => [...prev, confirmationMessage]);
       setPendingAction(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
@@ -205,7 +195,7 @@ export function AIAssistant() {
     }
   };
 
-  const handleCancelAction = () => {
+  const handleCancelAction = (): void => {
     const cancelMessage: Message = {
       id: Date.now().toString(),
       role: 'assistant',
@@ -216,7 +206,7 @@ export function AIAssistant() {
     setPendingAction(null);
   };
 
-  const executeActionAutomatically = async (action: any) => {
+  const executeActionAutomatically = async (action: MessageAction): Promise<void> => {
     try {
       // First, store the action to get an actionId
       const storeResponse = await asistenteApi.confirmAction({
@@ -227,7 +217,7 @@ export function AIAssistant() {
       if (storeResponse.action?.id) {
         // Execute the action
         const executeResponse = await api.post(`/asistente/actions/${storeResponse.action.id}/execute`);
-        
+
         // Add a message with the results
         const resultMessage: Message = {
           id: Date.now().toString(),
@@ -235,7 +225,7 @@ export function AIAssistant() {
           content: `✅ Action exécutée automatiquement. Résultats: ${JSON.stringify(executeResponse.data?.data || executeResponse.data, null, 2)}`,
           timestamp: new Date()
         };
-        
+
         setMessages(prev => [...prev, resultMessage]);
       }
     } catch (error) {
@@ -248,7 +238,7 @@ export function AIAssistant() {
     { label: 'Créer facture', prompt: 'Aidez-moi à créer une nouvelle facture pour un client' },
     { label: 'Analyser dépenses', prompt: 'Aidez-moi à analyser mes dépenses du dernier mois' },
     { label: 'Vérifier TVA', prompt: 'Comment vérifier que j\'applique correctement les taux de TVA ?' },
-  ];
+  ] as const;
 
   return (
     <>
@@ -272,9 +262,9 @@ export function AIAssistant() {
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 100, scale: 0.8 }}
-            animate={{ 
-              opacity: 1, 
-              y: 0, 
+            animate={{
+              opacity: 1,
+              y: 0,
               scale: 1,
               height: isMinimized ? '60px' : '600px'
             }}
@@ -325,25 +315,23 @@ export function AIAssistant() {
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                          message.role === 'user'
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.role === 'user'
                             ? 'bg-gradient-to-br from-purple-600 to-blue-600 text-white'
                             : 'bg-white text-slate-900 shadow-sm border border-purple-200'
-                        }`}
+                          }`}
                       >
                         <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                        <p className={`text-xs mt-1 ${
-                          message.role === 'user' ? 'text-purple-200' : 'text-slate-400'
-                        }`}>
-                          {message.timestamp.toLocaleTimeString('fr-CH', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
+                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-purple-200' : 'text-slate-400'
+                          }`}>
+                          {message.timestamp.toLocaleTimeString('fr-CH', {
+                            hour: '2-digit',
+                            minute: '2-digit'
                           })}
                         </p>
                       </div>
                     </motion.div>
                   ))}
-                  
+
                   {/* Action Confirmation Buttons */}
                   {pendingAction && !isLoading && (
                     <motion.div
@@ -374,7 +362,7 @@ export function AIAssistant() {
                       </div>
                     </motion.div>
                   )}
-                  
+
                   {isLoading && (
                     <motion.div
                       initial={{ opacity: 0 }}
@@ -389,7 +377,7 @@ export function AIAssistant() {
                       </div>
                     </motion.div>
                   )}
-                  
+
                   <div ref={messagesEndRef} />
                 </div>
 
@@ -434,7 +422,7 @@ export function AIAssistant() {
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
-                    ⚡ Propulsé par Asistente ADM de Simplifaq
+                    ⚡ Propulsé par Asistente ADM de SimpliFaq
                   </p>
                 </div>
               </>

@@ -47,12 +47,20 @@ export function useFormDataPreservation(
     ...preservationOptions
   } = options;
 
-  // Memoize preservationOptions by reference to prevent unnecessary re-renders
-  const memoizedPreservationOptions = useMemo(() => preservationOptions, [preservationOptions]);
+  // Memoize preservationOptions by stringified value to prevent unnecessary re-renders
+  const preservationOptionsKey = JSON.stringify(preservationOptions);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const memoizedPreservationOptions = useMemo(() => preservationOptions, [preservationOptionsKey]);
 
   const [preservationId, setPreservationId] = useState<string | null>(null);
   const [isPreserving, setIsPreserving] = useState(false);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const preservationIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    preservationIdRef.current = preservationId;
+  }, [preservationId]);
 
   /**
    * Preserve form data
@@ -65,9 +73,9 @@ export function useFormDataPreservation(
         return null;
       }
       
-      // Remove previous preservation if exists
-      if (preservationId) {
-        await formDataPreservation.removeFormData(preservationId);
+      // Remove previous preservation if exists (use ref to avoid dependency cycle)
+      if (preservationIdRef.current) {
+        await formDataPreservation.removeFormData(preservationIdRef.current);
       }
 
       const id = await formDataPreservation.preserveFormData(data as Record<string, unknown>, {
@@ -77,6 +85,7 @@ export function useFormDataPreservation(
 
       if (id) {
         setPreservationId(id);
+        preservationIdRef.current = id;
       }
       return id;
     } catch (error) {
@@ -85,7 +94,7 @@ export function useFormDataPreservation(
     } finally {
       setIsPreserving(false);
     }
-  }, [formId, memoizedPreservationOptions, preservationId]);
+  }, [formId, memoizedPreservationOptions]); // Removed preservationId to break the cycle
 
   /**
    * Retrieve preserved data
@@ -205,10 +214,12 @@ export function useAutoFormPreservation(
   formData: Record<string, unknown>,
   options: UseFormDataPreservationOptions = {}
 ) {
+  const optionsKey = JSON.stringify(options);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const memoizedOptions = useMemo(() => ({
     autoPreserve: true,
     ...options,
-  }), [options]);
+  }), [optionsKey]);
 
   const preservation = useFormDataPreservation(formId, memoizedOptions);
 
@@ -218,21 +229,43 @@ export function useAutoFormPreservation(
   const { preserveData } = preservation;
   const { retrieveData } = preservation;
   const prevFormDataRef = useRef<string | null>(null);
+  const preserveDataRef = useRef(preserveData);
+  
+  // Keep ref updated without triggering effect
+  useEffect(() => {
+    preserveDataRef.current = preserveData;
+  }, [preserveData]);
 
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   useEffect(() => {
     const stringifiedFormData = formData ? JSON.stringify(formData) : null;
     const isEmptyObject = stringifiedFormData === '{}';
+
+    // Clear any pending debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
 
     if (
       stringifiedFormData &&
       !isEmptyObject &&
       stringifiedFormData !== prevFormDataRef.current
     ) {
-      preserveData(formData);
+      // Debounce the preservation to avoid excessive calls
+      debounceTimerRef.current = setTimeout(() => {
+        preserveDataRef.current(formData);
+      }, 1500);
     }
 
     prevFormDataRef.current = stringifiedFormData;
-  }, [formData, preserveData]);
+    
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [formData]); // Remove preserveData from dependencies to break the loop
 
   /**
    * Restore most recent data

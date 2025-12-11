@@ -26,7 +26,8 @@ import aiRoutes from './ai';
 import tvaRatesRoutes from './tvaRates';
 import onboardingRoutes from './onboarding';
 import userSubscriptionRoutes from './userSubscriptions';
-import feedbackRoutes from './feedback';
+// import feedbackRoutes from './feedback'; // Comentado: modelo Feedback no existe en schema
+import plansRoutes from './plans';
 import { getAvailablePlans } from '../controllers/userSubscriptionController';
 import { PrismaClient } from '@prisma/client';
 
@@ -128,47 +129,9 @@ router.use('/onboarding', onboardingRoutes);
 router.use('/subscriptions', userSubscriptionRoutes);
 
 // Feedback routes (beta user feedback)
-router.use('/feedback', feedbackRoutes);
+// router.use('/feedback', feedbackRoutes); // Comentado: modelo Feedback no existe en schema
 
-// Public plans endpoint (no auth required)
-router.get('/plans', async (req, res) => {
-  try {
-    const plans = await prisma.plan.findMany({
-      where: { isActive: true },
-      orderBy: { price: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        description: true,
-        price: true,
-        currency: true,
-        maxInvoicesPerMonth: true,
-        maxClientsTotal: true,
-        maxProductsTotal: true,
-        hasEmailSupport: true,
-        hasPrioritySupport: true,
-        hasAdvancedReports: true,
-        hasApiAccess: true,
-        hasCustomBranding: true,
-        storageLimit: true,
-        hasSwissQRBill: true,
-        hasMultiCurrency: true,
-        hasMultiLanguage: true,
-      },
-    });
-
-    res.json({
-      success: true,
-      data: { plans },
-    });
-  } catch (error) {
-    console.error('Get plans error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch plans',
-    });
-  }
-});
+// Public plans routes (no auth required for /public endpoints)
+router.use('/plans', plansRoutes);
 
 export default router;

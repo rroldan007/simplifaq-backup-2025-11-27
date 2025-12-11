@@ -8,23 +8,27 @@ interface PaymentModalProps {
   invoiceId: string;
   invoiceNumber: string;
   totalAmount: number;
+  remainingAmount?: number;
   onPaymentAdded: () => void;
 }
 
-export function PaymentModal({ isOpen, onClose, invoiceId, invoiceNumber, totalAmount, onPaymentAdded }: PaymentModalProps) {
-  // Redondear el monto inicial a 2 decimales
-  const roundedAmount = Math.round(totalAmount * 100) / 100;
+export function PaymentModal({ isOpen, onClose, invoiceId, invoiceNumber, totalAmount, remainingAmount, onPaymentAdded }: PaymentModalProps) {
+  // Usar el monto restante si existe, de lo contrario usar el total
+  const initialAmount = remainingAmount !== undefined ? remainingAmount : totalAmount;
+  // Redondear a 2 decimales
+  const roundedAmount = Math.round(initialAmount * 100) / 100;
   const [amount, setAmount] = useState(roundedAmount);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Actualizar el monto cuando cambie totalAmount (cuando se abre el modal con una nueva factura)
+  // Actualizar el monto cuando cambie totalAmount o remainingAmount
   useEffect(() => {
-    const rounded = Math.round(totalAmount * 100) / 100;
+    const initial = remainingAmount !== undefined ? remainingAmount : totalAmount;
+    const rounded = Math.round(initial * 100) / 100;
     setAmount(rounded);
-  }, [totalAmount, isOpen]);
+  }, [totalAmount, remainingAmount, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +40,7 @@ export function PaymentModal({ isOpen, onClose, invoiceId, invoiceNumber, totalA
       onClose();
     } catch (error) {
       console.error('Error adding payment:', error);
-      const msg = (error as any)?.message || 'Erreur réseau';
+      const msg = error instanceof Error ? error.message : 'Erreur réseau';
       setErrorMsg(msg);
     } finally {
       setIsSubmitting(false);

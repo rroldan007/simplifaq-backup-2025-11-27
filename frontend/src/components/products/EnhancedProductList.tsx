@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { Package, Wrench, Search, X, LayoutGrid, List, ArrowDownAZ, Tag, Clock, Pencil, Copy, Trash2, Plus, Upload, Download } from 'lucide-react';
+import { Package, Wrench, Search, X, LayoutGrid, List, ArrowDownAZ, Tag, Clock, Pencil, Copy, Trash2, Plus, Upload, Download, Sparkles } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -28,6 +29,7 @@ interface EnhancedProductListProps {
   currency?: string;
   onOpenImport?: () => void;
   onExport?: () => void;
+  showInsights?: boolean;
 }
 
 export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
@@ -40,7 +42,8 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
   onCreateNew,
   currency = 'CHF',
   onOpenImport,
-  onExport
+  onExport,
+  showInsights = true
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'active' | 'inactive' | 'products' | 'services'>('all');
@@ -58,7 +61,7 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem('products_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('products_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Filter and search products
@@ -166,6 +169,32 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
     { value: 'created', label: 'Plus récent', icon: <Clock className="w-4 h-4" /> }
   ];
 
+  const catalogInsights = useMemo(() => {
+    if (!products.length) {
+      return {
+        total: 0,
+        activeRatio: 0,
+        averagePrice: 0,
+        serviceRatio: 0,
+        topProduct: null as string | null,
+      };
+    }
+
+    const total = products.length;
+    const active = products.filter(product => product.isActive).length;
+    const services = products.filter(product => ['heure', 'h', 'hour', 'service', 'consultation', 'forfait'].includes(product.unit.toLowerCase())).length;
+    const averagePrice = products.reduce((sum, product) => sum + product.unitPrice, 0) / total;
+    const topProduct = [...products].sort((a, b) => b.unitPrice - a.unitPrice)[0]?.name ?? null;
+
+    return {
+      total,
+      activeRatio: Math.round((active / Math.max(total, 1)) * 100),
+      averagePrice,
+      serviceRatio: Math.round((services / Math.max(total, 1)) * 100),
+      topProduct,
+    };
+  }, [products]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -190,122 +219,154 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
 
   return (
     <div className="space-y-6">
+      {showInsights && products.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        >
+          <Card className="p-5 border border-blue-100 bg-gradient-to-br from-blue-50 to-white">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Activation</p>
+            <p className="text-3xl font-bold text-blue-900 mt-2">{catalogInsights.activeRatio}%</p>
+            <p className="text-sm text-blue-600">de votre catalogue est prêt à l'emploi</p>
+          </Card>
+          <Card className="p-5 border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Prix moyen</p>
+            <p className="text-3xl font-bold text-emerald-900 mt-2">
+              {catalogInsights.averagePrice.toLocaleString('fr-CH', { style: 'currency', currency })}
+            </p>
+            <p className="text-sm text-emerald-600">Optimisez vos marges en gardant ce KPI à jour</p>
+          </Card>
+          <Card className="p-5 border border-orange-100 bg-gradient-to-br from-orange-50 to-white">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-600">Services</p>
+            <p className="text-3xl font-bold text-orange-900 mt-2">{catalogInsights.serviceRatio}%</p>
+            <p className="text-sm text-orange-600 flex items-center gap-1">
+              <Sparkles className="w-4 h-4" /> {catalogInsights.topProduct || 'Aucun produit premium identifié'}
+            </p>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Search and Filters */}
-      <Card className="p-6 card-theme">
-        <div className="space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="w-5 h-5 text-[var(--color-text-tertiary)]" />
-            </div>
-            <Input
-              type="text"
-              placeholder="Rechercher par nom, description, unité..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-3 text-lg input-theme"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Filter Tabs */}
-          <div className="flex flex-wrap gap-2">
-            {filterOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setSelectedFilter(option.value as 'all' | 'active' | 'inactive' | 'products' | 'services')}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  selectedFilter === option.value
-                    ? 'bg-[var(--color-accent-100)] text-[var(--color-accent-700)] border-2 border-[var(--color-accent-200)]'
-                    : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] border-2 border-transparent'
-                }`}
-              >
-                <span className="inline-flex">{option.icon}</span>
-                <span>{option.label}</span>
-                <span className={`px-2 py-0.5 text-xs rounded-full ${
-                  selectedFilter === option.value
-                    ? 'bg-[var(--color-accent-200)] text-[var(--color-accent-800)]'
-                    : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]'
-                }`}>
-                  {option.count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* View Mode, Sort and Results Count */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {/* View Mode */}
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-[var(--color-text-secondary)]">Affichage :</span>
-                <div className="flex bg-[var(--color-bg-secondary)] rounded-lg p-1">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`px-3 py-1 rounded text-sm ${
-                      viewMode === 'grid'
-                        ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] shadow-sm'
-                        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                    }`}
-                  >
-                    <span className="inline-flex items-center space-x-1"><LayoutGrid className="w-4 h-4" /><span>Grille</span></span>
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`px-3 py-1 rounded text-sm ${
-                      viewMode === 'list'
-                        ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] shadow-sm'
-                        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                    }`}
-                  >
-                    <span className="inline-flex items-center space-x-1"><List className="w-4 h-4" /><span>Liste</span></span>
-                  </button>
-                </div>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <Card className="p-6 card-theme">
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="w-5 h-5 text-[var(--color-text-tertiary)]" />
               </div>
+              <Input
+                type="text"
+                placeholder="Rechercher par nom, description, unité..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-3 text-lg input-theme"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
-              {/* Sort Options */}
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-[var(--color-text-secondary)]">Trier :</span>
-                <div className="flex space-x-1">
-                  {sortOptions.map((option) => (
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap gap-2">
+              {filterOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setSelectedFilter(option.value as 'all' | 'active' | 'inactive' | 'products' | 'services')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedFilter === option.value
+                      ? 'bg-[var(--color-accent-100)] text-[var(--color-accent-700)] border-2 border-[var(--color-accent-200)]'
+                      : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] border-2 border-transparent'
+                  }`}
+                >
+                  <span className="inline-flex">{option.icon}</span>
+                  <span>{option.label}</span>
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${
+                    selectedFilter === option.value
+                      ? 'bg-[var(--color-accent-200)] text-[var(--color-accent-800)]'
+                      : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]'
+                  }`}>
+                    {option.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* View Mode, Sort and Results Count */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {/* View Mode */}
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-[var(--color-text-secondary)]">Affichage :</span>
+                  <div className="flex bg-[var(--color-bg-secondary)] rounded-lg p-1">
                     <button
-                      key={option.value}
-                      onClick={() => setSortBy(option.value as 'name' | 'price' | 'created')}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded text-sm ${
-                        sortBy === option.value
-                          ? 'bg-[var(--color-accent-100)] text-[var(--color-accent-700)]'
-                          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]'
+                      onClick={() => setViewMode('grid')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        viewMode === 'grid'
+                          ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] shadow-sm'
+                          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                       }`}
                     >
-                      <span className="inline-flex">{option.icon}</span>
-                      <span>{option.label}</span>
+                      <span className="inline-flex items-center space-x-1"><LayoutGrid className="w-4 h-4" /><span>Grille</span></span>
                     </button>
-                  ))}
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        viewMode === 'list'
+                          ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] shadow-sm'
+                          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                      }`}
+                    >
+                      <span className="inline-flex items-center space-x-1"><List className="w-4 h-4" /><span>Liste</span></span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sort Options */}
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-[var(--color-text-secondary)]">Trier :</span>
+                  <div className="flex space-x-1">
+                    {sortOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => setSortBy(option.value as 'name' | 'price' | 'created')}
+                        className={`flex items-center space-x-1 px-3 py-1 rounded text-sm ${
+                          sortBy === option.value
+                            ? 'bg-[var(--color-accent-100)] text-[var(--color-accent-700)]'
+                            : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]'
+                        }`}
+                      >
+                        <span className="inline-flex">{option.icon}</span>
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-3 py-1 rounded-full">
-              <span className="font-medium">{filteredProducts.length}</span> produit{filteredProducts.length !== 1 ? 's' : ''}
-              {searchQuery && ' trouvé' + (filteredProducts.length !== 1 ? 's' : '')}
+              
+              <div className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-3 py-1 rounded-full">
+                <span className="font-medium">{filteredProducts.length}</span> produit{filteredProducts.length !== 1 ? 's' : ''}
+                {searchQuery && ' trouvé' + (filteredProducts.length !== 1 ? 's' : '')}
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </motion.div>
 
       {/* Product List */}
       {filteredProducts.length === 0 ? (
-        <Card className="p-12 text-center card-theme">
-          <div className="text-8xl mb-6">
-            {searchQuery || selectedFilter !== 'all' ? <Search className="w-16 h-16 mx-auto" /> : <Package className="w-16 h-16 mx-auto" />}
-          </div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="p-12 text-center card-theme">
+            <div className="text-8xl mb-6">
+              {searchQuery || selectedFilter !== 'all' ? <Search className="w-16 h-16 mx-auto" /> : <Package className="w-16 h-16 mx-auto" />}
+            </div>
           
           {searchQuery || selectedFilter !== 'all' ? (
             <>
@@ -326,68 +387,84 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
                 <span className="inline-flex items-center space-x-2"><Trash2 className="w-4 h-4" /><span>Effacer les filtres</span></span>
               </Button>
             </>
-          ) : (
-            <>
-              <h3 className="text-2xl font-semibold text-slate-900 mb-3">
-                Votre catalogue est vide
-              </h3>
-              <p className="text-slate-600 mb-8 text-lg">
-                Commencez par ajouter vos produits et services pour créer votre catalogue.
-              </p>
-              {onCreateNew && (
-                <Button
-                  onClick={onCreateNew}
-                  variant="primary"
-                  className="text-lg px-8 py-4"
-                >
-                  <span className="inline-flex items-center space-x-2"><Copy className="w-4 h-4" /><span>Ajouter mon premier produit</span></span>
-                </Button>
-              )}
-            </>
-          )}
-        </Card>
+            ) : (
+              <>
+                <h3 className="text-2xl font-semibold text-slate-900 mb-3">
+                  Votre catalogue est vide
+                </h3>
+                <p className="text-slate-600 mb-8 text-lg">
+                  Commencez par ajouter vos produits et services pour créer votre catalogue.
+                </p>
+                {onCreateNew && (
+                  <Button
+                    onClick={onCreateNew}
+                    variant="primary"
+                    className="text-lg px-8 py-4"
+                  >
+                    <span className="inline-flex items-center space-x-2"><Copy className="w-4 h-4" /><span>Ajouter mon premier produit</span></span>
+                  </Button>
+                )}
+              </>
+            )}
+          </Card>
+        </motion.div>
       ) : (
         viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <Card
-                key={product.id}
-                className={`p-6 card-theme hover:shadow-lg transition-all duration-200 ${!product.isActive ? 'opacity-75' : 'hover:shadow-xl'}`}
-              >
-                <div className="space-y-4">
-                  <div className="w-16 h-16 mx-auto bg-[var(--color-bg-secondary)] rounded-full flex items-center justify-center text-[var(--color-text-secondary)]">
-                    {getProductIcon(product)}
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center space-x-2 mb-1">
-                      <h3 className="text-lg font-semibold text-[var(--color-text-primary)] truncate">{product.name}</h3>
-                      {!product.isActive && (<span className="px-2 py-1 bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] text-xs rounded-full">Inactif</span>)}
+            <AnimatePresence>
+              {filteredProducts.map((product, index) => (
+                <motion.div
+                  key={product.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.25, delay: index * 0.03 }}
+                >
+                  <Card
+                    className={`p-6 card-theme hover:shadow-xl transition-all duration-200 ${!product.isActive ? 'opacity-75' : 'hover:-translate-y-1'}`}
+                  >
+                    <div className="space-y-4">
+                      <div className="w-16 h-16 mx-auto bg-[var(--color-bg-secondary)] rounded-full flex items-center justify-center text-[var(--color-text-secondary)]">
+                        {getProductIcon(product)}
+                      </div>
+                      <div className="text-center">
+                        <div className="flex items-center justify-center space-x-2 mb-1">
+                          <h3 className="text-lg font-semibold text-[var(--color-text-primary)] truncate">{product.name}</h3>
+                          {!product.isActive && (<span className="px-2 py-1 bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] text-xs rounded-full">Inactif</span>)}
+                        </div>
+                        <div className="flex items-center justify-center space-x-2 text-sm text-[var(--color-text-secondary)] mb-2">
+                          <span>{getProductType(product)}</span><span>•</span>
+                          <span className={`px-2 py-1 rounded-full text-xs ${getTvaColor()}`}>TVA {product.tvaRate}%</span>
+                        </div>
+                        {product.description && (
+                          <p className="text-sm text-[var(--color-text-secondary)] mb-2 line-clamp-2">{product.description}</p>
+                        )}
+                        <div className="flex items-center justify-center space-x-1">
+                          <span className="text-2xl font-bold text-[var(--color-text-primary)]">{formatPrice(product.unitPrice)}</span>
+                          <span className="text-[var(--color-text-secondary)]">/ {product.unit}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-center space-x-2 pt-4 border-t border-[var(--color-border-primary)]">
+                        {onEdit && (<Button onClick={() => onEdit(product.id)} variant="secondary" size="sm" className="text-xs"><span className="inline-flex items-center space-x-1"><Pencil className="w-4 h-4" /><span>Modifier</span></span></Button>)}
+                        {onDuplicate && (<Button onClick={() => onDuplicate(product.id)} variant="secondary" size="sm" className="text-xs"><span className="inline-flex items-center space-x-1"><Copy className="w-4 h-4" /><span>Dupliquer</span></span></Button>)}
+                        {onDelete && (<Button onClick={() => onDelete(product.id)} variant="danger" size="sm" className="text-xs"><Trash2 className="w-4 h-4" /></Button>)}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-center space-x-2 text-sm text-[var(--color-text-secondary)] mb-2">
-                      <span>{getProductType(product)}</span><span>•</span>
-                      <span className={`px-2 py-1 rounded-full text-xs ${getTvaColor()}`}>TVA {product.tvaRate}%</span>
-                    </div>
-                    {product.description && (
-                      <p className="text-sm text-[var(--color-text-secondary)] mb-2 line-clamp-2">{product.description}</p>
-                    )}
-                    <div className="flex items-center justify-center space-x-1">
-                      <span className="text-2xl font-bold text-[var(--color-text-primary)]">{formatPrice(product.unitPrice)}</span>
-                      <span className="text-[var(--color-text-secondary)]">/ {product.unit}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-center space-x-2 pt-4 border-t border-[var(--color-border-primary)]">
-                    {onEdit && (<Button onClick={() => onEdit(product.id)} variant="secondary" size="sm" className="text-xs"><span className="inline-flex items-center space-x-1"><Pencil className="w-4 h-4" /><span>Modifier</span></span></Button>)}
-                    {onDuplicate && (<Button onClick={() => onDuplicate(product.id)} variant="secondary" size="sm" className="text-xs"><span className="inline-flex items-center space-x-1"><Copy className="w-4 h-4" /><span>Dupliquer</span></span></Button>)}
-                    {onDelete && (<Button onClick={() => onDelete(product.id)} variant="danger" size="sm" className="text-xs"><Trash2 className="w-4 h-4" /></Button>)}
-                  </div>
-                </div>
-              </Card>
-            ))}
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm border border-[var(--color-border-primary)] rounded-lg overflow-hidden">
-              <thead className="bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)]">
+            <motion.table
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="min-w-full text-sm border border-[var(--color-border-primary)] rounded-2xl overflow-hidden shadow-sm"
+            >
+              <thead className="bg-[var(--color-bg-secondary)]/80 text-[var(--color-text-secondary)]">
                 <tr>
                   <th className="px-3 py-2 text-left">Nom</th>
                   <th className="px-3 py-2 text-left">Type</th>
@@ -399,30 +476,48 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="border-t border-[var(--color-border-primary)] hover:bg-[var(--color-bg-secondary)]">
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-[var(--color-text-primary)] truncate">{product.name}</div>
-                      {product.description && (
-                        <div className="text-[11px] text-[var(--color-text-tertiary)] truncate max-w-[32ch]">{product.description}</div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{getProductType(product)}</td>
-                    <td className="px-3 py-2">{product.tvaRate}%</td>
-                    <td className="px-3 py-2 text-right font-semibold">{formatPrice(product.unitPrice)}</td>
-                    <td className="px-3 py-2">{product.unit}</td>
-                    <td className="px-3 py-2">{product.isActive ? 'Actif' : 'Inactif'}</td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="inline-flex gap-2">
-                        {onEdit && (<button onClick={() => onEdit(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Modifier</button>)}
-                        {onDuplicate && (<button onClick={() => onDuplicate(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Dupliquer</button>)}
-                        {onDelete && (<button onClick={() => onDelete(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Supprimer</button>)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                <AnimatePresence initial={false}>
+                  {filteredProducts.map((product) => (
+                    <motion.tr
+                      key={product.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.2 }}
+                      className="border-t border-[var(--color-border-primary)] hover:bg-[var(--color-bg-secondary)]/70"
+                    >
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-[var(--color-text-primary)] truncate flex items-center gap-2">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-bg-secondary)] text-[var(--color-text-tertiary)]">
+                            {getProductIcon(product)}
+                          </span>
+                          {product.name}
+                        </div>
+                        {product.description && (
+                          <div className="text-[11px] text-[var(--color-text-tertiary)] truncate max-w-[32ch]">{product.description}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">{getProductType(product)}</td>
+                      <td className="px-3 py-2">{product.tvaRate}%</td>
+                      <td className="px-3 py-2 text-right font-semibold">{formatPrice(product.unitPrice)}</td>
+                      <td className="px-3 py-2">{product.unit}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-1 rounded-full text-xs ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                          {product.isActive ? 'Actif' : 'Inactif'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="inline-flex gap-2">
+                          {onEdit && (<button onClick={() => onEdit(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Modifier</button>)}
+                          {onDuplicate && (<button onClick={() => onDuplicate(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Dupliquer</button>)}
+                          {onDelete && (<button onClick={() => onDelete(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Supprimer</button>)}
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               </tbody>
-            </table>
+            </motion.table>
           </div>
         )
       )}

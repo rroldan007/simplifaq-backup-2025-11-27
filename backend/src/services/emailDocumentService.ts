@@ -6,7 +6,7 @@
 import nodemailer from 'nodemailer';
 import { prisma } from './database';
 import { decrypt } from '../utils/encryption';
-import { generateInvoicePDF } from '../utils/invoicePDFPdfkit';
+import { UnifiedPDFGenerator, DocumentData } from '../services/UnifiedPDFGenerator';
 import {
   prepareEmail,
   formatCurrency,
@@ -100,8 +100,8 @@ export async function sendDocumentByEmail(
       };
     }
 
-    // 4. Generate PDF - Always use functional PDFKit system
-    console.log('[PDF] Using PDFKit system with modern templates', { template: document.user?.pdfTemplate });
+    // 4. Generate PDF - Use UnifiedPDFGenerator
+    console.log('[PDF] Using UnifiedPDFGenerator for email attachment', { template: document.user?.pdfTemplate });
     
     const pdfStream = new PassThrough();
     const chunks: Buffer[] = [];
@@ -114,28 +114,81 @@ export async function sendDocumentByEmail(
     });
 
     // Generate QR Bill data ONLY for invoices (not quotes)
-    let qrData = null;
+    let qrBillData = undefined;
     if (documentType === 'invoice' && document.user?.iban && document.currency === 'CHF') {
       try {
+        // Import createQRBillFromInvoice dynamically to avoid circular dependencies if any
         const { createQRBillFromInvoice } = await import('../controllers/invoiceController');
-        qrData = await createQRBillFromInvoice(document as any);
+        qrBillData = await createQRBillFromInvoice(document as any);
         console.log('[PDF] QR Bill generated for invoice email:', { hasIban: !!document.user.iban, currency: document.currency });
       } catch (error) {
         console.warn('[PDF] Failed to generate QR Bill for email:', error);
       }
     }
 
-    await generateInvoicePDF(
-      {
-        invoice: document as any,
-        client: document.client,
-        qrData, // Include QR Bill data
-        template: document.user?.pdfTemplate,
-        accentColor: (document.user as any)?.pdfPrimaryColor,
-        lang: document.language as any,
+    // Prepare Document Data
+    const selectedTemplate = (document.user as any)?.pdfTemplate || 'swiss_minimal';
+    const selectedColor = (document.user as any)?.pdfPrimaryColor || '#000000';
+
+    const docData: DocumentData = {
+      type: documentType === 'invoice' ? 'INVOICE' : 'QUOTE',
+      documentNumber: document.invoiceNumber,
+      date: document.issueDate,
+      dueDate: document.dueDate || (documentType === 'quote' ? document.validUntil : undefined) || undefined, // Handle validUntil for quotes
+      currency: document.currency,
+      subtotal: Number(document.subtotal),
+      tvaAmount: Number(document.tvaAmount),
+      total: Number(document.total),
+      language: document.language || 'fr',
+      items: document.items.map((item: any) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        tvaRate: Number(item.tvaRate),
+        total: Number(item.total),
+        unit: typeof item.unit === 'string' ? item.unit : undefined,
+        lineDiscountValue: (item as any).lineDiscountValue,
+        lineDiscountType: (item as any).lineDiscountType
+      })),
+      globalDiscount: (document.globalDiscountValue && document.globalDiscountValue > 0) ? {
+        value: Number(document.globalDiscountValue),
+        type: document.globalDiscountType as 'PERCENT' | 'AMOUNT',
+        note: document.globalDiscountNote || undefined
+      } : undefined,
+      sender: {
+        companyName: document.user.companyName || undefined,
+        firstName: document.user.firstName || undefined,
+        lastName: document.user.lastName || undefined,
+        street: document.user.street || undefined,
+        city: document.user.city || undefined,
+        postalCode: document.user.postalCode || undefined,
+        country: document.user.country || undefined,
+        phone: document.user.phone || undefined,
+        email: document.user.email || undefined,
+        website: document.user.website || undefined,
+        vatNumber: document.user.vatNumber || undefined,
+        iban: document.user.iban || undefined,
+        logoUrl: (document.user as any).logoUrl || undefined
       },
-      pdfStream
-    );
+      recipient: {
+        companyName: document.client.companyName || undefined,
+        firstName: document.client.firstName || undefined,
+        lastName: document.client.lastName || undefined,
+        street: document.client.street || undefined,
+        city: document.client.city || undefined,
+        postalCode: document.client.postalCode || undefined,
+        country: document.client.country || undefined
+      },
+      settings: {
+        template: selectedTemplate,
+        accentColor: selectedColor,
+        showDecimals: (document.user as any).quantityDecimals === 3 ? 3 : 2
+      },
+      qrData: qrBillData
+    };
+
+    const generator = new UnifiedPDFGenerator(docData, pdfStream);
+    await generator.generate();
 
     const pdfBuffer = await pdfPromise;
 
@@ -227,7 +280,7 @@ export async function sendDocumentByEmail(
         provider: smtpConfig.provider,
         messageId: info.messageId,
         sentAt: new Date(),
-        includesQRBill: qrData !== null, // Only true if QR Bill was generated
+        includesQRBill: qrBillData !== null, // Only true if QR Bill was generated
         includesFooter: smtpConfig.includeFooter,
       },
     });

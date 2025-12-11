@@ -85,8 +85,9 @@ export function SendEmailModal({
         } else {
           throw new Error(response.data.error?.message || 'Erreur lors de l\'envoi de l\'email');
         }
-      } catch (err: any) {
-        const errorMessage = err?.response?.data?.error?.message || err?.message || 'Erreur lors de l\'envoi de l\'email';
+      } catch (err: unknown) {
+        const axiosErr = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
+        const errorMessage = axiosErr?.response?.data?.error?.message || axiosErr?.message || 'Erreur lors de l\'envoi de l\'email';
         setLocalError(errorMessage);
         result = { success: false };
       } finally {
@@ -128,7 +129,6 @@ export function SendEmailModal({
     }
   };
 
-  const documentType = isQuote ? 'devis' : 'facture';
   const documentTypeCapitalized = isQuote ? 'Devis' : 'Facture';
 
   return (

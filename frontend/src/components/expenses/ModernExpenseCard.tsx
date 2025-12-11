@@ -2,7 +2,6 @@ import React from 'react';
 import { 
   Receipt, 
   Calendar, 
-  DollarSign, 
   Edit2, 
   Trash2,
   FileText,

@@ -3,11 +3,9 @@ import {
   Plus, 
   Search, 
   Filter, 
-  Download, 
   LayoutGrid, 
   List, 
   TrendingUp,
-  Calendar,
   DollarSign,
   FileText,
   Clock,
@@ -15,8 +13,6 @@ import {
   XCircle,
   AlertCircle,
   Send,
-  Eye,
-  MoreHorizontal,
   ChevronDown,
   RefreshCw,
   Sparkles
@@ -43,7 +39,7 @@ interface ModernInvoiceListProps {
   onViewEmailHistory?: (invoiceId: string) => void;
   onCreateNew?: () => void;
   onRefresh?: () => void;
-  onFilterChange?: (filters: any) => void;
+  onFilterChange?: (filters: Record<string, unknown>) => void;
   currentFilters?: {
     status?: 'draft' | 'sent' | 'paid' | 'overdue' | undefined;
     search?: string;
@@ -83,9 +79,9 @@ export function ModernInvoiceList({
   onCreateNew,
   onRefresh,
   onFilterChange,
-  currentFilters,
-  operationLoading
+  currentFilters
 }: ModernInvoiceListProps) {
+  // Note: operationLoading is available in props but not currently used
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<InvoiceStatus>('all');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'client' | 'status'>('date');
@@ -97,14 +93,14 @@ export function ModernInvoiceList({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('invoices_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('invoices_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Initialize/sync local filters from parent-provided currentFilters
   useEffect(() => {
     if (!currentFilters) return;
     // Status
-    setSelectedStatus((currentFilters.status as any) || 'all');
+    setSelectedStatus((currentFilters.status as InvoiceStatus) || 'all');
     // Search
     setSearchQuery(currentFilters.search || '');
     // Note: sortBy/sortOrder mapping differs between components; keep local controls authoritative
@@ -416,7 +412,7 @@ export function ModernInvoiceList({
                       </label>
                       <select
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as any)}
+                        onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'client' | 'status')}
                         className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="date">Date</option>
@@ -548,7 +544,7 @@ export function ModernInvoiceList({
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-blue-200 overflow-hidden">
                 <AnimatePresence mode="popLayout">
-                  {filteredInvoices.map((invoice, index) => (
+                  {filteredInvoices.map((invoice) => (
                     <CompactInvoiceRow
                       key={invoice.id}
                       invoice={invoice}

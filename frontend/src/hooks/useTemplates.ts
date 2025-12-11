@@ -36,9 +36,9 @@ export function useTemplates() {
           setDefaultTemplate(templatesData.defaultTemplate || 'creative-signature');
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error loading templates:', err);
-      setError(err.message || 'Error al cargar templates');
+      setError(err instanceof Error ? err.message : 'Error al cargar templates');
       // Set default templates as fallback
       setTemplates([
         {

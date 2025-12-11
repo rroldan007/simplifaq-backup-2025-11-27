@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardContent } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
@@ -30,8 +30,10 @@ interface User {
   emailConfirmedAt?: string;
 }
 
+type RawUser = { id: string; email: string; firstName?: string; lastName?: string; companyName?: string; subscriptionPlan?: string; isActive?: boolean; createdAt?: string; lastLogin?: string; subscription?: { status?: string }; stats?: { invoiceCount?: number }; emailConfirmed?: boolean; emailConfirmedAt?: string };
+
 interface AdminUsersResponse {
-  users: any[];
+  users: RawUser[];
   pagination?: {
     totalPages?: number;
     totalCount?: number;
@@ -71,14 +73,15 @@ export const UserManagementPage: React.FC = () => {
         const response = await adminApiService.getPlans();
         if (!response.success || !response.data) return;
 
-        const rawData = response.data as { plans?: any[] } | any[];
+        type RawPlan = { id?: string; name: string; price?: number; displayName?: string; currency?: string };
+        const rawData = response.data as { plans?: RawPlan[] } | RawPlan[];
         const plansArray = Array.isArray(rawData)
           ? rawData
           : Array.isArray(rawData.plans)
             ? rawData.plans
             : [];
 
-        setAvailablePlans(plansArray.map((plan: any) => ({
+        setAvailablePlans(plansArray.map((plan) => ({
           id: plan.id || plan.name,
           name: plan.name,
           price: plan.price,
@@ -129,7 +132,7 @@ export const UserManagementPage: React.FC = () => {
           return;
         }
 
-        const mappedUsers: User[] = data.users.map((u: any) => ({
+        const mappedUsers: User[] = data.users.map((u) => ({
           id: u.id,
           email: u.email,
           firstName: u.firstName || '',
@@ -265,7 +268,8 @@ export const UserManagementPage: React.FC = () => {
     );
   };
 
-  const getEmailVerificationBadge = (emailConfirmed: boolean, emailConfirmedAt?: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getEmailVerificationBadge = (emailConfirmed: boolean, _emailConfirmedAt?: string) => {
     if (emailConfirmed) {
       return (
         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">

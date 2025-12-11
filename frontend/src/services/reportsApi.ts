@@ -58,7 +58,7 @@ async function authHeaders() {
  */
 async function getKpis(params: { dateFrom?: string; dateTo?: string; currency?: Currency }) {
   const headers = await authHeaders();
-  const qs = new URLSearchParams(params as any).toString();
+  const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE_URL}/reports/kpis${qs ? `?${qs}` : ''}`, { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || 'Erreur KPIs');
@@ -73,7 +73,7 @@ async function getKpis(params: { dateFrom?: string; dateTo?: string; currency?: 
  */
 async function getRevenueSeries(params: { dateFrom?: string; dateTo?: string; currency?: Currency; granularity?: 'daily' | 'weekly' | 'monthly' | 'yearly' }) {
   const headers = await authHeaders();
-  const qs = new URLSearchParams(params as any).toString();
+  const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE_URL}/reports/revenue-series${qs ? `?${qs}` : ''}`, { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || 'Erreur séries');
@@ -88,7 +88,7 @@ async function getRevenueSeries(params: { dateFrom?: string; dateTo?: string; cu
  */
 async function getInvoiceStatusBreakdown(params: { dateFrom?: string; dateTo?: string }) {
   const headers = await authHeaders();
-  const qs = new URLSearchParams(params as any).toString();
+  const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE_URL}/reports/invoice-status-breakdown${qs ? `?${qs}` : ''}`, { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || 'Erreur breakdown');

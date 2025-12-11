@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCurrentUser, useAuth } from '../../hooks/useAuth';
+import { useCurrentUser } from '../../hooks/useAuth';
 import { api } from '../../services/api';
 import { 
   ArrowLeft, 
@@ -111,7 +111,7 @@ const PLANS = [
 
 export function BillingPage() {
   const navigate = useNavigate();
-  const user = useCurrentUser();
+  useCurrentUser(); // Keep hook call for potential future use
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -135,7 +135,8 @@ export function BillingPage() {
       const subResponse = await api.get('/billing/subscription');
       console.log('[BillingPage] Subscription response:', subResponse);
       
-      const subscriptionData = (subResponse as any).data?.subscription || {
+      type SubResponse = { data?: { subscription?: Subscription } };
+      const subscriptionData = (subResponse as SubResponse).data?.subscription || {
         id: 'default',
         plan: 'free' as const,
         status: 'active' as const,
@@ -152,7 +153,8 @@ export function BillingPage() {
       const invoicesResponse = await api.get('/billing/invoices');
       console.log('[BillingPage] Invoices response:', invoicesResponse);
       
-      const invoicesData = (invoicesResponse as any).data?.invoices || [];
+      type InvResponse = { data?: { invoices?: Invoice[] } };
+      const invoicesData = (invoicesResponse as InvResponse).data?.invoices || [];
       console.log('[BillingPage] Setting invoices:', invoicesData);
       setInvoices(invoicesData);
       
@@ -185,14 +187,16 @@ export function BillingPage() {
 
     try {
       const response = await api.post('/billing/subscribe', { plan: planId });
-      if ((response as any).data?.checkoutUrl) {
+      type CheckoutResponse = { data?: { checkoutUrl?: string } };
+      const respData = (response as CheckoutResponse).data;
+      if (respData?.checkoutUrl) {
         // Redirect to payment page
-        window.location.href = (response as any).data.checkoutUrl;
+        window.location.href = respData.checkoutUrl;
       } else {
         showToast('Abonnement mis à jour avec succès', 'success');
         loadBillingData();
       }
-    } catch (error) {
+    } catch {
       showToast('Erreur lors de la mise à jour de l\'abonnement', 'error');
     }
   };
@@ -206,7 +210,7 @@ export function BillingPage() {
       await api.post('/billing/cancel');
       showToast('Abonnement annulé. Il restera actif jusqu\'à la fin de la période.', 'success');
       loadBillingData();
-    } catch (error) {
+    } catch {
       showToast('Erreur lors de l\'annulation de l\'abonnement', 'error');
     }
   };

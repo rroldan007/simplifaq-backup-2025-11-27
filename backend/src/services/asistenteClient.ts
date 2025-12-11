@@ -102,6 +102,11 @@ function buildHeaders(userToken: string, extra?: Record<string, string>): Record
   // Use the real user token instead of creating a dummy one
   headers['Authorization'] = `Bearer ${userToken}`;
 
+  // Add Origin and Referer to satisfy WAF/CORS requirements
+  const origin = process.env.FRONTEND_URL || 'https://app.simplifaq.ch';
+  headers['Origin'] = origin;
+  headers['Referer'] = `${origin}/`;
+
   return headers;
 }
 
@@ -166,7 +171,7 @@ export class AsistenteClient {
 
     const result = await handleResponse(response);
     console.log('✅ [AsistenteClient] Response data:', JSON.stringify(result, null, 2));
-    
+
     return result;
   }
 
@@ -205,10 +210,10 @@ export class AsistenteClient {
     }
 
     console.log('[AsistenteClient] Starting OCR text extraction...');
-    
+
     // Paso 1: Extraer texto del archivo usando OCR
     const ocrResult = await extractTextFromReceipt(file.buffer, file.mimetype);
-    
+
     console.log(`[AsistenteClient] OCR completed. Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
     console.log(`[AsistenteClient] Extracted text length: ${ocrResult.text.length} characters`);
 
@@ -252,12 +257,12 @@ Responde SOLO con un objeto JSON válido, sin texto adicional ni markdown.`;
     );
 
     const result: any = await handleResponse(response);
-    
+
     console.log('[AsistenteClient] ADM response received');
-    
+
     // Adaptar la respuesta del chat al formato esperado
     let proposal: Record<string, unknown> = {};
-    
+
     try {
       // Intentar parsear la respuesta como JSON
       if (result.response) {
@@ -302,8 +307,8 @@ Responde SOLO con un objeto JSON válido, sin texto adicional ni markdown.`;
     }
 
     // Build the internal API URL
-    const internalUrl = action.endpoint.url.startsWith('/api/') 
-      ? action.endpoint.url 
+    const internalUrl = action.endpoint.url.startsWith('/api/')
+      ? action.endpoint.url
       : `/api${action.endpoint.url.startsWith('/') ? action.endpoint.url : `/${action.endpoint.url}`}`;
 
     // Use the backend's API directly instead of calling the external service
@@ -316,7 +321,7 @@ Responde SOLO con un objeto JSON válido, sin texto adicional ni markdown.`;
           : 'http://localhost:3001');
 
       const fullUrl = `${baseUrl}${internalUrl}`;
-      
+
       const headers: Record<string, string> = {
         'Authorization': `Bearer ${options.userToken}`,
         'Content-Type': 'application/json',

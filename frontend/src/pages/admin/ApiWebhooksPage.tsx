@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Card, CardHeader, CardContent } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
@@ -60,9 +60,12 @@ export const ApiWebhooksPage: React.FC = () => {
   ]);
   const [showApiModal, setShowApiModal] = useState(false);
   const [showWebhookModal, setShowWebhookModal] = useState(false);
+  // Reserved for future edit functionality
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [editingApi, setEditingApi] = useState<ApiKey | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
-  const [formData, setFormData] = useState<any>({});
+  const [formData, setFormData] = useState<Record<string, string | string[]>>({});
 
   const handleCreateApiKey = () => {
     if (!formData.name || !formData.userEmail) {

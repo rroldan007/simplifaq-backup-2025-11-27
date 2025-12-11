@@ -75,7 +75,7 @@ class AdminApiService {
 
   constructor() {
     this.api = axios.create({
-            baseURL: `${import.meta.env.VITE_API_URL}/admin`,
+            baseURL: '/api/admin',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',

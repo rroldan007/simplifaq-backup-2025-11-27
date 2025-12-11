@@ -17,7 +17,8 @@ import {
 import * as IBAN from 'iban';
 import { securityLogger } from '../middleware/security';
 import { encrypt, decrypt } from '../utils/encryption';
-import { securityAuditService, SecurityEventType } from '../services/securityAuditService';
+import { securityAuditService, SecurityEventType, SecuritySeverity } from '../services/securityAuditService';
+import { UserManagementService } from '../services/userManagementService';
 
 /**
  * Change current user's password
@@ -384,6 +385,13 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
       // PDF appearance fields
       pdfPrimaryColor,
       pdfTemplate,
+      pdfLogoPosition,
+      pdfLogoSize,
+      pdfFontColorHeader,
+      pdfFontColorBody,
+      pdfTableHeadColor,
+      pdfTotalBgColor,
+      pdfTotalTextColor,
       pdfShowCompanyNameWithLogo,
       pdfShowVAT,
       pdfShowPhone,
@@ -673,6 +681,13 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
     // PDF appearance settings
     if (pdfPrimaryColor !== undefined) dataToUpdate.pdfPrimaryColor = pdfPrimaryColor;
     if (pdfTemplate !== undefined) dataToUpdate.pdfTemplate = pdfTemplate;
+    if (pdfLogoPosition !== undefined) dataToUpdate.pdfLogoPosition = pdfLogoPosition;
+    if (pdfLogoSize !== undefined) dataToUpdate.pdfLogoSize = pdfLogoSize;
+    if (pdfFontColorHeader !== undefined) dataToUpdate.pdfFontColorHeader = pdfFontColorHeader;
+    if (pdfFontColorBody !== undefined) dataToUpdate.pdfFontColorBody = pdfFontColorBody;
+    if (pdfTableHeadColor !== undefined) dataToUpdate.pdfTableHeadColor = pdfTableHeadColor;
+    if (pdfTotalBgColor !== undefined) dataToUpdate.pdfTotalBgColor = pdfTotalBgColor;
+    if (pdfTotalTextColor !== undefined) dataToUpdate.pdfTotalTextColor = pdfTotalTextColor;
     if (pdfShowCompanyNameWithLogo !== undefined) dataToUpdate.pdfShowCompanyNameWithLogo = pdfShowCompanyNameWithLogo;
     if (pdfShowVAT !== undefined) dataToUpdate.pdfShowVAT = pdfShowVAT;
     if (pdfShowPhone !== undefined) dataToUpdate.pdfShowPhone = pdfShowPhone;
@@ -1524,6 +1539,147 @@ export const resendConfirmationEmail = async (req: Request, res: Response): Prom
       error: {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Erreur interne du serveur',
+      },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+  }
+};
+
+/**
+ * Delete user account permanently
+ * Requires password confirmation for security
+ */
+export const deleteAccount = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Utilisateur non authentifié' },
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    const { password } = req.body as { password?: string };
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_PASSWORD', message: 'Mot de passe requis pour confirmer la suppression' },
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Get user from database
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'Utilisateur non trouvé' },
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      // Log failed attempt
+      securityLogger.warn('Account deletion attempt with invalid password', {
+        userId: user.id,
+        email: user.email,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        timestamp: new Date().toISOString(),
+      });
+
+      // Log security event
+      securityAuditService.logSecurityEvent({
+        eventType: SecurityEventType.ACCOUNT_DELETION_FAILED,
+        userId: user.id,
+        severity: SecuritySeverity.MEDIUM,
+        ip: req.ip || 'unknown',
+        timestamp: new Date(),
+        userAgent: req.get('User-Agent'),
+        metadata: {
+          reason: 'Invalid password',
+          email: user.email,
+        },
+      });
+
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_PASSWORD', message: 'Mot de passe incorrect' },
+        timestamp: new Date().toISOString(),
+      } as ApiResponse);
+    }
+
+    // Log account deletion
+    securityLogger.info('User account deletion initiated', {
+      userId: user.id,
+      email: user.email,
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString(),
+    });
+
+    // Log security event
+    securityAuditService.logSecurityEvent({
+      eventType: SecurityEventType.ACCOUNT_DELETED,
+      userId: user.id,
+      severity: SecuritySeverity.HIGH,
+      ip: req.ip || 'unknown',
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date(),
+      metadata: {
+        email: user.email,
+        fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        deletedAt: new Date().toISOString(),
+      },
+    });
+
+    // Permanently delete user and all related data
+    await UserManagementService.deleteUserPermanently(user.id);
+
+    // Log successful deletion
+    securityLogger.info('User account deleted successfully', {
+      userId: user.id,
+      email: user.email,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        message: 'Compte supprimé avec succès',
+      },
+      timestamp: new Date().toISOString(),
+    } as ApiResponse);
+
+  } catch (error) {
+    console.error('Delete account error:', error);
+    
+    // Log error
+    securityLogger.error('Account deletion error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      userId: (req as any).userId,
+      ip: req.ip,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Erreur lors de la suppression du compte',
       },
       timestamp: new Date().toISOString(),
     } as ApiResponse);

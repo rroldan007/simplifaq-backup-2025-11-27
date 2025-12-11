@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../services/database';
 import { ApiResponse, AppError } from '../types';
+import { UnifiedPDFGenerator, DocumentData } from '../services/UnifiedPDFGenerator';
 
 const toInt = (v: unknown, def: number) => {
   const n = typeof v === 'string' ? parseInt(v, 10) : Number(v);
@@ -141,7 +142,25 @@ export const createQuote = async (req: Request, res: Response): Promise<void> =>
         throw new AppError('Données de ligne de devis invalides', 400, 'INVALID_QUOTE_ITEM');
       }
 
-      const itemTotal = quantity * unitPrice;
+      // Calculate base total before discount
+      const subtotalBefore = quantity * unitPrice;
+      
+      // Process line-level discount
+      const lineDiscountValue = item.lineDiscountValue ? sanitizeNumber(item.lineDiscountValue) : undefined;
+      const lineDiscountType: 'PERCENT' | 'AMOUNT' | undefined = item.lineDiscountType;
+      const lineDiscountSource: 'FROM_PRODUCT' | 'MANUAL' | 'NONE' = item.lineDiscountSource || 'NONE';
+      
+      let discountAmt = 0;
+      if (lineDiscountSource !== 'NONE' && lineDiscountValue && lineDiscountValue > 0) {
+        if (lineDiscountType === 'PERCENT') {
+          discountAmt = subtotalBefore * (lineDiscountValue / 100);
+        } else if (lineDiscountType === 'AMOUNT') {
+          discountAmt = Math.min(lineDiscountValue, subtotalBefore);
+        }
+      }
+      
+      const subtotalAfter = subtotalBefore - discountAmt;
+      const itemTotal = subtotalAfter;
       const itemTva = itemTotal * (tvaRate / 100);
 
       subtotal += itemTotal;
@@ -156,6 +175,13 @@ export const createQuote = async (req: Request, res: Response): Promise<void> =>
         total: itemTotal,
         order: index + 1,
         unit,
+        // Line discount fields
+        lineDiscountValue: lineDiscountValue || null,
+        lineDiscountType: lineDiscountType || null,
+        lineDiscountSource,
+        subtotalBeforeDiscount: subtotalBefore,
+        discountAmount: discountAmt,
+        subtotalAfterDiscount: subtotalAfter,
       };
     });
 
@@ -457,6 +483,7 @@ export const generateQuotePDF = async (req: Request, res: Response): Promise<voi
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
+    const { template, accentColor } = req.query; // Read params from query
 
     const quote = await prisma.invoice.findFirst({
       where: { id, userId, isQuote: true },
@@ -474,23 +501,93 @@ export const generateQuotePDF = async (req: Request, res: Response): Promise<voi
       throw new AppError('Devis non trouvé', 404, 'QUOTE_NOT_FOUND');
     }
 
-    // Use quote-specific PDF generator (no QR for quotes)
-    const { generateQuotePDF: renderQuotePDF } = await import('../utils/quotePDFPdfkit');
+    // Prepare Document Data
+    const selectedTemplate = (typeof template === 'string' && template) ? template : ((quote.user as any)?.pdfTemplate || 'swiss_minimal');
+    const selectedColor = (typeof accentColor === 'string' && accentColor) ? accentColor : ((quote.user as any)?.pdfPrimaryColor || '#000000');
+
+    // Log para depurar descuentos en PDF
+    console.log('🔍 [PDF DEBUG] Items desde BD:', quote.items.map(item => ({
+      desc: item.description,
+      qty: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+      lineDiscountValue: (item as any).lineDiscountValue,
+      lineDiscountType: (item as any).lineDiscountType,
+      subtotalBefore: (item as any).subtotalBeforeDiscount,
+      discountAmt: (item as any).discountAmount,
+      subtotalAfter: (item as any).subtotalAfterDiscount
+    })));
+
+    const docData: DocumentData = {
+      type: 'QUOTE',
+      documentNumber: quote.invoiceNumber,
+      date: quote.issueDate,
+      dueDate: quote.validUntil || undefined,
+      currency: quote.currency,
+      subtotal: Number(quote.subtotal),
+      tvaAmount: Number(quote.tvaAmount),
+      total: Number(quote.total),
+      language: quote.language || 'fr',
+      items: quote.items.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        tvaRate: Number(item.tvaRate),
+        total: Number(item.total),
+        unit: (item as any).unit,
+        lineDiscountValue: (item as any).lineDiscountValue,
+        lineDiscountType: (item as any).lineDiscountType
+      })),
+      globalDiscount: (quote.globalDiscountValue && quote.globalDiscountValue > 0) ? {
+        value: Number(quote.globalDiscountValue),
+        type: quote.globalDiscountType as 'PERCENT' | 'AMOUNT',
+        note: quote.globalDiscountNote || undefined
+      } : undefined,
+      sender: {
+        companyName: quote.user.companyName || undefined,
+        firstName: quote.user.firstName || undefined,
+        lastName: quote.user.lastName || undefined,
+        street: quote.user.street || undefined,
+        city: quote.user.city || undefined,
+        postalCode: quote.user.postalCode || undefined,
+        country: quote.user.country || undefined,
+        phone: quote.user.phone || undefined,
+        email: quote.user.email || undefined,
+        website: quote.user.website || undefined,
+        vatNumber: quote.user.vatNumber || undefined,
+        iban: quote.user.iban || undefined,
+        logoUrl: (quote.user as any).logoUrl || undefined
+      },
+      recipient: {
+        companyName: quote.client.companyName || undefined,
+        firstName: quote.client.firstName || undefined,
+        lastName: quote.client.lastName || undefined,
+        street: quote.client.street || undefined,
+        city: quote.client.city || undefined,
+        postalCode: quote.client.postalCode || undefined,
+        country: quote.client.country || undefined
+      },
+      settings: {
+        template: selectedTemplate,
+        accentColor: selectedColor,
+        showDecimals: (quote.user as any).quantityDecimals === 3 ? 3 : 2,
+        // Advanced Customization
+        logoPosition: (quote.user as any).pdfLogoPosition,
+        logoSize: (quote.user as any).pdfLogoSize,
+        fontColorHeader: (quote.user as any).pdfFontColorHeader,
+        fontColorBody: (quote.user as any).pdfFontColorBody,
+        tableHeadColor: (quote.user as any).pdfTableHeadColor,
+        totalBgColor: (quote.user as any).pdfTotalBgColor,
+        totalTextColor: (quote.user as any).pdfTotalTextColor,
+      }
+    };
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="Devis_${quote.invoiceNumber}.pdf"`);
 
-    await renderQuotePDF(
-      {
-        quote: quote as any,
-        client: quote.client,
-        accentColor: (quote.user as any)?.pdfPrimaryColor,
-        template: (quote.user as any)?.pdfTemplate,
-        lang: quote.language || 'fr',
-        showHeader: true,
-      },
-      res
-    );
+    const generator = new UnifiedPDFGenerator(docData, res);
+    await generator.generate();
+
   } catch (error) {
     console.error('Error generating quote PDF:', error);
     res.status(error instanceof AppError ? error.statusCode : 500).json({
@@ -602,6 +699,13 @@ export const convertQuoteToInvoice = async (req: Request, res: Response): Promis
               total: item.total,
               order: item.order,
               unit: (item as any).unit,
+              // Transfer line discount fields from quote to invoice
+              lineDiscountValue: (item as any).lineDiscountValue,
+              lineDiscountType: (item as any).lineDiscountType,
+              lineDiscountSource: (item as any).lineDiscountSource || 'NONE',
+              subtotalBeforeDiscount: (item as any).subtotalBeforeDiscount,
+              discountAmount: (item as any).discountAmount,
+              subtotalAfterDiscount: (item as any).subtotalAfterDiscount,
             }))
           }
         },

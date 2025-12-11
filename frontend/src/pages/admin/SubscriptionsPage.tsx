@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../services/adminApi';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -25,13 +25,15 @@ type Plan = {
   hasSwissQRBill: boolean;
   hasMultiCurrency: boolean;
   hasMultiLanguage: boolean;
-  entitlements?: Array<{
-    id: string;
-    features?: Record<string, unknown>;
-    limits?: Record<string, unknown>;
-    stripePriceId?: string;
-    isActive: boolean;
-  }>;
+  entitlements?: Entitlement[];
+};
+
+type Entitlement = {
+  id?: string;
+  features?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
+  stripePriceId?: string;
+  isActive?: boolean;
 };
 
 export const SubscriptionsPage: React.FC = () => {
@@ -161,11 +163,11 @@ export const SubscriptionsPage: React.FC = () => {
           features: { module: 'expenses' },
           limits: {},
           isActive: true,
-        } as any);
+        } as Entitlement);
       }
       // Only send entitlements field if we're editing or if we toggled expenses during create
       if (editing || modules.expenses) {
-        (payload as any).entitlements = entitlements.map((e) => ({
+        (payload as { entitlements?: unknown[] }).entitlements = entitlements.map((e) => ({
           features: e.features ?? {},
           limits: e.limits ?? {},
           stripePriceId: e.stripePriceId,
@@ -240,7 +242,7 @@ export const SubscriptionsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-xs">
                       <div className="space-y-1 text-secondary">
-                        <div>Charges/Expenses: {p.entitlements?.some((e) => (e.features as any)?.module === 'expenses' && e.isActive !== false) ? 'Oui' : 'Non'}</div>
+                        <div>Charges/Expenses: {p.entitlements?.some((e) => (e.features as { module?: string })?.module === 'expenses' && e.isActive !== false) ? 'Oui' : 'Non'}</div>
                         <div>Swiss QR Bill: {p.hasSwissQRBill ? 'Oui' : 'Non'}</div>
                         <div>Multi-devise: {p.hasMultiCurrency ? 'Oui' : 'Non'}</div>
                         <div>Multi-langue: {p.hasMultiLanguage ? 'Oui' : 'Non'}</div>

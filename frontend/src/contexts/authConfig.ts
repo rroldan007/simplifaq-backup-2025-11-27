@@ -1,25 +1,31 @@
 // Non-React auth configuration and helpers (separate from React components/hooks)
 
-// Build API base URL for auth calls without using `import.meta` (which Jest can't parse)
+// Build API base URL for auth calls
 export function buildAuthApiBase(): string {
   // In Jest test environment, prefer a relative API base so tests don't depend on host
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
     return '/api/auth';
   }
 
-  const fromProcess = typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>)?.VITE_API_URL : undefined;
-  const fromGlobal = typeof globalThis !== 'undefined' ? (globalThis as unknown as { VITE_API_URL?: string }).VITE_API_URL : undefined;
-  const raw = fromProcess || fromGlobal;
+  // In development, always use the backend URL directly since the browser
+  // might be accessed through different ports (Vite dev server, preview proxies, etc.)
+  if (typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:3001/api/auth';
+  }
+
+  // Use import.meta.env in browser context (Vite injects this)
+  const raw = typeof import.meta !== 'undefined' && import.meta.env 
+    ? import.meta.env.VITE_API_URL 
+    : undefined;
 
   if (raw && typeof raw === 'string' && raw.length > 0) {
     const trimmed = raw.replace(/\/$/, '');
     return trimmed.endsWith('/api/auth') ? trimmed : `${trimmed}/api/auth`;
   }
   
-  // Use relative path if we're on the same domain (Nginx will proxy)
-  return typeof window !== 'undefined'
-    ? `https://${window.location.hostname}/api/auth`
-    : '/api/auth';
+  // Fallback: Use relative URL
+  return '/api/auth';
 }
 
 export const AUTH_API_BASE = buildAuthApiBase();

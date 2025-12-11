@@ -74,7 +74,7 @@ export const quotesApi = {
     const query = queryParams.toString();
     const endpoint = `/quotes${query ? `?${query}` : ''}`;
     
-    const response = await api.get<any>(endpoint);
+    const response = await api.get<{ quotes: Quote[]; total: number; hasMore: boolean }>(endpoint);
     // API returns { success, data: { quotes, total, hasMore } }
     return response.data.data?.quotes || [];
   },
@@ -152,7 +152,7 @@ export const quotesApi = {
 
   // Convert quote to invoice
   async convertToInvoice(id: string): Promise<{ id: string; invoiceNumber: string }> {
-    const response = await api.post<any>(`/quotes/${id}/convert`, {});
+    const response = await api.post<{ id: string; invoiceNumber: string }>(`/quotes/${id}/convert`, {});
     if (!response.data.data) throw new ApiError('Erreur lors de la conversion', 500);
     // Backend returns full invoice object, extract what we need
     const invoice = response.data.data;

@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Edit, Trash2, ArrowRight, FileText, Mail, CheckCircle, XCircle, Clock, Sparkles } from 'lucide-react';
 import { quotesApi, type Quote } from '../services/quotesApi';
 import { SendEmailModal } from '../components/invoices/SendEmailModal';
 import { EmailHistoryModal } from '../components/invoices/EmailHistoryModal';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { useCurrentUser } from '../hooks/useAuth';
+import { ModernQuotePDFViewer } from '../components/quotes/ModernQuotePDFViewer';
 
 const QuoteDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -62,18 +63,20 @@ const QuoteDetailPage: React.FC = () => {
   }, [fetchQuote]);
 
   const handleDownloadPdf = async () => {
-    if (!id || actionLoading.download) return;
+    if (!id || actionLoading.download || !quote) return;
     setActionLoading(prev => ({ ...prev, download: true }));
     try {
-      const options: any = {};
-      if ((currentUser as any)?.pdfTemplate) options.template = (currentUser as any).pdfTemplate;
-      if ((currentUser as any)?.pdfPrimaryColor) options.accentColor = (currentUser as any).pdfPrimaryColor;
-      console.log('Quote PDF download options:', options);
+      type UserPdfSettings = { pdfTemplate?: string; pdfPrimaryColor?: string };
+      const userPdf = currentUser as UserPdfSettings | null;
+      const options: { template?: string; accentColor?: string } = {};
+      if (userPdf?.pdfTemplate) options.template = userPdf.pdfTemplate;
+      if (userPdf?.pdfPrimaryColor) options.accentColor = userPdf.pdfPrimaryColor;
+      
       const blob = await quotesApi.downloadQuotePdf(id, options);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `devis-${quote?.quoteNumber || id}.pdf`;
+      link.download = `${quote.quoteNumber || id}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -106,25 +109,9 @@ const QuoteDetailPage: React.FC = () => {
   };
 
   const handleEmailSent = () => {
-    // Wait for backend to update, then refresh quote
     setTimeout(() => {
       fetchQuote();
     }, 800);
-  };
-
-  const handleSendQuote = async () => {
-    if (!id || actionLoading.send) return;
-    setActionLoading(prev => ({ ...prev, send: true }));
-    try {
-      await quotesApi.sendQuote(id);
-      alert('Devis envoyé avec succès');
-      await fetchQuote();
-    } catch (e) {
-      console.error('Error sending quote:', e);
-      alert('Erreur lors de l\'envoi du devis');
-    } finally {
-      setActionLoading(prev => ({ ...prev, send: false }));
-    }
   };
 
   const handleApproveQuote = async () => {
@@ -145,7 +132,6 @@ const QuoteDetailPage: React.FC = () => {
   };
 
   const handleRejectQuote = async () => {
-    console.log("REJECT QUOTE FUNCTION CALLED");
     if (!id || actionLoading.reject) return;
     const confirm = window.confirm('Marquer ce devis comme refusé ?');
     if (!confirm) return;
@@ -197,26 +183,30 @@ const QuoteDetailPage: React.FC = () => {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const badges = {
-      draft: 'bg-gray-100 text-gray-800',
-      sent: 'bg-blue-100 text-blue-800',
-      accepted: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-      expired: 'bg-orange-100 text-orange-800'
+  const formatDate = (date?: string) => {
+    return date ? new Intl.DateTimeFormat('fr-CH', { dateStyle: 'medium' }).format(new Date(date)) : '—';
+  };
+
+  const getStatusColor = (status: string) => {
+    const statusMap: Record<string, string> = {
+      draft: 'bg-slate-100 text-slate-800 ring-slate-200',
+      sent: 'bg-blue-50 text-blue-700 ring-blue-200',
+      accepted: 'bg-green-50 text-green-700 ring-green-200',
+      rejected: 'bg-red-50 text-red-700 ring-red-200',
+      expired: 'bg-orange-50 text-orange-700 ring-orange-200'
     };
-    const labels = {
+    return statusMap[status.toLowerCase()] || statusMap.draft;
+  };
+
+  const getStatusLabel = (status: string) => {
+    const statusMap: Record<string, string> = {
       draft: 'Brouillon',
       sent: 'Envoyé',
       accepted: 'Accepté',
       rejected: 'Refusé',
       expired: 'Expiré'
     };
-    return (
-      <span className={`px-3 py-1 text-sm font-medium rounded-full ${badges[status as keyof typeof badges] || badges.draft}`}>
-        {labels[status as keyof typeof labels] || status}
-      </span>
-    );
+    return statusMap[status?.toLowerCase()] || status || 'Brouillon';
   };
 
   if (loading) {
@@ -234,12 +224,9 @@ const QuoteDetailPage: React.FC = () => {
           <div className="text-center text-red-600">
             <p className="font-medium">Erreur</p>
             <p className="text-sm mt-1">{error || 'Devis non trouvé'}</p>
-            <button
-              onClick={() => navigate('/quotes')}
-              className="mt-4 text-blue-600 hover:text-blue-800"
-            >
+            <Button onClick={() => navigate('/quotes')} className="mt-4">
               Retour aux devis
-            </button>
+            </Button>
           </div>
         </Card>
       </div>
@@ -247,353 +234,217 @@ const QuoteDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => navigate('/quotes')}
-          className="flex items-center text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Retour aux devis
-        </button>
-        
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Edit button - always visible for non-converted quotes */}
-          {!quote.convertedInvoiceId && quote.status !== 'rejected' && (
-            <button
-              onClick={() => navigate(`/quotes/${id}/edit`)}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+    <div className="space-y-8 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* HEADER SECTION */}
+      <div className="relative">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+          {/* Left: Title & Status */}
+          <div className="flex items-start gap-4">
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/quotes')}
+              className="p-2 hover:bg-white/50 transition-colors rounded-full"
             >
-              <Edit className="h-4 w-4 mr-2" />
-              Modifier
-            </button>
-          )}
-          
-          {/* Download PDF - always visible */}
-          <button
-            onClick={handleDownloadPdf}
-            disabled={actionLoading.download}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {actionLoading.download ? 'Téléchargement...' : 'PDF'}
-          </button>
-          
-          {/* Email actions */}
-          {!quote.convertedInvoiceId && (
-            <>
-              <button
-                onClick={handleSendEmail}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Envoyer par email
-              </button>
-              
-              <button
-                onClick={handleViewEmailHistory}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                title="Historique des emails"
-              >
-                <Clock className="h-4 w-4" />
-              </button>
-            </>
-          )}
-          
-          {/* Delete button */}
-          {!quote.convertedInvoiceId && (
-            <button
-              onClick={handleDelete}
-              disabled={actionLoading.delete}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Supprimer
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Quote Info */}
-      <Card className="p-6">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <FileText className="h-8 w-8 text-blue-600" />
-              <h1 className="text-3xl font-bold text-gray-900">
-                Devis {quote.quoteNumber}
-              </h1>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              {getStatusBadge(quote.status)}
-              {quote.convertedInvoiceId && (
-                <span className="px-3 py-1 text-sm font-medium rounded-full bg-purple-100 text-purple-800">
-                  Converti en facture
+              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </Button>
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+                  Devis {quote.quoteNumber}
+                </h1>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ring-1 ring-inset ${getStatusColor(quote.status)}`}>
+                  {getStatusLabel(quote.status)}
                 </span>
-              )}
-            </div>
-          </div>
-          
-          <div className="text-right">
-            <p className="text-3xl font-bold text-gray-900">
-              {quote.total.toFixed(2)} {quote.currency}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              Montant total TTC
-            </p>
-          </div>
-        </div>
-
-        {/* Workflow Progress - Visual Status Indicator */}
-        {!quote.convertedInvoiceId && quote.status !== 'rejected' && (
-          <div className="border-t pt-6 mt-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">Progression du devis</h2>
-            <div className="flex items-center justify-between relative">
-              {/* Progress bar background */}
-              <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 -z-10" />
-              <div 
-                className="absolute top-5 left-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600 -z-10 transition-all duration-500"
-                style={{ 
-                  width: quote.status === 'draft' ? '0%' : 
-                         quote.status === 'sent' ? '33%' : 
-                         quote.status === 'accepted' ? '66%' : '100%' 
-                }}
-              />
-              
-              {/* Step 1: Draft */}
-              <div className="flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  quote.status === 'draft' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <FileText className="w-5 h-5" />
-                </div>
-                <span className="text-xs mt-2 font-medium">Brouillon</span>
-              </div>
-              
-              {/* Step 2: Sent */}
-              <div className="flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  quote.status === 'sent' || quote.status === 'accepted' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <Mail className="w-5 h-5" />
-                </div>
-                <span className="text-xs mt-2 font-medium">Envoyé</span>
-                {quote.status === 'draft' && (
-                  <button
-                    onClick={handleSendEmail}
-                    className="mt-2 text-xs px-3 py-1 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
-                  >
-                    Envoyer
-                  </button>
+                {quote.convertedInvoiceId && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ring-1 ring-inset bg-purple-50 text-purple-700 ring-purple-200">
+                    Converti
+                  </span>
                 )}
               </div>
-              
-              {/* Step 3: Approved */}
-              <div className="flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  quote.status === 'accepted' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <CheckCircle className="w-5 h-5" />
+              <div className="flex items-center gap-4 text-sm text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>Émis le {formatDate(quote.issueDate)}</span>
                 </div>
-                <span className="text-xs mt-2 font-medium">Approuvé</span>
-                {quote.status === 'sent' && (
-                  <div className="mt-2 flex flex-col gap-1">
-                    <button
-                      onClick={handleApproveQuote}
-                      disabled={actionLoading.approve}
-                      className="text-xs px-3 py-1 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                      {actionLoading.approve ? '...' : 'Approuver'}
-                    </button>
-                    <button
-                      onClick={handleRejectQuote}
-                      disabled={actionLoading.reject}
-                      className="text-xs px-3 py-1 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                    >
-                      <XCircle className="w-3 h-3" />
-                      {actionLoading.reject ? '...' : 'Refuser'}
-                    </button>
+                {quote.client && (
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span>{quote.client.companyName || `${quote.client.firstName} ${quote.client.lastName}`}</span>
                   </div>
                 )}
               </div>
-              
-              {/* Step 4: Convert to Invoice */}
-              <div className="flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  quote.convertedInvoiceId ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <span className="text-xs mt-2 font-medium">Facture</span>
-                {quote.status === 'accepted' && !quote.convertedInvoiceId && (
-                  <button
-                    onClick={handleConvertToInvoice}
-                    disabled={actionLoading.convert}
-                    className="mt-2 text-xs px-3 py-1 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {actionLoading.convert ? '...' : (
-                      <>
-                        <ArrowRight className="w-3 h-3" />
-                        Convertir
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
             </div>
           </div>
-        )}
 
-        {/* Client Info */}
-        <div className="border-t pt-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Client</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Nom</p>
-              <p className="mt-1 text-sm text-gray-900">
-                {quote.client?.companyName || 
-                 `${quote.client?.firstName || ''} ${quote.client?.lastName || ''}`.trim()}
-              </p>
-            </div>
-            {quote.client?.email && (
-              <div>
-                <p className="text-sm font-medium text-gray-500">Email</p>
-                <p className="mt-1 text-sm text-gray-900">{quote.client.email}</p>
-              </div>
+          {/* Right: Primary Actions */}
+          <div className="flex items-center gap-3">
+            {!quote.convertedInvoiceId && quote.status !== 'rejected' && (
+              <Button
+                onClick={() => navigate(`/quotes/${id}/edit`)}
+                className="bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 border border-slate-200/60 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 rounded-xl px-4"
+              >
+                <span className="mr-2 text-lg">✏️</span> Modifier
+              </Button>
+            )}
+            {!quote.convertedInvoiceId && quote.status !== 'rejected' && (
+              <Button
+                variant="primary"
+                onClick={handleConvertToInvoice}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-lg shadow-purple-900/20 transition-all hover:shadow-purple-900/30 hover:-translate-y-0.5 rounded-xl px-5 border-0"
+              >
+                <span className="mr-2 text-lg">✨</span> Convertir en Facture
+              </Button>
+            )}
+            {quote.status === 'sent' && (
+               <Button
+                variant="primary"
+                onClick={handleApproveQuote}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-900/20 transition-all hover:shadow-green-900/30 hover:-translate-y-0.5 rounded-xl px-5 border-0"
+              >
+                <span className="mr-2 text-lg">✅</span> Approuver
+              </Button>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Dates */}
-        <div className="border-t pt-6 mt-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Dates</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Date d'émission</p>
-              <p className="mt-1 text-sm text-gray-900">
-                {new Date(quote.issueDate).toLocaleDateString('fr-CH')}
-              </p>
+      {/* INFO CARDS GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* 1. Client & Details Card */}
+        <div className="lg:col-span-2">
+           <Card className="h-full border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                <span className="p-1.5 bg-blue-100 rounded-md text-blue-600">
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </span>
+                Détails du devis
+              </h3>
             </div>
-            {quote.validUntil && (
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-                <p className="text-sm font-medium text-gray-500">Valide jusqu'au</p>
-                <p className="mt-1 text-sm text-gray-900">
-                  {new Date(quote.validUntil).toLocaleDateString('fr-CH')}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Items */}
-        <div className="border-t pt-6 mt-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Lignes du devis</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Quantité
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Prix unitaire
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    TVA
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {quote.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-6 py-4 text-sm text-gray-900">{item.description}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900 text-right">
-                      {item.unitPrice.toFixed(2)} {quote.currency}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.tvaRate}%</td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                      {item.total.toFixed(2)} {quote.currency}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-50">
-                <tr>
-                  <td colSpan={4} className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
-                    Sous-total HT
-                  </td>
-                  <td className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
-                    {quote.subtotal.toFixed(2)} {quote.currency}
-                  </td>
-                </tr>
-                {(quote as any).globalDiscountValue && (quote as any).globalDiscountValue > 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-3 text-sm font-medium text-red-600 text-right">
-                      Rabais global ({(quote as any).globalDiscountValue}{(quote as any).globalDiscountType === 'PERCENT' ? '%' : ' ' + quote.currency})
-                      {(quote as any).globalDiscountNote && (
-                        <div className="text-xs text-gray-500 mt-1">{(quote as any).globalDiscountNote}</div>
+                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Client</h4>
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg">
+                      {(quote.client?.companyName?.[0] || quote.client?.firstName?.[0] || '?').toUpperCase()}
+                   </div>
+                   <div>
+                      <p className="font-semibold text-slate-900 text-lg">
+                        {quote.client?.companyName || `${quote.client?.firstName || ''} ${quote.client?.lastName || ''}`.trim()}
+                      </p>
+                      {quote.client?.email && (
+                        <p className="text-sm text-slate-500">{quote.client.email}</p>
                       )}
-                    </td>
-                    <td className="px-6 py-3 text-sm font-medium text-red-600 text-right">
-                      -{(() => {
-                        const discountValue = (quote as any).globalDiscountValue || 0;
-                        const discountType = (quote as any).globalDiscountType;
-                        if (discountType === 'PERCENT') {
-                          return (quote.subtotal * (discountValue / 100)).toFixed(2);
-                        } else {
-                          return Math.min(discountValue, quote.subtotal).toFixed(2);
-                        }
-                      })()} {quote.currency}
-                    </td>
-                  </tr>
-                )}
-                <tr>
-                  <td colSpan={4} className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
-                    TVA
-                  </td>
-                  <td className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
-                    {quote.tvaAmount.toFixed(2)} {quote.currency}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={4} className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
-                    Total TTC
-                  </td>
-                  <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
-                    {quote.total.toFixed(2)} {quote.currency}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                   </div>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Montants & Validité</h4>
+                <div className="space-y-2">
+                   <div className="flex justify-between items-center">
+                      <span className="text-slate-600">Total TTC:</span>
+                      <span className="text-xl font-bold text-slate-900">{quote.total.toFixed(2)} {quote.currency}</span>
+                   </div>
+                   {quote.validUntil && (
+                     <div className="flex justify-between items-center">
+                        <span className="text-slate-600">Valide jusqu'au:</span>
+                        <span className="text-slate-900 font-medium">{formatDate(quote.validUntil)}</span>
+                     </div>
+                   )}
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        {/* Notes */}
-        {quote.notes && (
-          <div className="border-t pt-6 mt-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Notes</h2>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{quote.notes}</p>
-          </div>
-        )}
+        {/* 2. Quick Actions Card */}
+        <div className="space-y-6">
+          <Card className="border-slate-200/60 shadow-sm p-5 bg-white/80 backdrop-blur-sm">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
+              Actions Rapides
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              {!quote.convertedInvoiceId && (
+                <Button
+                  variant="secondary"
+                  onClick={handleSendEmail}
+                  disabled={actionLoading.send}
+                  className="w-full justify-start text-sm h-auto py-3 px-4 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-700 rounded-xl transition-all group"
+                >
+                  <span className="mr-3 text-lg group-hover:scale-110 transition-transform">📤</span> 
+                  {actionLoading.send ? 'Envoi...' : 'Envoyer par email'}
+                </Button>
+              )}
+              
+              <Button
+                variant="secondary"
+                onClick={handleDownloadPdf}
+                disabled={actionLoading.download}
+                className="w-full justify-start text-sm h-auto py-3 px-4 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-700 rounded-xl transition-all group"
+              >
+                <span className="mr-3 text-lg group-hover:scale-110 transition-transform">📄</span> 
+                {actionLoading.download ? 'Téléchargement...' : 'Télécharger PDF'}
+              </Button>
 
-        {/* Terms */}
-        {quote.terms && (
-          <div className="border-t pt-6 mt-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Conditions</h2>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{quote.terms}</p>
-          </div>
-        )}
-      </Card>
+              {!quote.convertedInvoiceId && quote.status !== 'rejected' && (
+                <Button
+                  variant="secondary"
+                  onClick={handleConvertToInvoice}
+                  disabled={actionLoading.convert}
+                  className="w-full justify-start text-sm h-auto py-3 px-4 bg-white border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 hover:text-purple-700 rounded-xl transition-all group"
+                >
+                  <span className="mr-3 text-lg group-hover:scale-110 transition-transform">✨</span> 
+                  {actionLoading.convert ? 'Conversion...' : 'Convertir en Facture'}
+                </Button>
+              )}
+              
+              {!quote.convertedInvoiceId && (
+                 <div className="grid grid-cols-2 gap-3 mt-2">
+                    {quote.status === 'sent' && (
+                      <Button
+                        variant="secondary"
+                        onClick={handleRejectQuote}
+                        disabled={actionLoading.reject}
+                        className="w-full justify-start text-sm h-auto py-3 px-4 bg-white border border-slate-200 hover:border-red-300 hover:bg-red-50/50 hover:text-red-700 rounded-xl transition-all group"
+                      >
+                        <span className="mr-2 text-lg group-hover:scale-110 transition-transform">❌</span> 
+                        Refuser
+                      </Button>
+                    )}
+                    <Button
+                      variant="danger"
+                      onClick={handleDelete}
+                      disabled={actionLoading.delete}
+                      className={`w-full justify-start text-sm h-auto py-3 px-4 bg-red-50/50 text-red-600 border border-red-100 hover:bg-red-100 hover:border-red-200 hover:text-red-700 rounded-xl transition-all group ${quote.status !== 'sent' ? 'col-span-2' : ''}`}
+                    >
+                      <span className="mr-2 text-lg group-hover:scale-110 transition-transform">🗑️</span> 
+                      Supprimer
+                    </Button>
+                 </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      </div>
 
-      {/* Send Email Modal */}
+      {/* NEW MODERN PDF VIEWER COMPONENT */}
+      <div className="animate-fade-in-up">
+        <ModernQuotePDFViewer 
+          quoteId={quote.id}
+          quoteNumber={quote.quoteNumber} 
+          onDownloadPdf={handleDownloadPdf}
+        />
+      </div>
+
+      {/* Modals */}
       <SendEmailModal
         isOpen={sendEmailModal.isOpen}
         onClose={() => setSendEmailModal(prev => ({ ...prev, isOpen: false }))}
@@ -604,7 +455,6 @@ const QuoteDetailPage: React.FC = () => {
         isQuote={true}
       />
 
-      {/* Email History Modal */}
       <EmailHistoryModal
         isOpen={emailHistoryModal.isOpen}
         onClose={() => setEmailHistoryModal(prev => ({ ...prev, isOpen: false }))}

@@ -24,9 +24,9 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { 
-    name: 'Tableau de bord', 
-    href: '/dashboard', 
+  {
+    name: 'Tableau de bord',
+    href: '/dashboard',
     icon: DashboardIcon,
     description: 'Vue d\'ensemble de votre activité'
   },
@@ -40,39 +40,33 @@ const navigation: NavigationItem[] = [
       { name: 'Devis', href: '/quotes', icon: QuoteIcon },
     ],
   },
-  { 
-    name: 'Clients', 
-    href: '/clients', 
+  {
+    name: 'Clients',
+    href: '/clients',
     icon: ClientIcon,
     description: 'Gestion des clients'
   },
-  { 
-    name: 'Produits', 
-    href: '/products', 
+  {
+    name: 'Produits',
+    href: '/products',
     icon: ProductIcon,
     description: 'Catalogue de produits et services'
   },
   {
-    name: 'Plans',
-    href: '/plans',
-    icon: ProductIcon,
-    description: 'Choisissez ou modifiez votre abonnement'
-  },
-  { 
-    name: 'Charges', 
-    href: '/expenses', 
+    name: 'Charges',
+    href: '/expenses',
     icon: ExpenseIcon,
     description: 'Dépenses et charges'
   },
-  { 
-    name: 'Rapports', 
-    href: '/reports', 
+  {
+    name: 'Rapports',
+    href: '/reports',
     icon: ReportIcon,
     description: 'Analyses et statistiques'
   },
-  { 
-    name: 'Paramètres', 
-    href: '/settings', 
+  {
+    name: 'Paramètres',
+    href: '/settings',
     icon: SettingsIcon,
     description: 'Configuration du compte'
   },
@@ -114,7 +108,7 @@ export function Layout() {
     >
       {/* Overlay mobile */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
@@ -131,9 +125,9 @@ export function Layout() {
           <div className="flex items-center justify-between h-16 px-4" style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
             <Link to="/dashboard" className="flex items-center">
               {/* Logo image - coloca tu logo en /public/brand/logo-light.png (modo claro) y logo-dark.png (modo oscuro) */}
-              <img 
-                src="/brand/logo-light.png" 
-                alt="Simplifaq" 
+              <img
+                src="/brand/logo-light.png"
+                alt="SimpliFaq"
                 className="h-10 w-auto dark:hidden"
                 onError={(e) => {
                   // Fallback al logo de texto si la imagen no existe
@@ -142,9 +136,9 @@ export function Layout() {
                   if (fallback) fallback.style.display = 'flex';
                 }}
               />
-              <img 
-                src="/brand/logo-dark.png" 
-                alt="Simplifaq" 
+              <img
+                src="/brand/logo-dark.png"
+                alt="SimpliFaq"
                 className="h-10 w-auto hidden dark:block"
                 onError={(e) => {
                   // Fallback al logo de texto si la imagen no existe
@@ -158,10 +152,10 @@ export function Layout() {
                 <div className="w-10 h-10 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: 'var(--color-primary-600)', color: 'var(--color-text-inverse)' }}>
                   <span className="font-bold text-xl">S</span>
                 </div>
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary-500)' }}>Simplifaq</h1>
+                <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary-500)' }}>SimpliFaq</h1>
               </div>
             </Link>
-            
+
             {/* Bouton fermer mobile */}
             <button
               onClick={() => setIsSidebarOpen(false)}
@@ -289,7 +283,7 @@ export function Layout() {
                 )}
               </div>
             </div>
-            
+
             {/* Logout Button */}
             <button
               onClick={handleLogout}
@@ -333,7 +327,7 @@ export function Layout() {
             >
               <MenuIcon className="w-5 h-5" />
             </button>
-            <h1 className="text-lg font-semibold text-gray-900">Simplifaq</h1>
+            <h1 className="text-lg font-semibold text-gray-900">SimpliFaq</h1>
             <div className="w-9" /> {/* Spacer pour centrer le titre */}
           </div>
         </div>
@@ -353,7 +347,7 @@ export function Layout() {
 
       {/* Session Warning Component */}
       <SessionWarning />
-      
+
       {/* AI Assistant - Only show if feature is enabled */}
       {aiAssistantEnabled && <AIAssistant />}
     </div>

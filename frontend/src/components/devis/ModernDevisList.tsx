@@ -3,20 +3,15 @@ import {
   Plus, 
   Search, 
   Filter, 
-  Download, 
   LayoutGrid, 
   List, 
   TrendingUp,
-  Calendar,
   DollarSign,
   FileText,
-  Clock,
   CheckCircle2,
   XCircle,
   AlertCircle,
   Send,
-  Eye,
-  MoreHorizontal,
   ChevronDown,
   RefreshCw,
   Sparkles,
@@ -61,7 +56,7 @@ interface ModernDevisListProps {
   onConvertToInvoice?: (devisId: string) => void;
   onCreateNew?: () => void;
   onRefresh?: () => void;
-  onFilterChange?: (filters: any) => void;
+  onFilterChange?: (filters: Record<string, unknown>) => void;
   currentFilters?: {
     status?: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | undefined;
     search?: string;
@@ -98,13 +93,12 @@ export function ModernDevisList({
   onDownloadPdf,
   onSendEmail,
   onViewEmailHistory,
-  onConvertToInvoice,
   onCreateNew,
   onRefresh,
   onFilterChange,
-  currentFilters,
-  operationLoading
+  currentFilters
 }: ModernDevisListProps) {
+  // Note: onConvertToInvoice and operationLoading are available in props but not currently used
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<DevisStatus>('all');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'client' | 'status'>('date');
@@ -116,7 +110,7 @@ export function ModernDevisList({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('devis_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('devis_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Initialize/sync local filters from parent-provided currentFilters
@@ -444,7 +438,7 @@ export function ModernDevisList({
                       </label>
                       <select
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as any)}
+                        onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'client' | 'status')}
                         className="w-full px-4 py-2.5 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       >
                         <option value="date">Date</option>
@@ -576,7 +570,7 @@ export function ModernDevisList({
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-purple-200 overflow-hidden">
                 <AnimatePresence mode="popLayout">
-                  {filteredDevis.map((devis, index) => (
+                  {filteredDevis.map((devis) => (
                     <CompactDevisRow
                       key={devis.id}
                       invoice={devis}

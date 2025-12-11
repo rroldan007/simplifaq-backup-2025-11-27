@@ -9,6 +9,41 @@ import { CreativePremium } from '../invoices/templates/CreativePremium';
 import { CleanCreative } from '../invoices/templates/CleanCreative';
 import { BoldStatement } from '../invoices/templates/BoldStatement';
 
+// Theme color configurations matching backend ThemeDefinitions.ts
+const THEME_COLORS: Record<string, {
+  primary: string;
+  headerBg: string;
+  tableHeaderBg: string;
+  headerText: string;
+  bodyText: string;
+  altRow: string;
+}> = {
+  swiss_minimal: {
+    primary: '#000000',
+    headerBg: '#FFFFFF',
+    tableHeaderBg: '#FAFAFA',
+    headerText: '#000000',
+    bodyText: '#111111',
+    altRow: '#FFFFFF'
+  },
+  modern_blue: {
+    primary: '#2563EB',
+    headerBg: '#EFF6FF',
+    tableHeaderBg: '#EFF6FF',
+    headerText: '#1E3A8A',
+    bodyText: '#334155',
+    altRow: '#F8FAFC'
+  },
+  creative_bold: {
+    primary: '#7C3AED',
+    headerBg: '#7C3AED',
+    tableHeaderBg: '#7C3AED',
+    headerText: '#FFFFFF',
+    bodyText: '#1F2937',
+    altRow: '#F9FAFB'
+  }
+};
+
 interface PDFPreviewProps {
   user: User;
   companyData: {
@@ -24,7 +59,24 @@ interface PDFPreviewProps {
 }
 
 // Map of template keys to components
-const TEMPLATE_COMPONENTS: Record<string, React.ComponentType<{ data: InvoicePreviewData; accentColor?: string; showHeader?: boolean }>> = {
+const TEMPLATE_COMPONENTS: Record<string, React.ComponentType<{ 
+  data: InvoicePreviewData; 
+  accentColor?: string; 
+  showHeader?: boolean;
+  logoPosition?: 'left' | 'center' | 'right';
+  logoSize?: 'small' | 'medium' | 'large';
+  fontColorHeader?: string;
+  fontColorBody?: string;
+  tableHeadColor?: string;
+  headerBgColor?: string;
+  altRowColor?: string;
+}>> = {
+  // New Unified Themes Mapped to Best Available Preview Components
+  'swiss_minimal': ElegantClassic,
+  'modern_blue': FormalPro,
+  'creative_bold': BoldStatement,
+  
+  // Legacy mappings for backward compatibility if needed
   'swiss_classic': ElegantClassic,
   'european_minimal': MinimalModern,
   'swiss_blue': FormalPro,
@@ -41,10 +93,26 @@ const TEMPLATE_COMPONENTS: Record<string, React.ComponentType<{ data: InvoicePre
  * Preview component that respects PDF configuration settings
  */
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => {
-  const accentColor = user.pdfPrimaryColor || '#4F46E5';
-  const template = (user as any).pdfTemplate || 'swiss_classic';
+  type UserWithPdfSettings = { pdfTemplate?: string; pdfShowCompanyNameWithLogo?: boolean; firstName?: string; lastName?: string };
+  const userPdf = user as UserWithPdfSettings;
+  const template = userPdf.pdfTemplate || 'swiss_classic';
   const logoUrl = getLogoUrl(user.logoUrl);
-  const showHeader = (user as any).pdfShowCompanyNameWithLogo !== false;
+  const showHeader = userPdf.pdfShowCompanyNameWithLogo !== false;
+  
+  // Get theme colors (NO hardcoding)
+  const themeColors = THEME_COLORS[template] || THEME_COLORS.swiss_minimal;
+  
+  // Apply custom primary color if set, otherwise use theme default
+  const customPrimaryColor = user.pdfPrimaryColor;
+  const accentColor = customPrimaryColor || themeColors.primary;
+  
+  // Determine header background color (apply custom color for creative_bold and modern_blue)
+  let headerBgColor = themeColors.headerBg;
+  let tableHeaderBgColor = themeColors.tableHeaderBg;
+  if (customPrimaryColor && (template === 'creative_bold' || template === 'modern_blue')) {
+    headerBgColor = customPrimaryColor;
+    tableHeaderBgColor = customPrimaryColor;
+  }
 
   const roundToCHF05 = (amount: number, currency?: string) => {
     if ((currency || '').toUpperCase() === 'CHF') {
@@ -58,8 +126,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
   
   // Build preview data that respects user settings
   const previewData: InvoicePreviewData = useMemo(() => {
-    const userAny = user as any;
-    const companyDisplayName = companyData.companyName || `${userAny.firstName || ''} ${userAny.lastName || ''}`.trim() || 'Votre société';
+    const companyDisplayName = companyData.companyName || `${userPdf.firstName || ''} ${userPdf.lastName || ''}`.trim() || 'Votre société';
     const companyLines: string[] = [
       companyDisplayName,
       companyData.street,
@@ -67,20 +134,22 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
       companyData.country,
     ].filter(Boolean);
 
-    if (userAny.pdfShowVAT !== false && companyData.vatNumber) {
+    type UserPdfOptions = { pdfShowVAT?: boolean; pdfShowPhone?: boolean; pdfShowEmail?: boolean; pdfShowWebsite?: boolean; pdfShowIBAN?: boolean; email?: string; iban?: string; quantityDecimals?: number };
+    const userOpts = user as UserPdfOptions;
+    if (userOpts.pdfShowVAT !== false && companyData.vatNumber) {
       companyLines.push(`TVA: ${companyData.vatNumber}`);
     }
-    if (userAny.pdfShowPhone !== false && companyData.phone) {
+    if (userOpts.pdfShowPhone !== false && companyData.phone) {
       companyLines.push(`Tél: ${companyData.phone}`);
     }
-    if (userAny.pdfShowEmail !== false && userAny.email) {
-      companyLines.push(`Email: ${userAny.email}`);
+    if (userOpts.pdfShowEmail !== false && userOpts.email) {
+      companyLines.push(`Email: ${userOpts.email}`);
     }
-    if (userAny.pdfShowWebsite !== false && companyData.website) {
+    if (userOpts.pdfShowWebsite !== false && companyData.website) {
       companyLines.push(`Web: ${companyData.website}`);
     }
-    if (userAny.pdfShowIBAN === true && userAny.iban) {
-      companyLines.push(`IBAN: ${userAny.iban}`);
+    if (userOpts.pdfShowIBAN === true && userOpts.iban) {
+      companyLines.push(`IBAN: ${userOpts.iban}`);
     }
 
     const subtotal = 320;
@@ -105,7 +174,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
       tax,
       total: roundToCHF05(total, currency),
       logoUrl: logoUrl || undefined,
-      quantityDecimals: (userAny.quantityDecimals === 3 ? 3 : 2) as 2 | 3,
+      quantityDecimals: (userOpts.quantityDecimals === 3 ? 3 : 2) as 2 | 3,
     };
   }, [companyData, logoUrl, user]);
 
@@ -115,6 +184,13 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
         data={previewData} 
         accentColor={accentColor}
         showHeader={showHeader}
+        logoPosition={(user as any).pdfLogoPosition || 'left'}
+        logoSize={(user as any).pdfLogoSize || 'medium'}
+        fontColorHeader={(user as any).pdfFontColorHeader || themeColors.headerText}
+        fontColorBody={(user as any).pdfFontColorBody || themeColors.bodyText}
+        tableHeadColor={(user as any).pdfTableHeadColor || tableHeaderBgColor}
+        headerBgColor={headerBgColor}
+        altRowColor={themeColors.altRow}
       />
     </div>
   );

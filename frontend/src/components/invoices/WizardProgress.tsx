@@ -188,6 +188,7 @@ export function WizardProgress({
 }
 
 // Default icons for common steps
+// eslint-disable-next-line react-refresh/only-export-components
 export const defaultStepIcons = {
   client: <FileText className="w-6 h-6" />,
   items: <Package className="w-6 h-6" />,

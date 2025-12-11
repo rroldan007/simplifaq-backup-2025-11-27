@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowRight, Upload, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Upload } from 'lucide-react';
 import { api } from '../../../services/api';
 
 interface LogoStepProps {
@@ -11,6 +11,37 @@ export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const dataLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!dataLoadedRef.current) {
+      loadExistingLogo();
+      dataLoadedRef.current = true;
+    }
+  }, []);
+
+  const loadExistingLogo = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/auth/me');
+      const userData = response.data.data as { user?: { logoUrl?: string } };
+      const user = userData.user || {};
+      if (user.logoUrl) {
+        // Build full URL for logo - logoUrl from backend is relative path like "uploads/logos/..."
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const baseUrl = apiUrl.replace(/\/api$/, '');
+        const logoUrl = user.logoUrl.startsWith('http') 
+          ? user.logoUrl 
+          : `${baseUrl}/${user.logoUrl.replace(/^\//, '')}`;
+        setPreview(logoUrl);
+      }
+    } catch (err) {
+      console.error('Error loading logo:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -33,18 +64,32 @@ export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
 
     try {
       const formData = new FormData();
-      formData.append('logo', file);
+      formData.append('file', file);
 
-      const response = await api.post('/upload/logo', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // Use api.upload for FormData - api.post tries to JSON.stringify which breaks multipart/form-data
+      const response = await api.upload('/upload/logo', formData);
 
-      setPreview(response.data.data.logoUrl);
+      // Backend returns { success: true, data: { url, logoUrl, filename, ... } }
+      const logoUrl = (response.data as any)?.url || (response.data as any)?.logoUrl;
+      
+      if (!logoUrl) {
+        throw new Error('Logo URL not received from server');
+      }
+      
+      // Build full URL - logoUrl from backend is relative like "uploads/logos/..."
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      // Remove /api suffix if present to get the base server URL
+      const baseUrl = apiUrl.replace(/\/api$/, '');
+      const fullUrl = logoUrl.startsWith('http') 
+        ? logoUrl 
+        : `${baseUrl}/${logoUrl.replace(/^\//, '')}`;
+      
+      setPreview(fullUrl);
       setUploading(false);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Erreur lors du téléchargement');
+    } catch (err: unknown) {
+      console.error('Logo upload error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du téléchargement';
+      setError(errorMessage);
       setUploading(false);
     }
   };
@@ -57,11 +102,24 @@ export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <p className="text-gray-600">
-        Ajoutez le logo de votre entreprise. Il apparaîtra sur vos factures et devis.
-        Vous pouvez passer cette étape et l'ajouter plus tard.
+        {preview 
+          ? "Votre logo actuel. Vous pouvez le changer ou continuer avec celui-ci."
+          : "Ajoutez le logo de votre entreprise. Il apparaîtra sur vos factures et devis. Vous pouvez passer cette étape et l'ajouter plus tard."
+        }
       </p>
 
       {error && (
@@ -70,21 +128,27 @@ export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
         </div>
       )}
 
-      <div className="flex flex-col items-center justify-center">
+      <div className="flex flex-col items-center justify-center gap-4">
         {preview ? (
-          <div className="relative">
-            <img
-              src={preview}
-              alt="Logo preview"
-              className="max-w-xs max-h-48 object-contain border-2 border-gray-200 rounded-lg p-4"
-            />
-            <button
-              onClick={() => setPreview(null)}
-              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors"
-            >
-              ×
-            </button>
-          </div>
+          <>
+            <div className="relative">
+              <img
+                src={preview}
+                alt="Logo preview"
+                className="max-w-xs max-h-48 object-contain border-2 border-gray-200 rounded-lg p-4"
+              />
+            </div>
+            <label className="cursor-pointer px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors">
+              Changer le logo
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
+          </>
         ) : (
           <label className="w-full max-w-md cursor-pointer">
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-indigo-500 transition-colors">

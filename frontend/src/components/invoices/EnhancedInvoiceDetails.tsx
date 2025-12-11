@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '../ui/Input';
 
 interface InvoiceDetailsData {
@@ -45,33 +45,16 @@ export const EnhancedInvoiceDetails: React.FC<EnhancedInvoiceDetailsProps> = ({
   onChange,
   errors = {}
 }) => {
-  const [validation, setValidation] = useState<ValidationState>({
-    invoiceNumber: 'pending',
-    issueDate: 'pending',
-    dueDate: 'pending',
-  });
   const [showDatePresets, setShowDatePresets] = useState(false);
 
-  // Real-time validation
-  useEffect(() => {
-    const validateFields = () => {
-      const newValidation: ValidationState = {
-        invoiceNumber: data.invoiceNumber.length >= 3 ? 'valid' : 'invalid',
-        issueDate: data.issueDate ? 'valid' : 'invalid',
-        dueDate: data.dueDate && new Date(data.dueDate) > new Date(data.issueDate) ? 'valid' : 'invalid',
-      };
-      
-      // Only update if validation state actually changed to prevent infinite loop
-      setValidation(prev => {
-        if (JSON.stringify(prev) !== JSON.stringify(newValidation)) {
-          return newValidation;
-        }
-        return prev;
-      });
+  // Real-time validation using useMemo to avoid infinite re-renders
+  const validation = React.useMemo<ValidationState>(() => {
+    return {
+      invoiceNumber: data.invoiceNumber.length >= 3 ? 'valid' : 'invalid',
+      issueDate: data.issueDate ? 'valid' : 'invalid',
+      dueDate: data.dueDate && new Date(data.dueDate) > new Date(data.issueDate) ? 'valid' : 'invalid',
     };
-
-    validateFields();
-  }, [data.invoiceNumber, data.issueDate, data.dueDate]); // Be specific about dependencies
+  }, [data.invoiceNumber, data.issueDate, data.dueDate]);
 
   const fieldClass = (field: keyof ValidationState) => {
     switch (validation[field]) {
@@ -278,4 +261,4 @@ export const EnhancedInvoiceDetails: React.FC<EnhancedInvoiceDetailsProps> = ({
     </div>
   );
 }
-;
+  ;

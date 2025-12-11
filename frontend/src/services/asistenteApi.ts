@@ -1,12 +1,7 @@
 import { api } from './api';
 
-// API Key del Asistente ADM
-const ASISTENTE_API_KEY = import.meta.env.VITE_ASISTENTE_API_KEY || '';
-
-// Headers comunes para todas las llamadas al asistente
-const getAsistenteHeaders = () => ({
-  'x-api-key': ASISTENTE_API_KEY,
-});
+// El x-api-key se envía desde el backend, no desde el frontend
+// El frontend solo necesita enviar el JWT de autenticación
 
 export interface AsistenteChatRequest {
   message: string;
@@ -62,34 +57,27 @@ export interface AssistantActionListQuery {
   status?: 'pending' | 'confirmed' | 'executed' | 'cancelled' | 'failed';
 }
 
-export interface AssistantActionListItem extends AssistantActionPlan {}
+export type AssistantActionListItem = AssistantActionPlan;
 
 export const asistenteApi = {
   async chat(payload: AsistenteChatRequest): Promise<AsistenteChatResponse> {
-    const response = await api.post<AsistenteChatResponse>('/asistente/chat', payload, {
-      headers: getAsistenteHeaders(),
-    });
+    const response = await api.post<AsistenteChatResponse>('/asistente/chat', payload);
     return response.data.data as AsistenteChatResponse;
   },
 
   async confirmAction(payload: ConfirmActionRequest): Promise<ConfirmActionResponse> {
-    const response = await api.post<ConfirmActionResponse>('/asistente/actions/confirm', payload, {
-      headers: getAsistenteHeaders(),
-    });
+    const response = await api.post<ConfirmActionResponse>('/asistente/actions/confirm', payload);
     return response.data.data as ConfirmActionResponse;
   },
 
   async cancelAction(actionId: string): Promise<{ actionId: string; status: 'cancelled' }> {
-    const response = await api.post<{ actionId: string; status: 'cancelled' }>(`/asistente/actions/${actionId}/cancel`, undefined, {
-      headers: getAsistenteHeaders(),
-    });
+    const response = await api.post<{ actionId: string; status: 'cancelled' }>(`/asistente/actions/${actionId}/cancel`);
     return response.data.data as { actionId: string; status: 'cancelled' };
   },
 
   async listActions(params?: AssistantActionListQuery): Promise<AssistantActionListItem[]> {
     const response = await api.get<AssistantActionListItem[]>(`/asistente/actions`, { 
       params: params as Record<string, unknown> | undefined,
-      headers: getAsistenteHeaders(),
     });
     const raw = response.data.data;
     if (Array.isArray(raw)) return raw;
@@ -100,9 +88,7 @@ export const asistenteApi = {
   },
 
   async getAction(actionId: string): Promise<AssistantActionPlan | null> {
-    const response = await api.get<AssistantActionPlan>(`/asistente/actions/${actionId}`, {
-      headers: getAsistenteHeaders(),
-    });
+    const response = await api.get<AssistantActionPlan>(`/asistente/actions/${actionId}`);
     return response.data.data ?? null;
   },
 
@@ -114,6 +100,7 @@ export const asistenteApi = {
     }
 
     const response = await api.upload('/asistente/expenses/analyze', formData);
-    return (response.data as any).data as AnalyzeExpenseResponse;
+    type UploadResponse = { data?: AnalyzeExpenseResponse };
+    return (response.data as UploadResponse).data as AnalyzeExpenseResponse;
   },
 };

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { prisma } from '../services/database';
 
 // Configurar multer para almacenamiento de archivos
 const storage = multer.diskStorage({
@@ -40,14 +41,25 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB
+    fileSize: 5 * 1024 * 1024, // 5MB (coincide con validación del frontend)
   }
 });
 
 // Controlador para subir logo
 export const uploadLogo = async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('[UPLOAD] ==========================================');
+    console.log('[UPLOAD] Upload logo request received');
+    console.log('[UPLOAD] Content-Type:', req.headers['content-type']);
+    console.log('[UPLOAD] User:', (req as any).user?.id);
+    console.log('[UPLOAD] Body keys:', Object.keys(req.body));
+    console.log('[UPLOAD] File object:', req.file);
+    console.log('[UPLOAD] File originalname:', req.file?.originalname);
+    console.log('[UPLOAD] ==========================================');
+    
     if (!req.file) {
+      console.error('[UPLOAD] ❌ No file provided - multer did not parse it');
+      console.error('[UPLOAD] This means: wrong field name, or Content-Type missing boundary');
       res.status(400).json({
         success: false,
         error: {
@@ -59,21 +71,41 @@ export const uploadLogo = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Construir URL del archivo
-    const fileUrl = `/uploads/logos/${req.file.filename}`;
+    // Construir URL del archivo (ruta relativa para la BD)
+    const logoPath = path.join('uploads', 'logos', req.file.filename);
+    console.log('[UPLOAD] Logo path:', logoPath);
+    
+    // Actualizar usuario en la base de datos si está autenticado
+    const userId = (req as any).user?.id;
+    if (userId) {
+      console.log('[UPLOAD] Updating user logoUrl in database...');
+      try {
+        await (prisma.user as any).update({
+          where: { id: userId },
+          data: { logoUrl: logoPath }
+        });
+        console.log('[UPLOAD] User logoUrl updated successfully');
+      } catch (dbError) {
+        console.error('[UPLOAD] Error updating user in database:', dbError);
+        // No fallar el upload si falla la actualización de BD
+      }
+    }
     
     res.json({
       success: true,
       data: {
-        url: fileUrl,
+        url: logoPath,
+        logoUrl: logoPath, // Para compatibilidad
         filename: req.file.filename,
         originalName: req.file.originalname,
         size: req.file.size
       },
       timestamp: new Date().toISOString()
     });
+    
+    console.log('[UPLOAD] Upload completed successfully');
   } catch (error) {
-    console.error('Erreur lors du téléchargement du logo:', error);
+    console.error('[UPLOAD] Erreur lors du téléchargement du logo:', error);
     
     res.status(500).json({
       success: false,

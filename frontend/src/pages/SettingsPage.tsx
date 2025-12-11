@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCurrentUser, useAuth } from '../hooks/useAuth';
 import type { User } from '../contexts/authTypes';
 import { api } from '../services/api';
-import { validateInput, sanitizeTextInput } from '../utils/security';
+import { sanitizeTextInput } from '../utils/security';
 import { LogoUpload } from '../components/settings/LogoUpload';
 import { SwissAddressAutocomplete } from '../components/clients/SwissAddressAutocomplete';
 import { ColorPicker } from '../components/ui/ColorPicker';
@@ -66,9 +66,29 @@ export function SettingsPage() {
     website: '',
   });
 
+  // Extended user type for settings fields
+  type ExtendedUser = User & {
+    vatNumber?: string;
+    website?: string;
+    iban?: string;
+    bankApiKey?: string;
+    bankApiProvider?: string;
+    bankSyncEnabled?: boolean;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    invoicePrefix?: string;
+    nextInvoiceNumber?: number;
+    invoicePadding?: number;
+    quotePrefix?: string;
+    nextQuoteNumber?: number;
+    quotePadding?: number;
+  };
+
   // Sync form when user context updates (e.g., after logo upload or profile save)
   useEffect(() => {
     if (!user) return;
+    const extUser = user as ExtendedUser;
 
     setCompany({
       companyName: user.companyName || '',
@@ -79,32 +99,32 @@ export function SettingsPage() {
       postalCode: user.address?.postalCode || '',
       canton: user.address?.canton || '',
       country: user.address?.country || 'Suisse',
-      vatNumber: (user as any)?.vatNumber || '',
-      website: (user as any)?.website || '',
+      vatNumber: extUser.vatNumber || '',
+      website: extUser.website || '',
     });
 
-    setIban((user as any)?.iban || '');
-    setBankApiKey((user as any)?.bankApiKey || '');
-    setBankApiProvider((user as any)?.bankApiProvider || '');
-    setBankSyncEnabled((user as any)?.bankSyncEnabled || false);
+    setIban(extUser.iban || '');
+    setBankApiKey(extUser.bankApiKey || '');
+    setBankApiProvider(extUser.bankApiProvider || '');
+    setBankSyncEnabled(extUser.bankSyncEnabled || false);
 
     setProfile({
-      firstName: (user as any)?.firstName || '',
-      lastName: (user as any)?.lastName || '',
+      firstName: extUser.firstName || '',
+      lastName: extUser.lastName || '',
       email: user?.email || '',
-      phone: (user as any)?.phone || '',
+      phone: extUser.phone || '',
     });
 
     setInvoiceNumbering({
-      prefix: (user as any)?.invoicePrefix || '',
-      nextNumber: (user as any)?.nextInvoiceNumber || 1,
-      padding: (user as any)?.invoicePadding || 0,
+      prefix: extUser.invoicePrefix || '',
+      nextNumber: extUser.nextInvoiceNumber || 1,
+      padding: extUser.invoicePadding || 0,
     });
 
     setQuoteNumbering({
-      prefix: (user as any)?.quotePrefix || '',
-      nextNumber: (user as any)?.nextQuoteNumber || 1,
-      padding: (user as any)?.quotePadding || 0,
+      prefix: extUser.quotePrefix || '',
+      nextNumber: extUser.nextQuoteNumber || 1,
+      padding: extUser.quotePadding || 0,
     });
   }, [user]);
 
@@ -198,7 +218,7 @@ export function SettingsPage() {
       const updated = await api.updateMyProfile(payload);
       updateUser(updated as User);
       showToast('Configuration des paiements enregistrée', 'success');
-    } catch (error) {
+    } catch {
       showToast('Erreur lors de l\'enregistrement', 'error');
     } finally {
       setSavingIban(false);
@@ -273,7 +293,7 @@ export function SettingsPage() {
           invoicePrefix: payload.prefix,
           nextInvoiceNumber: payload.nextNumber,
           invoicePadding: payload.padding,
-        } as any);
+        } as User);
       }
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Erreur lors de la mise à jour", 'error');
@@ -307,7 +327,7 @@ export function SettingsPage() {
           quotePrefix: payload.prefix,
           nextQuoteNumber: payload.nextNumber,
           quotePadding: payload.padding,
-        } as any);
+        } as User);
       }
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Erreur lors de la mise à jour", 'error');
@@ -535,7 +555,7 @@ export function SettingsPage() {
                   <h4 className="font-semibold text-slate-800">Logo de l'Entreprise</h4>
                 </div>
                 
-                <LogoUpload currentLogoUrl={(user as any)?.logoUrl} className="" />
+                <LogoUpload currentLogoUrl={(user as unknown as { logoUrl?: string })?.logoUrl} className="" />
                 
                 <div className="mt-4 flex items-start gap-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -821,18 +841,15 @@ export function SettingsPage() {
                             updateUser(nextUser);
                             showToast('Modèle mis à jour', 'success');
                           }
-                        } catch (error) {
+                        } catch {
                           showToast('Erreur lors de la mise à jour', 'error');
                         }
                       }}
                       className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all bg-slate-50 hover:bg-white"
                     >
-                      <option value="minimal_modern">✨ Minimaliste Européen (Recommandé)</option>
-                      <option value="european_minimal">🎨 Européen Minimal</option>
-                      <option value="swiss_classic">🇨🇭 Classique Suisse</option>
-                      <option value="swiss_blue">💼 Bleu Corporatif</option>
-                      <option value="elegant_classic">👔 Élégant Classique</option>
-                      <option value="german_formal">📋 Formel Allemand</option>
+                      <option value="swiss_minimal">🇨🇭 Swiss Minimal (Recommandé)</option>
+                      <option value="modern_blue">💼 Modern Blue</option>
+                      <option value="creative_bold">🎨 Creative Bold</option>
                     </select>
                   </div>
 
@@ -855,7 +872,7 @@ export function SettingsPage() {
                             updateUser(nextUser);
                             showToast('Couleur mise à jour', 'success');
                           }
-                        } catch (error) {
+                        } catch {
                           showToast('Erreur lors de la mise à jour', 'error');
                         }
                       }}
@@ -863,6 +880,124 @@ export function SettingsPage() {
                     <p className="text-xs text-slate-500 mt-2">
                       Cette couleur sera utilisée pour les titres et éléments importants
                     </p>
+                  </div>
+
+                  {/* Advanced Customization Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      </svg>
+                      <h4 className="font-semibold text-slate-800">Personnalisation Avancée</h4>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {/* Logo Position */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Position du Logo</label>
+                        <select
+                          value={(user as any)?.pdfLogoPosition || 'left'}
+                          onChange={async (e) => {
+                            try {
+                              const result = await api.put('/auth/me', { pdfLogoPosition: e.target.value });
+                              const nextUser = extractUserFromResponse(result);
+                              if (nextUser) updateUser(nextUser);
+                            } catch {
+                              showToast('Erreur lors de la mise à jour', 'error');
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        >
+                          <option value="left">Gauche</option>
+                          <option value="center">Centre</option>
+                          <option value="right">Droite</option>
+                        </select>
+                      </div>
+
+                      {/* Logo Size */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Taille du Logo</label>
+                        <select
+                          value={(user as any)?.pdfLogoSize || 'medium'}
+                          onChange={async (e) => {
+                            try {
+                              const result = await api.put('/auth/me', { pdfLogoSize: e.target.value });
+                              const nextUser = extractUserFromResponse(result);
+                              if (nextUser) updateUser(nextUser);
+                            } catch {
+                              showToast('Erreur lors de la mise à jour', 'error');
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        >
+                          <option value="small">Petit</option>
+                          <option value="medium">Moyen</option>
+                          <option value="large">Grand</option>
+                        </select>
+                      </div>
+
+                      {/* Advanced Colors */}
+                      <div className="pt-4 border-t border-slate-100">
+                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">Couleurs Spécifiques</p>
+                        <div className="space-y-4">
+                           <ColorPicker 
+                              label="Texte En-tête" 
+                              value={(user as any)?.pdfFontColorHeader || '#1F2937'} 
+                              onChange={async (color) => {
+                                try {
+                                  const result = await api.put('/auth/me', { pdfFontColorHeader: color });
+                                  const nextUser = extractUserFromResponse(result);
+                                  if (nextUser) updateUser(nextUser);
+                                } catch { showToast('Erreur', 'error'); }
+                              }} 
+                           />
+                           <ColorPicker 
+                              label="Texte Principal" 
+                              value={(user as any)?.pdfFontColorBody || '#374151'} 
+                              onChange={async (color) => {
+                                try {
+                                  const result = await api.put('/auth/me', { pdfFontColorBody: color });
+                                  const nextUser = extractUserFromResponse(result);
+                                  if (nextUser) updateUser(nextUser);
+                                } catch { showToast('Erreur', 'error'); }
+                              }} 
+                           />
+                           <ColorPicker 
+                              label="Fond En-tête Tableau" 
+                              value={(user as any)?.pdfTableHeadColor || '#F3F4F6'} 
+                              onChange={async (color) => {
+                                try {
+                                  const result = await api.put('/auth/me', { pdfTableHeadColor: color });
+                                  const nextUser = extractUserFromResponse(result);
+                                  if (nextUser) updateUser(nextUser);
+                                } catch { showToast('Erreur', 'error'); }
+                              }} 
+                           />
+                           <ColorPicker 
+                              label="Fond Bloc Total" 
+                              value={(user as any)?.pdfTotalBgColor || '#1E3A8A'} 
+                              onChange={async (color) => {
+                                try {
+                                  const result = await api.put('/auth/me', { pdfTotalBgColor: color });
+                                  const nextUser = extractUserFromResponse(result);
+                                  if (nextUser) updateUser(nextUser);
+                                } catch { showToast('Erreur', 'error'); }
+                              }} 
+                           />
+                           <ColorPicker 
+                              label="Texte Bloc Total" 
+                              value={(user as any)?.pdfTotalTextColor || '#FFFFFF'} 
+                              onChange={async (color) => {
+                                try {
+                                  const result = await api.put('/auth/me', { pdfTotalTextColor: color });
+                                  const nextUser = extractUserFromResponse(result);
+                                  if (nextUser) updateUser(nextUser);
+                                } catch { showToast('Erreur', 'error'); }
+                              }} 
+                           />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Display Options Card */}
@@ -885,7 +1020,7 @@ export function SettingsPage() {
                               if (nextUser) {
                                 updateUser(nextUser);
                               }
-                            } catch (error) {
+                            } catch {
                               showToast('Erreur lors de la mise à jour', 'error');
                             }
                           }}
@@ -907,7 +1042,7 @@ export function SettingsPage() {
                               if (nextUser) {
                                 updateUser(nextUser);
                               }
-                            } catch (error) {
+                            } catch {
                               showToast('Erreur lors de la mise à jour', 'error');
                             }
                           }}
@@ -927,7 +1062,7 @@ export function SettingsPage() {
                               if (nextUser) {
                                 updateUser(nextUser);
                               }
-                            } catch (error) {
+                            } catch {
                               showToast('Erreur lors de la mise à jour', 'error');
                             }
                           }}
@@ -947,7 +1082,7 @@ export function SettingsPage() {
                               if (nextUser) {
                                 updateUser(nextUser);
                               }
-                            } catch (error) {
+                            } catch {
                               showToast('Erreur lors de la mise à jour', 'error');
                             }
                           }}
@@ -967,7 +1102,7 @@ export function SettingsPage() {
                               if (nextUser) {
                                 updateUser(nextUser);
                               }
-                            } catch (error) {
+                            } catch {
                               showToast('Erreur lors de la mise à jour', 'error');
                             }
                           }}
@@ -987,7 +1122,7 @@ export function SettingsPage() {
                               if (nextUser) {
                                 updateUser(nextUser);
                               }
-                            } catch (error) {
+                            } catch {
                               showToast('Erreur lors de la mise à jour', 'error');
                             }
                           }}

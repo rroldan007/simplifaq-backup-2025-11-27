@@ -53,8 +53,8 @@ export function CompanyPage() {
       postalCode: user.address?.postalCode || '',
       canton: user.address?.canton || '',
       country: user.address?.country || 'Suisse',
-      vatNumber: (user as any)?.vatNumber || '',
-      website: (user as any)?.website || '',
+      vatNumber: (user as unknown as { vatNumber?: string })?.vatNumber || '',
+      website: (user as unknown as { website?: string })?.website || '',
     });
   }, [user]);
 
@@ -84,7 +84,7 @@ export function CompanyPage() {
       const updated = await api.updateMyProfile(payload);
       updateUser(updated as User);
       showToast('Informations de l\'entreprise mises à jour avec succès', 'success');
-    } catch (error) {
+    } catch {
       showToast('Erreur lors de la mise à jour', 'error');
     } finally {
       setSaving(false);
@@ -142,7 +142,7 @@ export function CompanyPage() {
           {/* Logo Upload */}
           <div className="pb-6 border-b">
             <label className="block text-sm font-medium text-gray-700 mb-3">Logo de l'entreprise</label>
-            <LogoUpload currentLogoUrl={(user as any)?.logoUrl} />
+            <LogoUpload currentLogoUrl={(user as unknown as { logoUrl?: string })?.logoUrl} />
           </div>
 
           {/* Basic Information */}

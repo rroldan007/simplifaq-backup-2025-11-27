@@ -304,6 +304,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 // Hook to use admin auth context
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAdminAuth() {
   const context = React.useContext(AdminAuthContext);
   if (!context) {

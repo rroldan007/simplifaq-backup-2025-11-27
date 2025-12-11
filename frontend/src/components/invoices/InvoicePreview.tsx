@@ -1,6 +1,7 @@
 import React from 'react';
 import { getLogoUrl } from '../../utils/assets';
 import { useAuth } from '../../hooks/useAuth';
+import { calculateLineItemDiscount, calculateDiscountAmount, calculateProportionalGlobalDiscount } from '../../utils/discountCalculations';
 import { ElegantClassic } from './templates/ElegantClassic';
 import { MinimalModern } from './templates/MinimalModern';
 import { FormalPro } from './templates/FormalPro';
@@ -15,6 +16,11 @@ interface InvoiceItemMinimal {
   unitPrice?: number | string;
   tvaRate?: number | string;
   unit?: string;
+  lineDiscountValue?: number;
+  lineDiscountType?: 'PERCENT' | 'AMOUNT';
+  subtotalBeforeDiscount?: number;
+  discountAmount?: number;
+  subtotalAfterDiscount?: number;
 }
 
 interface InvoiceUserMinimal {
@@ -50,6 +56,12 @@ interface InvoicePreviewInvoice {
   items?: InvoiceItemMinimal[];
   user?: InvoiceUserMinimal;
   client?: InvoiceClientMinimal;
+  globalDiscountValue?: number;
+  globalDiscountType?: 'PERCENT' | 'AMOUNT';
+  globalDiscountNote?: string;
+  subtotal?: number;
+  tvaAmount?: number;
+  total?: number;
 }
 
 interface InvoicePreviewProps {
@@ -63,12 +75,14 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
 }) => {
   const { user: authUser } = useAuth();
   const invoiceUser = (invoice?.user || {}) as InvoiceUserMinimal;
+  type UserWithPdfSettings = { pdfTemplate?: string; pdfPrimaryColor?: string; logoUrl?: string } | null;
+  const userWithSettings = authUser as UserWithPdfSettings;
   const resolvedTemplate = template
     || invoiceUser.pdfTemplate
-    || (authUser as any)?.pdfTemplate
+    || userWithSettings?.pdfTemplate
     || 'elegant_classic';
   const accentColor = invoiceUser.pdfPrimaryColor
-    || (authUser as any)?.pdfPrimaryColor
+    || userWithSettings?.pdfPrimaryColor
     || '#4F46E5';
   if (!invoice) {
     return (
@@ -85,25 +99,67 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
   const resolvedQtyDecimals = (invoiceCompany?.quantityDecimals) === 3 ? 3 : 2;
   const quantityDecimals: 2 | 3 = resolvedQtyDecimals as 2 | 3;
 
-  // Calculate totals
-  const subtotal = items.reduce((sum: number, item: InvoiceItemMinimal) => {
+  // Calculate totals with discounts
+  // Use invoice totals if available (already calculated by backend)
+  const invoiceSubtotal = invoice.subtotal ? Number(invoice.subtotal) : null;
+  const invoiceTvaAmount = invoice.tvaAmount ? Number(invoice.tvaAmount) : null;
+  const invoiceTotal = invoice.total ? Number(invoice.total) : null;
+
+  // Calculate from items if invoice totals not available
+  let subtotalAfterLineDiscounts = 0;
+  items.forEach((item: InvoiceItemMinimal) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
-    return sum + (qty * price);
-  }, 0);
+    
+    const lineDiscountConfig = item.lineDiscountValue && item.lineDiscountValue > 0 && item.lineDiscountType
+      ? { value: item.lineDiscountValue, type: item.lineDiscountType }
+      : undefined;
+    
+    const { subtotalAfterDiscount } = calculateLineItemDiscount(qty, price, lineDiscountConfig);
+    subtotalAfterLineDiscounts += subtotalAfterDiscount;
+  });
 
-  const totalTVA = items.reduce((sum: number, item: InvoiceItemMinimal) => {
+  // Apply global discount
+  const globalDiscountConfig = invoice.globalDiscountValue && invoice.globalDiscountValue > 0 && invoice.globalDiscountType
+    ? { value: invoice.globalDiscountValue, type: invoice.globalDiscountType }
+    : undefined;
+  
+  const globalDiscountAmount = calculateDiscountAmount(subtotalAfterLineDiscounts, globalDiscountConfig);
+
+  const subtotalAfterAllDiscounts = subtotalAfterLineDiscounts - globalDiscountAmount;
+
+  // Calculate TVA on final subtotal (after all discounts)
+  let totalTVA = 0;
+  items.forEach((item: InvoiceItemMinimal) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
     const tvaRate = Number(item.tvaRate) || 0;
-    return sum + (qty * price * tvaRate / 100);
-  }, 0);
+    
+    const lineDiscountConfig = item.lineDiscountValue && item.lineDiscountValue > 0 && item.lineDiscountType
+      ? { value: item.lineDiscountValue, type: item.lineDiscountType }
+      : undefined;
+    
+    const { subtotalAfterDiscount: itemAfterLineDiscount } = calculateLineItemDiscount(qty, price, lineDiscountConfig);
+    
+    // Apply proportional global discount
+    const itemGlobalDiscount = calculateProportionalGlobalDiscount(
+      itemAfterLineDiscount,
+      subtotalAfterLineDiscounts,
+      globalDiscountAmount
+    );
+    const itemFinalSubtotal = itemAfterLineDiscount - itemGlobalDiscount;
+    
+    totalTVA += (itemFinalSubtotal * (tvaRate / 100));
+  });
 
-  const total = subtotal + totalTVA;
+  // Use invoice totals if available, otherwise use calculated ones
+  const subtotal = invoiceSubtotal !== null ? invoiceSubtotal : subtotalAfterLineDiscounts;
+  const tax = invoiceTvaAmount !== null ? invoiceTvaAmount : totalTVA;
+  const total = invoiceTotal !== null ? invoiceTotal : (subtotalAfterAllDiscounts + totalTVA);
 
   // Build preview data for advanced templates
   const previewData: InvoicePreviewData = {
-    logoUrl: getLogoUrl(invoiceCompany?.logoUrl || (authUser as any)?.logoUrl) || undefined,
+    logoUrl: getLogoUrl(invoiceCompany?.logoUrl || userWithSettings?.logoUrl) || undefined,
     companyName: invoiceCompany?.companyName || authUser?.companyName || 'Votre Entreprise',
     companyAddress: [
       invoiceCompany?.address?.street || authUser?.address?.street,
@@ -126,16 +182,32 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
     invoiceNumber: invoice.invoiceNumber || invoice.id || 'N/A',
     issueDate: invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString('fr-CH') : '—',
     dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('fr-CH') : '—',
-    items: items.map((item: InvoiceItemMinimal) => ({
-      description: item.description || '—',
-      quantity: Number(item.quantity) || 0,
-      unitPrice: Number(item.unitPrice) || 0,
-      total: (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
-      unit: item.unit,
-    })),
+    items: items.map((item: InvoiceItemMinimal) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      const itemSubtotal = qty * price;
+      
+      return {
+        description: item.description || '—',
+        quantity: qty,
+        unitPrice: price,
+        total: Number(item.subtotalAfterDiscount) || (qty * price),
+        unit: item.unit,
+        lineDiscountValue: item.lineDiscountValue,
+        lineDiscountType: item.lineDiscountType,
+        subtotalBeforeDiscount: Number(item.subtotalBeforeDiscount) || itemSubtotal,
+        discountAmount: Number(item.discountAmount) || 0,
+      };
+    }),
     currency: invoice.currency || 'CHF',
     subtotal,
-    tax: totalTVA,
+    discount: (invoice.globalDiscountValue && invoice.globalDiscountValue > 0) ? {
+      value: Number(invoice.globalDiscountValue),
+      type: invoice.globalDiscountType || 'PERCENT',
+      amount: globalDiscountAmount,
+      note: invoice.globalDiscountNote,
+    } : undefined,
+    tax,
     total,
     quantityDecimals,
   };

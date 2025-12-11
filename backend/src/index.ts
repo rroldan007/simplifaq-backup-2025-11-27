@@ -53,6 +53,10 @@ const ensureUploadsDirExists = async () => {
 
 ensureUploadsDirExists();
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+console.log('[INIT] Static file serving enabled for /uploads');
+
 // TEST ROUTES - BEFORE ANY MIDDLEWARE
 app.get('/test-get', (req, res) => {
   console.log('🎯 TEST GET route accessed');

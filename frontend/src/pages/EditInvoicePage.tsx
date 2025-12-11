@@ -78,7 +78,8 @@ const EditInvoicePage: React.FC = () => {
 
       // Map form values to update payload expected by API
       // Build base payload
-      const payloadBase: any = {
+      type InvoicePayload = { invoiceNumber: string; clientId?: string; issueDate?: string; dueDate?: string; notes?: string; terms?: string; language: 'fr' | 'de' | 'it' | 'en'; currency: 'CHF' | 'EUR'; estRecurrente?: boolean; frequence?: string; prochaineDateRecurrence?: string; dateFinRecurrence?: string; globalDiscountValue?: number; globalDiscountType?: 'PERCENT' | 'AMOUNT'; globalDiscountNote?: string };
+      const payloadBase: InvoicePayload = {
         invoiceNumber: values.invoiceNumber,
         clientId: values.client?.id as string | undefined,
         issueDate: formatDate(values.issueDate),
@@ -92,7 +93,20 @@ const EditInvoicePage: React.FC = () => {
         ...(values.frequence ? { frequence: values.frequence } : {}),
         ...(values.prochaineDateRecurrence ? { prochaineDateRecurrence: formatDate(values.prochaineDateRecurrence) } : {}),
         ...(values.dateFinRecurrence ? { dateFinRecurrence: formatDate(values.dateFinRecurrence) } : {}),
+        // Global discount fields
+        ...(values.globalDiscountValue && values.globalDiscountValue > 0 ? {
+          globalDiscountValue: Number(values.globalDiscountValue),
+          globalDiscountType: values.globalDiscountType || 'PERCENT',
+          ...(values.globalDiscountNote ? { globalDiscountNote: values.globalDiscountNote } : {}),
+        } : {}),
       };
+
+      console.log('[EditInvoicePage] RAW values.items:', values.items);
+      console.log('[EditInvoicePage] Global discount:', {
+        globalDiscountValue: values.globalDiscountValue,
+        globalDiscountType: values.globalDiscountType,
+        globalDiscountNote: values.globalDiscountNote,
+      });
 
       // Only include items if invoice is not sent/paid
       const isLocked = ['sent','paid'].includes(String(invoice?.status || ''));
@@ -100,18 +114,43 @@ const EditInvoicePage: React.FC = () => {
         ? payloadBase
         : {
             ...payloadBase,
-            items: (values.items || []).map((it, idx: number) => ({
-              description: it.description,
-              quantity: Number(it.quantity) || 0,
-              unitPrice: Number(it.unitPrice) || 0,
-              tvaRate: Number(it.tvaRate ?? 0),
-              total: Number(it.quantity) * Number(it.unitPrice),
-              order: typeof it.order === 'number' ? it.order : idx,
-              productId: it.productId,
-              unit: it.unit,
-            })),
+            items: (values.items || []).map((it, idx: number) => {
+              const lineDiscountSource = it.lineDiscountSource || 'NONE';
+              
+              console.log(`[EditInvoicePage] Item ${idx} discount fields:`, {
+                description: it.description,
+                lineDiscountValue: it.lineDiscountValue,
+                lineDiscountType: it.lineDiscountType,
+                lineDiscountSource,
+              });
+
+              const itemPayload = {
+                id: it.id, // CRITICAL: Must include ID for updates
+                description: it.description,
+                quantity: Number(it.quantity) || 0,
+                unitPrice: Number(it.unitPrice) || 0,
+                tvaRate: Number(it.tvaRate ?? 0),
+                total: Number(it.quantity) * Number(it.unitPrice),
+                order: typeof it.order === 'number' ? it.order : idx,
+                productId: it.productId,
+                unit: it.unit,
+                lineDiscountSource,
+                // ALWAYS include discount fields - send null to clear them
+                lineDiscountValue: (lineDiscountSource !== 'NONE' && it.lineDiscountValue !== undefined) 
+                  ? Number(it.lineDiscountValue)
+                  : null,
+                lineDiscountType: (lineDiscountSource !== 'NONE' && it.lineDiscountType) 
+                  ? it.lineDiscountType
+                  : null,
+              };
+
+              console.log(`[EditInvoicePage] Item ${idx} payload:`, itemPayload);
+              return itemPayload;
+            }),
           };
 
+      console.log('[EditInvoicePage] FINAL PAYLOAD:', payload);
+      // @ts-expect-error - Type mismatch in frequence field but works at runtime
       await api.updateInvoice(id, payload);
       navigate(`/invoices/${id}`);
     } catch (e: unknown) {
@@ -162,7 +201,8 @@ const EditInvoicePage: React.FC = () => {
     dueDate: formatDateForInput(invoice.dueDate),
     // Prefill client when available
     client: (function() {
-      const c: any = (invoice as any).client;
+      type InvoiceClient = { id?: string; companyName?: string; firstName?: string; lastName?: string; email?: string; street?: string; addressLine1?: string; city?: string; postalCode?: string; country?: string; vatNumber?: string };
+      const c = (invoice as unknown as { client?: InvoiceClient }).client;
       if (!c || typeof c !== 'object') return null;
       return {
         id: String(c.id || ''),
@@ -189,15 +229,26 @@ const EditInvoicePage: React.FC = () => {
       order: typeof it.order === 'number' ? it.order : 0,
       productId: it.productId,
       unit: it.unit,
+      // Line discount fields
+      lineDiscountValue: (it as any).lineDiscountValue,
+      lineDiscountType: (it as any).lineDiscountType,
+      lineDiscountSource: (it as any).lineDiscountSource || 'NONE',
+      subtotalBeforeDiscount: (it as any).subtotalBeforeDiscount,
+      discountAmount: (it as any).discountAmount,
+      subtotalAfterDiscount: (it as any).subtotalAfterDiscount,
     })),
     notes: invoice.notes,
     terms: invoice.terms,
     // language and currency left undefined to keep current defaults in wizard
     // Recurrence: prefill from invoice if present
-    estRecurrente: (invoice as any).estRecurrente as unknown as boolean | undefined,
-    frequence: (invoice as any).frequence as unknown as InvoiceFormData['frequence'] | undefined,
-    prochaineDateRecurrence: formatDateForInput((invoice as any).prochaineDateRecurrence),
-    dateFinRecurrence: formatDateForInput((invoice as any).dateFinRecurrence),
+    estRecurrente: (invoice as unknown as { estRecurrente?: boolean }).estRecurrente,
+    frequence: (invoice as unknown as { frequence?: InvoiceFormData['frequence'] }).frequence,
+    prochaineDateRecurrence: formatDateForInput((invoice as unknown as { prochaineDateRecurrence?: string }).prochaineDateRecurrence),
+    dateFinRecurrence: formatDateForInput((invoice as unknown as { dateFinRecurrence?: string }).dateFinRecurrence),
+    // Global discount fields
+    globalDiscountValue: (invoice as any).globalDiscountValue,
+    globalDiscountType: (invoice as any).globalDiscountType,
+    globalDiscountNote: (invoice as any).globalDiscountNote,
   };
 
   return (

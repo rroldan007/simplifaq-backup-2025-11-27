@@ -2,10 +2,9 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../services/database';
 import { ApiResponse, AppError } from '../types';
-import { generateInvoicePDF as renderInvoicePDF } from '../utils/invoicePDFPdfkit';
-import { getInvoicePDFService } from '../services/invoicePDFService';
+import { UnifiedPDFGenerator, DocumentData } from '../services/UnifiedPDFGenerator';
 import { featureFlags } from '../features/featureFlags';
-import { SwissQRBillData, QRReferenceType, generateQRReference, formatIBAN, isValidSwissIBAN, isQRIBAN, isValidQRReference } from '../utils/swissQRBill';
+import { SwissQRBillData, QRReferenceType, generateQRReference, formatIBAN, isValidSwissIBAN, isQRIBAN, isValidQRReference, validateQRBillData } from '../utils/swissQRBill';
 import archiver from 'archiver';
 import { PassThrough, Writable } from 'stream';
 
@@ -164,8 +163,91 @@ const generatePDFForInvoice = async (
   invoice: any,
   stream: Writable,
 ) => {
-  const qrData: SwissQRBillData | undefined = undefined as any;
-  await renderInvoicePDF({ invoice, client: invoice.client, qrData, accentColor: (invoice.user as any)?.pdfPrimaryColor, template: (invoice.user as any)?.pdfTemplate, lang: invoice.language || 'fr' }, stream);
+  const qrBillData = await createQRBillFromInvoice(invoice);
+  
+  // Validate QR Data explicitly to detect issues
+  const qrValidation = validateQRBillData(qrBillData);
+  if (!qrValidation.isValid) {
+    console.error('[QRBILL_VALIDATION_FAILURE] QR Bill data is invalid. QR Bill may not be generated.', {
+      errors: qrValidation.errors,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber
+    });
+  } else {
+    console.log('[QRBILL_VALIDATION_SUCCESS] QR Bill data is valid.');
+  }
+  
+  const selectedTemplate = (invoice.user as any)?.pdfTemplate || 'swiss_minimal';
+  const selectedColor = (invoice.user as any)?.pdfPrimaryColor || '#000000';
+
+  const docData: DocumentData = {
+    type: 'INVOICE',
+    documentNumber: invoice.invoiceNumber,
+    date: invoice.issueDate,
+    dueDate: invoice.dueDate,
+    currency: invoice.currency,
+    subtotal: Number(invoice.subtotal),
+    tvaAmount: Number(invoice.tvaAmount),
+    total: Number(invoice.total),
+    language: invoice.language || 'fr',
+    items: invoice.items.map((item: any) => ({
+      description: item.description,
+      details: item.product?.description || undefined, // Additional product details
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      tvaRate: Number(item.tvaRate),
+      total: Number(item.total),
+      unit: typeof item.unit === 'string' ? item.unit : (item.product?.unit || undefined),
+      lineDiscountValue: (item as any).lineDiscountValue,
+      lineDiscountType: (item as any).lineDiscountType
+    })),
+    globalDiscount: (invoice.globalDiscountValue && invoice.globalDiscountValue > 0) ? {
+      value: Number(invoice.globalDiscountValue),
+      type: invoice.globalDiscountType as 'PERCENT' | 'AMOUNT',
+      note: invoice.globalDiscountNote || undefined
+    } : undefined,
+    sender: {
+      companyName: invoice.user.companyName || undefined,
+      firstName: invoice.user.firstName || undefined,
+      lastName: invoice.user.lastName || undefined,
+      street: invoice.user.street || undefined,
+      city: invoice.user.city || undefined,
+      postalCode: invoice.user.postalCode || undefined,
+      country: invoice.user.country || undefined,
+      phone: invoice.user.phone || undefined,
+      email: invoice.user.email || undefined,
+      website: invoice.user.website || undefined,
+      vatNumber: invoice.user.vatNumber || undefined,
+      iban: invoice.user.iban || undefined,
+      logoUrl: (invoice.user as any).logoUrl || undefined
+    },
+    recipient: {
+      companyName: invoice.client.companyName || undefined,
+      firstName: invoice.client.firstName || undefined,
+      lastName: invoice.client.lastName || undefined,
+      street: invoice.client.street || undefined,
+      city: invoice.client.city || undefined,
+      postalCode: invoice.client.postalCode || undefined,
+      country: invoice.client.country || undefined
+    },
+    settings: {
+      template: selectedTemplate,
+      accentColor: selectedColor,
+      showDecimals: (invoice.user as any).quantityDecimals === 3 ? 3 : 2,
+      // Advanced Customization
+      logoPosition: (invoice.user as any).pdfLogoPosition,
+      logoSize: (invoice.user as any).pdfLogoSize,
+      fontColorHeader: (invoice.user as any).pdfFontColorHeader,
+      fontColorBody: (invoice.user as any).pdfFontColorBody,
+      tableHeadColor: (invoice.user as any).pdfTableHeadColor,
+      totalBgColor: (invoice.user as any).pdfTotalBgColor,
+      totalTextColor: (invoice.user as any).pdfTotalTextColor,
+    },
+    qrData: qrBillData
+  };
+
+  const generator = new UnifiedPDFGenerator(docData, stream);
+  await generator.generate();
 };
 
 // GET /api/invoices - Get all invoices for authenticated user
@@ -909,7 +991,24 @@ export const updateInvoice = async (req: Request, res: Response): Promise<void> 
             throw new AppError('Données de ligne de facture invalides', 400, 'INVALID_INVOICE_ITEM');
           }
 
-          const lineTotal = quantity * unitPrice;
+          // Process line discount
+          const lineDiscountValue = item.lineDiscountValue ? sanitizeNumber(item.lineDiscountValue) : undefined;
+          const lineDiscountType: 'PERCENT' | 'AMOUNT' | undefined = item.lineDiscountType;
+          const lineDiscountSource: 'FROM_PRODUCT' | 'MANUAL' | 'NONE' = item.lineDiscountSource || 'NONE';
+          
+          const subtotalBeforeDiscount = quantity * unitPrice;
+          let discountAmount = 0;
+          
+          if (lineDiscountValue && lineDiscountValue > 0 && lineDiscountType) {
+            if (lineDiscountType === 'PERCENT') {
+              discountAmount = subtotalBeforeDiscount * (lineDiscountValue / 100);
+            } else {
+              discountAmount = Math.min(lineDiscountValue, subtotalBeforeDiscount);
+            }
+          }
+          
+          const subtotalAfterDiscount = subtotalBeforeDiscount - discountAmount;
+          const lineTotal = subtotalAfterDiscount;
           const itemTva = lineTotal * (tvaRate / 100);
           subtotal += lineTotal;
           tvaAmount += itemTva;
@@ -920,9 +1019,17 @@ export const updateInvoice = async (req: Request, res: Response): Promise<void> 
             description: String(item.description || ''),
             quantity,
             unitPrice,
+            unit: item.unit || undefined,
             tvaRate,
             total: lineTotal,
             order: Number.isFinite(item.order) ? Number(item.order) : index + 1,
+            // Line discount fields
+            lineDiscountValue: lineDiscountValue || null,
+            lineDiscountType: lineDiscountType || null,
+            lineDiscountSource,
+            subtotalBeforeDiscount,
+            discountAmount,
+            subtotalAfterDiscount,
           };
         });
 
@@ -948,9 +1055,17 @@ export const updateInvoice = async (req: Request, res: Response): Promise<void> 
                 description: item.description,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
+                unit: item.unit,
                 tvaRate: item.tvaRate,
                 total: item.total,
                 order: item.order,
+                // Line discount fields
+                lineDiscountValue: item.lineDiscountValue,
+                lineDiscountType: item.lineDiscountType,
+                lineDiscountSource: item.lineDiscountSource,
+                subtotalBeforeDiscount: item.subtotalBeforeDiscount,
+                discountAmount: item.discountAmount,
+                subtotalAfterDiscount: item.subtotalAfterDiscount,
               },
             });
           } else {
@@ -961,9 +1076,17 @@ export const updateInvoice = async (req: Request, res: Response): Promise<void> 
                 description: item.description,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
+                unit: item.unit,
                 tvaRate: item.tvaRate,
                 total: item.total,
                 order: item.order,
+                // Line discount fields
+                lineDiscountValue: item.lineDiscountValue,
+                lineDiscountType: item.lineDiscountType,
+                lineDiscountSource: item.lineDiscountSource,
+                subtotalBeforeDiscount: item.subtotalBeforeDiscount,
+                discountAmount: item.discountAmount,
+                subtotalAfterDiscount: item.subtotalAfterDiscount,
               },
             });
           }
@@ -989,6 +1112,23 @@ export const updateInvoice = async (req: Request, res: Response): Promise<void> 
         }
       }
 
+      // Process global discount if provided
+      const globalDiscountValue = bodyAny.globalDiscountValue ? sanitizeNumber(bodyAny.globalDiscountValue) : undefined;
+      const globalDiscountType = bodyAny.globalDiscountType as 'PERCENT' | 'AMOUNT' | undefined;
+      const globalDiscountNote = bodyAny.globalDiscountNote as string | undefined;
+
+      // Apply global discount to totals if provided and items were updated
+      if (itemsProvided && globalDiscountValue && globalDiscountValue > 0 && globalDiscountType) {
+        let globalDiscountAmount = 0;
+        if (globalDiscountType === 'PERCENT') {
+          globalDiscountAmount = subtotal * (globalDiscountValue / 100);
+        } else {
+          globalDiscountAmount = Math.min(globalDiscountValue, subtotal);
+        }
+        subtotal = subtotal - globalDiscountAmount;
+        total = subtotal + tvaAmount;
+      }
+
       // Finally update invoice header and totals (and optional invoiceNumber)
       const inv = await tx.invoice.update({
         where: { id },
@@ -1000,6 +1140,12 @@ export const updateInvoice = async (req: Request, res: Response): Promise<void> 
           invoiceNumber: normalizedInvoiceNumber || undefined,
           // Only override totals when items were provided; otherwise preserve existing
           ...(itemsProvided ? { subtotal, tvaAmount, total } : {}),
+          // Global discount fields
+          ...(typeof globalDiscountValue !== 'undefined' ? {
+            globalDiscountValue: globalDiscountValue || null,
+            globalDiscountType: globalDiscountType || null,
+            globalDiscountNote: globalDiscountNote || null,
+          } : {}),
           // Recurrence update
           ...rec,
           updatedAt: new Date(),
@@ -1159,295 +1305,122 @@ export const sendInvoice = async (req: Request, res: Response): Promise<void> =>
 
 // GET /api/invoices/:id/pdf - Generate PDF for invoice
 export const generateInvoicePDF = async (req: Request, res: Response): Promise<void> => {
-  // --- DEBUGGING: Log request entry ---
-  console.log(`[PDF_DEBUG] ENTERING generateInvoicePDF. req.params available: ${!!req.params}. ID: ${req.params?.id}`);
   try {
     const userId = (req as any).userId;
-    if (!userId) {
-      throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
-    }
+    if (!userId) throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
 
     const { id } = req.params;
-    const { language = 'fr', format = 'A4', template, accentColor, showHeader } = req.query as any;
-    // Normalize template aliases (e.g., common typo minimal_moderm -> minimal_modern)
-    const templateRaw = typeof template === 'string' ? template.trim() : '';
-    const templateAliasMap: Record<string, string> = {
-      minimal_moderm: 'minimal_modern',
-    };
-    const normalizedTemplate = templateAliasMap[templateRaw] || templateRaw;
+    const { template, accentColor } = req.query;
 
-    // Get invoice with all related data
     const invoice = await prisma.invoice.findFirst({
       where: { id, userId },
       include: {
-        client: {
-          select: {
-            id: true,
-            companyName: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            street: true,
-            city: true,
-            postalCode: true,
-            country: true,
-            vatNumber: true,
-            notes: true,
-            createdAt: true,
-            updatedAt: true,
-            userId: true,
-          }
-        },
-        items: {
-          include: {
-            product: true,
-          },
-          orderBy: { order: 'asc' },
-        },
-        user: {
-          select: {
-            id: true,
-            email: true,
-            companyName: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            street: true,
-            city: true,
-            postalCode: true,
-            country: true,
-            vatNumber: true,
-            iban: true,
-            logoUrl: true,
-            website: true,
-            createdAt: true,
-            updatedAt: true,
-            quantityDecimals: true,
-            pdfPrimaryColor: true,
-            pdfTemplate: true,
-            pdfShowCompanyNameWithLogo: true,
-            pdfShowVAT: true,
-            pdfShowPhone: true,
-            pdfShowEmail: true,
-            pdfShowWebsite: true,
-            pdfShowIBAN: true,
-          }
-        },
+        client: true,
+        items: { include: { product: true }, orderBy: { order: 'asc' } },
+        user: true,
+        payments: true
       },
     });
 
-    if (!invoice) {
-      throw new AppError('Facture non trouvée', 404, 'INVOICE_NOT_FOUND');
-    }
+    if (!invoice) throw new AppError('Facture non trouvée', 404, 'INVOICE_NOT_FOUND');
 
-    // Type assertion to include the relations with all client fields
-    interface InvoiceWithRelations extends Prisma.InvoiceGetPayload<{
-      include: {
-        client: true;
-        items: { include: { product: true } };
-        user: true;
-      };
-    }> {}
+    // Debug: Log global discount values from DB
+    console.log('[generateInvoicePDF] Global discount from DB:', {
+      globalDiscountValue: invoice.globalDiscountValue,
+      globalDiscountType: invoice.globalDiscountType,
+      globalDiscountNote: invoice.globalDiscountNote,
+      hasValue: invoice.globalDiscountValue && invoice.globalDiscountValue > 0
+    });
 
-    const invoiceWithRelations = invoice as unknown as InvoiceWithRelations;
+    // Calculate QR Data
+    const qrBillData = await createQRBillFromInvoice(invoice);
 
-    // Debug log the raw invoice data with client
-    // Log detailed client and user data
-    console.log('📄 [PDF_DEBUG] Raw invoice data with client:', JSON.stringify({
-      invoiceId: invoiceWithRelations.id,
-      hasClient: !!invoiceWithRelations.client,
-      clientData: invoiceWithRelations.client ? {
-        id: invoiceWithRelations.client.id,
-        companyName: invoiceWithRelations.client.companyName,
-        firstName: invoiceWithRelations.client.firstName,
-        lastName: invoiceWithRelations.client.lastName,
-        street: invoiceWithRelations.client.street,
-        addressLine2: invoiceWithRelations.client.addressLine2,
-        city: invoiceWithRelations.client.city,
-        postalCode: invoiceWithRelations.client.postalCode,
-        country: invoiceWithRelations.client.country,
-        email: invoiceWithRelations.client.email,
-        phone: invoiceWithRelations.client.phone,
-        vatNumber: invoiceWithRelations.client.vatNumber
-      } : null,
-      userData: invoiceWithRelations.user ? {
-        id: invoiceWithRelations.user.id,
-        email: invoiceWithRelations.user.email,
-        companyName: invoiceWithRelations.user.companyName,
-        street: invoiceWithRelations.user.street,
-        city: invoiceWithRelations.user.city,
-        postalCode: invoiceWithRelations.user.postalCode,
-        country: invoiceWithRelations.user.country,
-      } : null
-    }, null, 2));
+    // Prepare Doc Data
+    const selectedTemplate = (typeof template === 'string' && template) ? template : ((invoice.user as any)?.pdfTemplate || 'swiss_minimal');
+    const selectedColor = (typeof accentColor === 'string' && accentColor) ? accentColor : ((invoice.user as any)?.pdfPrimaryColor || '#000000');
 
-    // Convert invoice data to PDF format
-    const invoiceData = await convertInvoiceToPDFData(invoiceWithRelations);
-    
-    // Debug log the converted invoice data
-    console.log('Converted invoice data:', JSON.stringify({
-      client: invoiceData.client,
-      company: invoiceData.company,
-      hasClient: !!invoiceData.client,
-      hasCompany: !!invoiceData.company
-    }, null, 2));
-    
-    // Generate QR Bill data
-    const qrBillData = await createQRBillFromInvoice(invoiceWithRelations);
-    
-    // Debug log the QR bill data
-    console.log('QR Bill data before return:', JSON.stringify({
-      hasDebtor: !!qrBillData.debtor,
-      debtor: qrBillData.debtor,
-      hasCreditor: !!qrBillData.creditor,
-      creditor: qrBillData.creditor,
-      reference: qrBillData.reference,
-      referenceType: qrBillData.referenceType,
-      amount: qrBillData.amount,
-      currency: qrBillData.currency,
-      unstructuredMessage: qrBillData.unstructuredMessage
-    }, null, 2));
-    
-    // Normalize logo path: prefer filesystem absolute path for uploads to avoid HTTP fetch
-    try {
-      const rawLogo = (invoiceData as any)?.company?.logoUrl as string | undefined;
-      if (rawLogo && typeof rawLogo === 'string') {
-        const pathMod = require('path');
-        const urlMod = require('url');
-        let normalized: string | undefined = undefined;
-
-        if (rawLogo.startsWith('/uploads/')) {
-          normalized = pathMod.join(process.cwd(), rawLogo.replace(/^\//, ''));
-        } else if (rawLogo.startsWith('uploads/')) {
-          normalized = pathMod.join(process.cwd(), rawLogo);
-        } else if (/^https?:\/\//i.test(rawLogo)) {
-          try {
-            const u = new urlMod.URL(rawLogo);
-            // If URL path points to our uploads directory, use local file path
-            if (u.pathname && /^\/uploads\//.test(u.pathname)) {
-              normalized = pathMod.join(process.cwd(), u.pathname.replace(/^\//, ''));
-            }
-          } catch {}
-        } else if (rawLogo.startsWith('/')) {
-          // Absolute filesystem path already
-          normalized = rawLogo;
-        }
-
-        if (normalized) {
-          (invoiceData as any).company.logoUrl = normalized;
-        }
-      }
-    } catch (e) {
-      console.warn('[INVOICE_PDF] Failed to normalize logo path', { error: (e as any)?.message || String(e) });
-    }
-    try {
-      console.info('[INVOICE_PDF] Company logo path', { logo: (invoiceData as any)?.company?.logoUrl || null });
-    } catch {}
-    
-    // Generate PDF with QR Bill using new InvoicePDF component
-    // Validate template (include both Puppeteer and PDFKit templates)
-    const allowedTemplates = new Set([
-      'elegant_classic',
-      'minimal_modern',
-      'formal_pro',
-      'creative_premium',
-      'clean_creative',
-      'bold_statement',
-      // PDFKit templates
-      'european_minimal',
-      'swiss_classic',
-      'swiss_blue',
-    ]);
-    const tpl = typeof normalizedTemplate === 'string' && allowedTemplates.has(normalizedTemplate) ? (normalizedTemplate as any) : undefined;
-    // Normalize and validate accent color more robustly
-    const normalizeHexColor = (val: unknown): string | undefined => {
-      if (typeof val !== 'string') return undefined;
-      let s = val.trim();
-      if (s.length === 0) return undefined;
-      // Allow values without '#'
-      if (!s.startsWith('#')) s = `#${s}`;
-      // Uppercase for consistency
-      s = `#${s.slice(1).toUpperCase()}`;
-      // Handle 8-digit RGBA like #RRGGBBAA -> strip alpha
-      if (/^#[0-9A-F]{8}$/.test(s)) s = `#${s.slice(1, 7)}`;
-      // Handle 4-digit short RGBA #RGBA -> strip alpha -> #RGB
-      if (/^#[0-9A-F]{4}$/.test(s)) s = `#${s[1]}${s[2]}${s[3]}`;
-      // Expand short #RGB to #RRGGBB
-      if (/^#[0-9A-F]{3}$/.test(s)) s = `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`;
-      // Final validation #RRGGBB
-      return /^#[0-9A-F]{6}$/.test(s) ? s : undefined;
-    };
-    const accColor = normalizeHexColor(accentColor);
-    // Parse boolean for showHeader (default true). Accept false-y strings.
-    const showHeaderBool = (() => {
-      if (typeof showHeader === 'undefined') return true;
-      const s = String(showHeader).trim().toLowerCase();
-      return !(['false', '0', 'no', 'off'].includes(s));
-    })();
-    console.log('[INVOICE_PDF] Query params received', { rawTemplate: template, normalizedTemplate, rawAccentColor: accentColor, language, format, showHeader });
-    console.log('[INVOICE_PDF] Using options', { template: tpl || '(default)', accentColor: accColor || '(default)', showHeader: showHeaderBool });
-    // CRITICAL DEBUG: Confirm we're about to call the updated PDF generator
-    console.log('🔥 [CONTROLLER_DEBUG] About to call renderInvoicePDF with template:', tpl, 'and accentColor:', accColor);
-
-    // Prepare data for the new PDF generator (streaming)
-    const pdfData: any = {
-      invoice: {
-        ...invoiceWithRelations,
-        items: invoiceWithRelations.items,
-        client: invoiceWithRelations.client,
-        user: invoiceWithRelations.user,
+    const docData: DocumentData = {
+      type: 'INVOICE',
+      documentNumber: invoice.invoiceNumber,
+      date: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      currency: invoice.currency,
+      subtotal: Number(invoice.subtotal),
+      tvaAmount: Number(invoice.tvaAmount),
+      total: Number(invoice.total),
+      language: invoice.language || 'fr',
+      items: invoice.items.map(item => ({
+        description: item.description,
+        details: (item as any).product?.description || undefined,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        tvaRate: Number(item.tvaRate),
+        total: Number(item.total),
+        unit: (item as any).unit,
+        lineDiscountValue: (item as any).lineDiscountValue,
+        lineDiscountType: (item as any).lineDiscountType
+      })),
+      globalDiscount: (invoice.globalDiscountValue && invoice.globalDiscountValue > 0) ? {
+        value: Number(invoice.globalDiscountValue),
+        type: invoice.globalDiscountType as 'PERCENT' | 'AMOUNT',
+        note: invoice.globalDiscountNote || undefined
+      } : undefined,
+      sender: {
+        companyName: invoice.user.companyName || undefined,
+        firstName: invoice.user.firstName || undefined,
+        lastName: invoice.user.lastName || undefined,
+        street: invoice.user.street || undefined,
+        city: invoice.user.city || undefined,
+        postalCode: invoice.user.postalCode || undefined,
+        country: invoice.user.country || undefined,
+        phone: invoice.user.phone || undefined,
+        email: invoice.user.email || undefined,
+        website: invoice.user.website || undefined,
+        vatNumber: invoice.user.vatNumber || undefined,
+        iban: invoice.user.iban || undefined,
+        logoUrl: (invoice.user as any).logoUrl || undefined
       },
-      client: invoiceWithRelations.client,
-      qrData: qrBillData,
-      template: tpl,
-      accentColor: accColor,
-      lang: (language as any) || 'fr',
-      showHeader: showHeaderBool,
+      recipient: {
+        companyName: invoice.client.companyName || undefined,
+        firstName: invoice.client.firstName || undefined,
+        lastName: invoice.client.lastName || undefined,
+        street: invoice.client.street || undefined,
+        city: invoice.client.city || undefined,
+        postalCode: invoice.client.postalCode || undefined,
+        country: invoice.client.country || undefined
+      },
+      settings: {
+        template: selectedTemplate,
+        accentColor: selectedColor,
+        showDecimals: (invoice.user as any).quantityDecimals === 3 ? 3 : 2,
+        // Advanced Customization
+        logoPosition: (invoice.user as any).pdfLogoPosition,
+        logoSize: (invoice.user as any).pdfLogoSize,
+        fontColorHeader: (invoice.user as any).pdfFontColorHeader,
+        fontColorBody: (invoice.user as any).pdfFontColorBody,
+        tableHeadColor: (invoice.user as any).pdfTableHeadColor,
+        totalBgColor: (invoice.user as any).pdfTotalBgColor,
+        totalTextColor: (invoice.user as any).pdfTotalTextColor,
+      },
+      qrData: qrBillData
     };
 
-    // Set basic headers for PDF stream
+    // Debug: Log docData globalDiscount
+    console.log('[generateInvoicePDF] docData.globalDiscount:', docData.globalDiscount);
+
     res.setHeader('Content-Type', 'application/pdf');
-    // Force download to ensure proper browser behavior
-    res.setHeader('Content-Disposition', `attachment; filename="facture-${invoice.invoiceNumber}.pdf"`);
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Disposition', `attachment; filename="Facture_${invoice.invoiceNumber}.pdf"`);
 
-    // ALWAYS use PDFKit system (Puppeteer deprecated)
-    console.log('[PDF] Using PDFKit system with template:', tpl || '(default)');
-    await renderInvoicePDF(pdfData, res as any);
+    const generator = new UnifiedPDFGenerator(docData, res);
+    await generator.generate();
+
   } catch (error) {
-    // Enhanced logging to diagnose PDF/QR Bill generation errors
-    const errObj = error as any;
-    console.error('[INVOICE_PDF] Error generating invoice PDF', {
-      invoiceId: req.params?.id,
-      userId: (req as any)?.userId,
-      message: errObj?.message || String(error),
-      stack: errObj?.stack,
-      cause: errObj?.cause?.message || errObj?.cause,
-    });
-    // If streaming has already started, we cannot change headers or send JSON
-    if (res.headersSent) {
-      try { res.end(); } catch {}
-      return;
-    }
-
-    if (error instanceof AppError) {
-      const response: ApiResponse = {
-        success: false,
-        error: { code: error.code, message: error.message },
-        timestamp: new Date().toISOString(),
-      };
-      res.status(error.statusCode).json(response);
-      return;
-    }
-
-    const devDetails = (process.env.NODE_ENV !== 'production') ? { message: errObj?.message, stack: errObj?.stack } : undefined;
-    const response: ApiResponse = {
+    console.error('Error generating invoice PDF:', error);
+    res.status(error instanceof AppError ? error.statusCode : 500).json({
       success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Erreur lors de la génération du PDF', ...(devDetails || {}) } as any,
+      error: { code: error instanceof AppError ? error.code : 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Erreur génération PDF' },
       timestamp: new Date().toISOString(),
-    };
-    res.status(500).json(response);
+    });
   }
 };
 
@@ -1652,6 +1625,7 @@ async function convertInvoiceToPDFData(invoice: any): Promise<any> {
     
     items: invoice.items.map((item: any) => ({
       description: item.description,
+      details: item.product?.description || undefined,
       quantity: Number(item.quantity),
       unitPrice: Number(item.unitPrice),
       tvaRate: Number(item.tvaRate),
@@ -1954,29 +1928,22 @@ async function createQRBillFromInvoice(invoice: any): Promise<SwissQRBillData> {
       regularClient: invoice.client ? 'present' : 'missing'
     }, null, 2));
 
-    // Handle different client data structures
+    // Handle different client data structures with robust fallbacks
     const clientName = client.name || client.companyName || 
                       `${client.firstName || ''} ${client.lastName || ''}`.trim() ||
-                      'Client Name Not Provided';
+                      'Client Inconnu';
     
-    // Use addressLine1 if street is not available
-    const street = client.street || client.addressLine1 || 'Street Not Provided';
-    const postalCode = client.postalCode || 'N/A';
-    const city = client.city || 'City Not Provided';
+    // Use addressLine1 if street is not available, with fallback
+    const street = client.street || client.addressLine1 || 'Adresse inconnue';
+    const postalCode = client.postalCode || '0000';
+    const city = client.city || 'Ville inconnue';
     const country = normalizeCountry(client.country) || 'CH';
     const addressLine2 = client.addressLine2 || '';
 
-    // Validate required fields
-    if (!clientName || !street || !postalCode || !city) {
-      console.error('Missing required client data:', {
-        hasName: !!clientName,
-        hasStreet: !!street,
-        hasPostalCode: !!postalCode,
-        hasCity: !!city,
-        hasCountry: !!country,
-        client: client
-      });
-    }
+    // Log warnings but DO NOT fail validation if possible
+    if (!client.street && !client.addressLine1) console.warn('[QRBILL_WARN] Missing street for client, using fallback');
+    if (!client.postalCode) console.warn('[QRBILL_WARN] Missing postalCode for client, using fallback');
+    if (!client.city) console.warn('[QRBILL_WARN] Missing city for client, using fallback');
 
     // Set debtor information
     qrBillData.debtor = {

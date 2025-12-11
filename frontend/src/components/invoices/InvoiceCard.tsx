@@ -210,10 +210,10 @@ export function InvoiceCard({
           <div className="text-sm text-[var(--color-text-secondary)] leading-5">Montant TTC</div>
           <div className="text-right">
             <div className="text-lg sm:text-xl font-bold text-[var(--color-primary-700)] leading-6">
-              {formatCurrency((invoice as any).total ?? invoice.amount, invoice.currency)}
+              {formatCurrency((invoice as unknown as { total?: number }).total ?? invoice.amount, invoice.currency)}
             </div>
-            {(invoice as any)?.tvaAmount ? (
-              <div className="text-[11px] text-[var(--color-text-tertiary)]">dont TVA {formatCurrency(Number((invoice as any).tvaAmount), invoice.currency)}</div>
+            {(invoice as unknown as { tvaAmount?: number })?.tvaAmount ? (
+              <div className="text-[11px] text-[var(--color-text-tertiary)]">dont TVA {formatCurrency(Number((invoice as unknown as { tvaAmount?: number }).tvaAmount), invoice.currency)}</div>
             ) : null}
           </div>
         </div>

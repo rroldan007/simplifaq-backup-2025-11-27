@@ -55,9 +55,10 @@ export const SendInvoiceEmailModal: React.FC<SendInvoiceEmailModalProps> = ({
       setEmail(previewData.recipientEmail || clientEmail || '');
       setSubject(previewData.subject || '');
       setBody(previewData.body || '');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error loading email preview:', err);
-      setError(err?.message || 'Erreur lors du chargement de l\'aperçu');
+      const errorMsg = err instanceof Error ? err.message : 'Erreur lors du chargement de l\'aperçu';
+      setError(errorMsg);
     } finally {
       setLoadingPreview(false);
     }
@@ -84,9 +85,9 @@ export const SendInvoiceEmailModal: React.FC<SendInvoiceEmailModalProps> = ({
         onSuccess();
         handleClose();
       }, 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error sending invoice email:', err);
-      let errorMessage = err?.message || 'Erreur lors de l\'envoi de l\'email';
+      let errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'envoi de l\'email';
       
       // Enhanced error messages for common issues
       if (errorMessage.includes('400') || errorMessage.includes('EMAIL_SEND_FAILED')) {

@@ -43,7 +43,8 @@ export const AdvancedSettingsPage: React.FC = () => {
     loadSettings();
   }, []);
 
-  const SettingCard = ({ icon: Icon, title, description, linkTo, status }: any) => (
+  type SettingCardProps = { icon: React.ComponentType<{ className?: string }>; title: string; description: string; linkTo: string; status?: { isConfigured?: boolean; message?: string } };
+  const SettingCard = ({ icon: Icon, title, description, linkTo, status }: SettingCardProps) => (
     <Link
       to={linkTo}
       className="block bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow p-6"

@@ -3,7 +3,8 @@ import { api } from './api';
 export type OnboardingStep = 
   | 'company_info' 
   | 'logo' 
-  | 'financial' 
+  | 'financial'
+  | 'smtp'
   | 'client' 
   | 'product' 
   | 'invoice'
@@ -15,6 +16,7 @@ export interface OnboardingStatus {
   companyInfoCompleted: boolean;
   logoUploaded: boolean;
   financialInfoCompleted: boolean;
+  smtpConfigured: boolean;
   firstClientCreated: boolean;
   firstProductCreated: boolean;
   firstInvoiceCreated: boolean;
@@ -24,6 +26,8 @@ export interface OnboardingStatus {
   skippedSteps: string[];
   progress: number;
   nextStep: OnboardingStep | null;
+  welcomeMessageShown: boolean;
+  welcomeMessageShownAt: string | null;
 }
 
 export const onboardingApi = {
@@ -56,6 +60,14 @@ export const onboardingApi = {
    */
   reset: async (): Promise<OnboardingStatus> => {
     const response = await api.post<OnboardingStatus>('/onboarding/reset');
+    return response.data.data as OnboardingStatus;
+  },
+
+  /**
+   * Mark welcome message as shown
+   */
+  markWelcomeShown: async (): Promise<OnboardingStatus> => {
+    const response = await api.post<OnboardingStatus>('/onboarding/welcome-shown');
     return response.data.data as OnboardingStatus;
   }
 };

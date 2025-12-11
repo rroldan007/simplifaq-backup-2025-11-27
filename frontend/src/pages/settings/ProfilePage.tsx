@@ -10,7 +10,7 @@ import { useCurrentUser, useAuth } from '../../hooks/useAuth';
 import type { User } from '../../contexts/authTypes';
 import { api } from '../../services/api';
 import { sanitizeTextInput } from '../../utils/security';
-import { ArrowLeft, User as UserIcon, Lock, Save } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Lock, Save, AlertTriangle, Trash2 } from 'lucide-react';
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -19,6 +19,9 @@ export function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [changingPwd, setChangingPwd] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
   
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ msg, type });
@@ -36,15 +39,42 @@ export function ProfilePage() {
   // Password form state
   const [pwd, setPwd] = useState({ old: '', neu: '', conf: '' });
 
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      showToast('Veuillez entrer votre mot de passe', 'error');
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await api.post('/auth/delete-account', { password: deletePassword });
+      showToast('Compte supprimé avec succès. Vous allez être déconnecté...', 'success');
+      
+      // Wait 2 seconds then logout and redirect
+      setTimeout(() => {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }, 2000);
+    } catch (err: any) {
+      showToast(
+        err.response?.data?.error?.message || 'Erreur lors de la suppression du compte',
+        'error'
+      );
+      setDeleting(false);
+    }
+  };
+
   // Sync form when user context updates
   useEffect(() => {
     if (!user) return;
 
+    type ExtendedProfile = { firstName?: string; lastName?: string; phone?: string };
+    const extUser = user as ExtendedProfile;
     setProfile({
-      firstName: (user as any)?.firstName || '',
-      lastName: (user as any)?.lastName || '',
+      firstName: extUser?.firstName || '',
+      lastName: extUser?.lastName || '',
       email: user?.email || '',
-      phone: (user as any)?.phone || '',
+      phone: extUser?.phone || '',
     });
   }, [user]);
 
@@ -60,7 +90,7 @@ export function ProfilePage() {
       const updated = await api.updateMyProfile(payload);
       updateUser(updated as User);
       showToast('Profil mis à jour avec succès', 'success');
-    } catch (error) {
+    } catch {
       showToast('Erreur lors de la mise à jour du profil', 'error');
     } finally {
       setSaving(false);
@@ -257,6 +287,115 @@ export function ProfilePage() {
           </div>
         </form>
       </div>
+
+      {/* Delete Account Card */}
+      <div className="bg-white rounded-lg border border-red-200 shadow-sm">
+        <div className="p-6 border-b border-red-200">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Zone de danger</h2>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="font-semibold text-red-900 mb-2">Supprimer définitivement votre compte</h3>
+            <p className="text-sm text-red-700 mb-3">
+              Cette action est irréversible. Toutes vos données seront définitivement supprimées :
+            </p>
+            <ul className="text-sm text-red-700 space-y-1 mb-4 list-disc list-inside">
+              <li>Vos factures et devis</li>
+              <li>Vos clients et produits</li>
+              <li>Vos configurations SMTP</li>
+              <li>Toutes vos données personnelles</li>
+            </ul>
+            <p className="text-sm text-red-800 font-medium">
+              ⚠️ Aucune récupération ne sera possible après cette action.
+            </p>
+          </div>
+
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition"
+            >
+              <Trash2 className="w-4 h-4" />
+              Supprimer mon compte
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6 border-b">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Confirmer la suppression</h3>
+                  <p className="text-sm text-gray-500">Cette action est irréversible</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-700">
+                Pour confirmer la suppression de votre compte, veuillez entrer votre mot de passe :
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mot de passe actuel
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Entrez votre mot de passe"
+                  disabled={deleting}
+                  autoFocus
+                />
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-xs text-yellow-800">
+                  <strong>Dernière chance :</strong> Êtes-vous absolument certain ? Toutes vos données
+                  (factures, clients, produits) seront définitivement perdues.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeletePassword('');
+                }}
+                disabled={deleting}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleting || !deletePassword}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4" />
+                {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

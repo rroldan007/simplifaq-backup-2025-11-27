@@ -128,7 +128,7 @@ export function useQuotes(params: UseQuotesParams = {}) {
       try {
         const updatedUser = await api.getMyProfile();
         if (updatedUser) {
-          updateUser(updatedUser as any);
+          updateUser(updatedUser);
         }
       } catch (e) {
         console.error('Failed to refresh user after creating quote:', e);
@@ -256,9 +256,11 @@ export function useQuotes(params: UseQuotesParams = {}) {
     try {
       const quote = state.quotes.find(q => q.id === id);
       // Merge user preferences with provided options
+      type UserPdfSettings = { pdfTemplate?: string; pdfPrimaryColor?: string };
+      const userPdf = user as UserPdfSettings | null;
       const pdfOptions = {
-        template: options?.template || (user as any)?.pdfTemplate,
-        accentColor: options?.accentColor || (user as any)?.pdfPrimaryColor,
+        template: options?.template || userPdf?.pdfTemplate,
+        accentColor: options?.accentColor || userPdf?.pdfPrimaryColor,
       };
       const pdfBlob = await quotesApi.downloadQuotePdf(id, pdfOptions);
       

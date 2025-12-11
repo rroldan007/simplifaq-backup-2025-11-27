@@ -31,7 +31,7 @@ export function ConfirmEmailPage() {
           setStatus('error');
           setMessage(data.error || 'Erreur lors de la confirmation');
         }
-      } catch (error) {
+      } catch {
         setStatus('error');
         setMessage('Erreur de connexion au serveur');
       }

@@ -5,6 +5,7 @@ import {
   skipOnboardingStep,
   resetOnboarding,
   autoUpdateOnboarding,
+  markWelcomeMessageShown,
   OnboardingStep
 } from '../services/onboardingService';
 import { ApiResponse } from '../types';
@@ -176,6 +177,43 @@ export async function reset(req: Request, res: Response): Promise<void> {
       error: {
         code: 'INTERNAL_ERROR',
         message: error instanceof Error ? error.message : 'Failed to reset onboarding'
+      }
+    } as ApiResponse);
+  }
+}
+
+/**
+ * Mark welcome message as shown
+ */
+export async function markWelcomeShown(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User not authenticated'
+        }
+      } as ApiResponse);
+      return;
+    }
+
+    const status = await markWelcomeMessageShown(userId);
+
+    res.json({
+      success: true,
+      data: status,
+      timestamp: new Date().toISOString()
+    } as ApiResponse);
+  } catch (error) {
+    console.error('[Onboarding] Error marking welcome as shown:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to mark welcome as shown'
       }
     } as ApiResponse);
   }

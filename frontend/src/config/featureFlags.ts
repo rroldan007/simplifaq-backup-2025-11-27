@@ -75,7 +75,7 @@ export function getFeatureFlags(): FeatureFlags {
   // Initialize localStorage with defaults on first load
   try {
     localStorage.setItem('feature_flags', JSON.stringify(defaultFlags));
-  } catch (e) {
+  } catch {
     console.warn('[FeatureFlags] Cannot save defaults to localStorage');
   }
   

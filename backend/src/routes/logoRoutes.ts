@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
@@ -11,9 +11,29 @@ import { prisma } from '../services/database';
 const router = Router();
 
 // Configure multer for logo uploads
-const uploadDir = process.env.UPLOADS_DIR || '/var/www/simplifaq/my/backend/uploads/logos';
+// Use relative path in development, absolute in production
+const uploadDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', '..', 'uploads', 'logos');
+
+console.log('[LOGO] Upload directory configured:', uploadDir);
+console.log('[LOGO] __dirname is:', __dirname);
+console.log('[LOGO] process.cwd() is:', process.cwd());
+
+// Ensure upload directory exists
+try {
+  const fsSync = require('fs');
+  if (!fsSync.existsSync(uploadDir)) {
+    console.log('[LOGO] Creating upload directory:', uploadDir);
+    fsSync.mkdirSync(uploadDir, { recursive: true });
+  } else {
+    console.log('[LOGO] Upload directory exists');
+  }
+} catch (err) {
+  console.error('[LOGO] Error checking/creating upload directory:', err);
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
+    console.log('[LOGO] Multer destination called, uploadDir:', uploadDir);
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
@@ -37,15 +57,34 @@ const upload = multer({
   }
 });
 
+// Error handler middleware for multer
+const multerErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    console.error('[LOGO] Multer error:', err.code, err.message);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Max size is 5MB' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  } else if (err) {
+    console.error('[LOGO] Unknown upload error:', err);
+    return res.status(500).json({ error: err.message || 'Unknown upload error' });
+  }
+  next();
+};
+
 // Upload company logo
-router.post('/upload', authenticateToken, upload.single('logo'), async (req, res, next) => {
+router.post('/upload', authenticateToken, upload.single('logo'), multerErrorHandler, async (req: Request, res: Response, next: NextFunction) => {
   console.log('[LOGO] Upload request received');
   console.log('[LOGO] Auth user:', (req as any).user?.id);
+  console.log('[LOGO] Request headers:', req.headers);
+  console.log('[LOGO] Request body keys:', Object.keys(req.body));
   console.log('[LOGO] File received:', req.file?.originalname);
+  console.log('[LOGO] req.file object:', req.file);
   
   try {
     if (!req.file) {
-      console.error('[LOGO] No file uploaded');
+      console.error('[LOGO] No file uploaded - multer did not process the file');
+      console.error('[LOGO] This could mean: wrong field name, file too large, or invalid file type');
       res.status(400).json({ error: 'No file uploaded' });
       return;
     }
@@ -170,7 +209,8 @@ router.delete('/current', authenticateToken, async (req, res) => {
     if (user?.logoUrl) {
       // Delete file from filesystem
       try {
-        const fullPath = path.join('/var/www/simplifaq/my/backend', user.logoUrl);
+        const baseDir = process.env.UPLOADS_BASE_DIR || path.join(__dirname, '..', '..');
+        const fullPath = path.join(baseDir, user.logoUrl);
         await fs.unlink(fullPath);
         console.info('[LOGO] Logo file deleted', { path: user.logoUrl });
       } catch (fileError) {

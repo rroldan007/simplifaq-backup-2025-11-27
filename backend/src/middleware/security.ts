@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import { Request, Response, NextFunction } from 'express';
 import { body, validationResult, ValidationChain } from 'express-validator';
-import winston from 'winston';
+import * as winston from 'winston';
 
 // Security logger configuration
 const securityLogger = winston.createLogger({
@@ -285,15 +285,30 @@ export const preventSQLInjection = (req: Request, res: Response, next: NextFunct
 
 // CORS configuration
 export const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:3001',
-    'http://127.0.0.1:3001',
-    'https://test.simplifaq.ch',
-    'https://www.test.simplifaq.ch',
-    'https://my.simplifaq.ch'
-  ],
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Allow all localhost/127.0.0.1 origins (any port) in development
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return callback(null, true);
+    }
+    
+    // Production allowed origins
+    const allowedOrigins = [
+      'https://test.simplifaq.ch',
+      'https://www.test.simplifaq.ch',
+      'https://my.simplifaq.ch'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error(`CORS not allowed for origin: ${origin}`));
+  },
   
   // Enable credentials (cookies, auth headers)
   credentials: true,
