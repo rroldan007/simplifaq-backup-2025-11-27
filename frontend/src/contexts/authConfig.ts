@@ -11,7 +11,7 @@ export function buildAuthApiBase(): string {
   // might be accessed through different ports (Vite dev server, preview proxies, etc.)
   if (typeof window !== 'undefined' && 
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:3001/api/auth';
+    return '/api/auth';
   }
 
   // Use import.meta.env in browser context (Vite injects this)
@@ -21,7 +21,16 @@ export function buildAuthApiBase(): string {
 
   if (raw && typeof raw === 'string' && raw.length > 0) {
     const trimmed = raw.replace(/\/$/, '');
-    return trimmed.endsWith('/api/auth') ? trimmed : `${trimmed}/api/auth`;
+    // If VITE_API_URL already ends with /api, just add /auth
+    if (trimmed.endsWith('/api')) {
+      return `${trimmed}/auth`;
+    }
+    // If it already has /api/auth, use as is
+    if (trimmed.endsWith('/api/auth')) {
+      return trimmed;
+    }
+    // Otherwise add /api/auth
+    return `${trimmed}/api/auth`;
   }
   
   // Fallback: Use relative URL

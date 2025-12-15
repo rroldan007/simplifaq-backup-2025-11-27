@@ -3,7 +3,7 @@ import { useAuth } from './useAuth';
 import type { Plan } from '../components/billing/PlanCard';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export interface Subscription {
   id: string;

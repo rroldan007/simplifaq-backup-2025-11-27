@@ -16,7 +16,8 @@
     
     <!-- Content Security Policy -->
     <!-- Allow loading images (logo preview) from backend dev server on :3001 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:3001; font-src 'self' data:; connect-src 'self' http://localhost:3000 ws://localhost:3000 http://localhost:3001 http://localhost:8000 https://localhost:8000 http://localhost:5000 https://localhost:5000; base-uri 'self'; form-action 'self'" />
+    <!-- Allow workers for confetti animation -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:3001; font-src 'self' data:; connect-src 'self' http://localhost:3000 ws://localhost:3000 http://localhost:3001 http://localhost:8000 https://localhost:8000 http://localhost:5000 https://localhost:5000; frame-src 'self' blob:; object-src 'self' blob:; media-src 'self' blob:; base-uri 'self'; form-action 'self'" />
     
     <!-- Prevent information disclosure -->
     <meta name="robots" content="noindex, nofollow" />

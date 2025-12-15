@@ -80,6 +80,9 @@ export class EmailService {
       port: config.port,
       secure: config.secure,
       auth: config.auth,
+      tls: {
+        rejectUnauthorized: false // Allow self-signed certificates
+      }
     });
   }
 

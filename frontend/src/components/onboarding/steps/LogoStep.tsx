@@ -29,7 +29,7 @@ export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
       const user = userData.user || {};
       if (user.logoUrl) {
         // Build full URL for logo - logoUrl from backend is relative path like "uploads/logos/..."
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const apiUrl = import.meta.env.VITE_API_URL || '/api';
         const baseUrl = apiUrl.replace(/\/api$/, '');
         const logoUrl = user.logoUrl.startsWith('http') 
           ? user.logoUrl 

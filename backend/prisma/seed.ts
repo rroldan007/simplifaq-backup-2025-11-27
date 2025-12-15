@@ -194,9 +194,8 @@ async function main() {
         name: 'Pralines Maison',
         description: 'Assortiment de pralines faites main',
         unitPrice: 32.00,
-        currency: 'CHF',
         unit: 'boîte',
-        taxRate: 2.5,
+        tvaRate: 2.5,
         isActive: true,
       }
     })

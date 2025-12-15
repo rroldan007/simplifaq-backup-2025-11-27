@@ -136,24 +136,27 @@ const emailTemplates = [
       margin-right: 10px;
     }
     .footer { 
-      background: #1e293b; 
+      background: #f8fafc; 
       padding: 30px; 
       text-align: center; 
-      color: #94a3b8;
+      color: #475569;
+      border-top: 2px solid #e2e8f0;
     }
     .footer-logo {
       font-size: 24px;
       font-weight: 700;
-      color: #ffffff;
+      color: #1e293b;
       margin-bottom: 10px;
     }
     .footer p {
       margin: 8px 0;
       font-size: 13px;
+      color: #64748b;
     }
     .footer a {
       color: #667eea;
       text-decoration: none;
+      font-weight: 600;
     }
     .highlight {
       background: linear-gradient(120deg, #fef3c7 0%, #fde68a 100%);
@@ -263,9 +266,9 @@ const emailTemplates = [
         <a href="{{dashboardUrl}}">Tableau de bord</a> • 
         <a href="mailto:contact@simplifaq.ch">Support</a>
       </p>
-      <div style="border-top: 1px solid #475569; margin-top: 20px; padding-top: 15px; font-size: 11px; color: #94a3b8;">
-        <p style="margin: 5px 0;">© 2025 SimpliFaq – Projet développé par Patricia Roldán Boyrie (responsable du traitement)</p>
-        <p style="margin: 5px 0;">Genève, Suisse – <a href="mailto:contact@simplifaq.ch" style="color: #94a3b8;">contact@simplifaq.ch</a></p>
+      <div style="border-top: 1px solid #cbd5e1; margin-top: 20px; padding-top: 15px; font-size: 11px; color: #64748b;">
+        <p style="margin: 5px 0; color: #64748b;">© 2025 SimpliFaq – Projet développé par Patricia Roldán Boyrie (responsable du traitement)</p>
+        <p style="margin: 5px 0; color: #64748b;">Genève, Suisse – <a href="mailto:contact@simplifaq.ch" style="color: #667eea; text-decoration: none;">contact@simplifaq.ch</a></p>
       </div>
     </div>
   </div>

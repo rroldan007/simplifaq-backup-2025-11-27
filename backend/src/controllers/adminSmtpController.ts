@@ -99,7 +99,7 @@ export const getSmtpConfig = async (req: Request, res: Response): Promise<void> 
             port: parseInt(process.env.SMTP_PORT || '587'),
             secure: process.env.SMTP_SECURE === 'true',
             user: process.env.SMTP_USER || '',
-            fromEmail: process.env.SMTP_FROM_EMAIL || '',
+            fromEmail: process.env.EMAIL_FROM || process.env.SMTP_USER || '',
             fromName: 'SimpliFaq',
             provider: 'smtp',
             isActive: false,
