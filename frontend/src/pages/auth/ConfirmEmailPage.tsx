@@ -50,10 +50,10 @@ export function ConfirmEmailPage() {
           setStatus('error');
           setMessage('Erreur lors de la confirmation');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         setStatus('error');
         setMessage(
-          error.message || 
+          error instanceof Error ? error.message : 
           'Token de confirmation invalide ou expiré'
         );
       }

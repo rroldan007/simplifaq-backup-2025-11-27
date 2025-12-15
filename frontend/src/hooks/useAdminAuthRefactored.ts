@@ -105,7 +105,8 @@ export function useAdminAuth(): AdminAuthContextType {
         if (response.requiresTwoFactor) {
           updateState({ requiresTwoFactor: true, isLoading: false });
         } else {
-          const payload = response.data as any;
+          type LoginPayload = { admin?: unknown; accessToken?: string; token?: string };
+          const payload = response.data as LoginPayload;
           const admin = payload.admin;
           const token = payload.accessToken || payload.token;
           

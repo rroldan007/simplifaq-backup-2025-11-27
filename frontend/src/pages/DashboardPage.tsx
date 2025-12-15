@@ -2,12 +2,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useOnboarding } from '../hooks/useOnboarding';
 import { secureStorage } from '../utils/security';
 import { SummaryCard } from '../components/dashboard/SummaryCard';
 import { RecentInvoices } from '../components/dashboard/RecentInvoices';
 import { OverdueInvoices } from '../components/dashboard/OverdueInvoices';
 import { EmailVerificationAlert } from '../components/auth/EmailVerificationAlert';
+import WelcomeModal from '../components/onboarding/WelcomeModal';
+import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 import { reportsApi, type Currency, type KpisResponse } from '../services/reportsApi';
+import { api } from '../services/api';
 import {
   ResponsiveContainer,
   XAxis,
@@ -25,17 +29,26 @@ import {
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { financialSummary, recentInvoices = [], overdueInvoices = [], loading, error } = useDashboardData();
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  
+  // Disable auto-refresh when onboarding is active to prevent flickering
+  const { recentInvoices = [], overdueInvoices = [], loading, error } = useDashboardData(
+    !showOnboardingWizard && !showWelcome // autoRefresh only when onboarding is NOT active
+  );
+  const { status: onboardingStatus, loading: onboardingLoading, showOnboarding, dismiss: dismissOnboarding, refresh: refreshOnboarding } = useOnboarding();
+  // Note: financialSummary is available from useDashboardData but not currently used
   const [searchParams, setSearchParams] = useSearchParams();
+  const [userName, setUserName] = useState<string>('');
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   // Filters persisted in URL
-  const [dateFrom, setDateFrom] = useState<string>(searchParams.get('from') || startOfMonth.toISOString().slice(0,10));
-  const [dateTo, setDateTo] = useState<string>(searchParams.get('to') || today.toISOString().slice(0,10));
+  const [dateFrom, setDateFrom] = useState<string>(searchParams.get('from') || startOfMonth.toISOString().slice(0, 10));
+  const [dateTo, setDateTo] = useState<string>(searchParams.get('to') || today.toISOString().slice(0, 10));
   const [currency, setCurrency] = useState<Currency>((searchParams.get('ccy') as Currency) || 'CHF');
-  const [granularity, setGranularity] = useState<'daily'|'weekly'|'monthly'|'yearly'>(
-    (searchParams.get('g') as any) || 'monthly'
+  const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>(
+    (searchParams.get('g') as 'daily' | 'weekly' | 'monthly' | 'yearly') || 'monthly'
   );
 
   // Dashboard data from new endpoints
@@ -47,7 +60,7 @@ export function DashboardPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [chartExportOpen, setChartExportOpen] = useState(false);
 
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
+  const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || '/api';
 
   async function downloadExport(format: 'csv' | 'xlsx' | 'pdf') {
     try {
@@ -65,21 +78,21 @@ export function DashboardPage() {
         },
       });
       if (!res.ok) {
-        const data = await res.json().catch(()=>({}));
-        throw new Error((data as any)?.error?.message || 'Export failed');
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: { message?: string } })?.error?.message || 'Export failed');
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `dashboard_${new Date().toISOString().slice(0,10)}.${format === 'csv' ? 'csv' : format === 'xlsx' ? 'xlsx' : 'pdf'}`;
+      a.download = `dashboard_${new Date().toISOString().slice(0, 10)}.${format === 'csv' ? 'csv' : format === 'xlsx' ? 'xlsx' : 'pdf'}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) {
       console.error('downloadExport error', e);
-      setDashError((e as any)?.message || 'Erreur export');
+      setDashError(e instanceof Error ? e.message : 'Erreur export');
     }
   }
 
@@ -98,21 +111,21 @@ export function DashboardPage() {
         },
       });
       if (!res.ok) {
-        const data = await res.json().catch(()=>({}));
-        throw new Error((data as any)?.error?.message || 'Export factures échoué');
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: { message?: string } })?.error?.message || 'Export factures échoué');
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `invoices_${new Date().toISOString().slice(0,10)}.${format}`;
+      a.download = `invoices_${new Date().toISOString().slice(0, 10)}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) {
       console.error('downloadExportInvoices error', e);
-      setDashError((e as any)?.message || 'Erreur export factures');
+      setDashError(e instanceof Error ? e.message : 'Erreur export factures');
     }
   }
 
@@ -131,23 +144,51 @@ export function DashboardPage() {
         },
       });
       if (!res.ok) {
-        const data = await res.json().catch(()=>({}));
-        throw new Error((data as any)?.error?.message || 'Export charges échoué');
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: { message?: string } })?.error?.message || 'Export charges échoué');
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `expenses_${new Date().toISOString().slice(0,10)}.${format}`;
+      a.download = `expenses_${new Date().toISOString().slice(0, 10)}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) {
       console.error('downloadExportExpenses error', e);
-      setDashError((e as any)?.message || 'Erreur export charges');
+      setDashError(e instanceof Error ? e.message : 'Erreur export charges');
     }
   }
+
+  // Load user data and determine if welcome modal should be shown
+  useEffect(() => {
+    let mounted = true;
+    async function loadUserAndOnboarding() {
+      try {
+        const response = await api.get('/auth/me');
+        const user = response.data.data as { companyName?: string; firstName?: string };
+        if (mounted) {
+          setUserName(user.companyName || user.firstName || '');
+          
+          // Show welcome modal if not shown yet and onboarding not completed
+          if (onboardingStatus && !onboardingStatus.welcomeMessageShown && !onboardingStatus.isCompleted) {
+            setShowWelcome(true);
+          } else if (showOnboarding && !onboardingStatus?.isCompleted) {
+            // Show onboarding wizard if welcome was already shown
+            setShowOnboardingWizard(true);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading user data:', err);
+      }
+    }
+    if (!onboardingLoading && onboardingStatus) {
+      loadUserAndOnboarding();
+    }
+    return () => { mounted = false; };
+  }, [onboardingStatus, onboardingLoading, showOnboarding]);
 
   // Persist filters in URL
   useEffect(() => {
@@ -177,11 +218,11 @@ export function DashboardPage() {
         if (!mounted) return;
         setKpis(k);
         setSeries(s.series);
-        setStatus({ draft: b.draft ?? 0, sent: b.sent ?? 0, paid: b.paid ?? 0, overdue: b.overdue ?? 0 } as any);
-      } catch (e: any) {
+        setStatus({ draft: b.draft ?? 0, sent: b.sent ?? 0, paid: b.paid ?? 0, overdue: b.overdue ?? 0 });
+      } catch (e: unknown) {
         console.error('[Dashboard] Error loading data:', e);
         if (!mounted) return;
-        setDashError(e?.message || 'Erreur chargement dashboard');
+        setDashError(e instanceof Error ? e.message : 'Erreur chargement dashboard');
       } finally {
         if (mounted) setDashLoading(false);
       }
@@ -213,9 +254,41 @@ export function DashboardPage() {
       { name: 'En retard', value: status.overdue, color: '#f59e0b' },
     ] : []
   ), [status]);
-  
+
   const handleViewInvoice = (invoiceId: string) => navigate(`/invoices/${invoiceId}`);
   const handleCreateInvoice = () => navigate('/invoices/new');
+  
+  const handleCloseWelcome = async () => {
+    setShowWelcome(false);
+    try {
+      // Mark welcome message as shown in the database
+      await api.post('/onboarding/welcome-shown');
+    } catch (err) {
+      console.error('Error marking welcome as shown:', err);
+    }
+    dismissOnboarding();
+  };
+  
+  const handleStartOnboarding = async () => {
+    setShowWelcome(false);
+    try {
+      // Mark welcome message as shown in the database
+      await api.post('/onboarding/welcome-shown');
+    } catch (err) {
+      console.error('Error marking welcome as shown:', err);
+    }
+    setShowOnboardingWizard(true);
+  };
+  
+  const handleCompleteOnboarding = () => {
+    setShowOnboardingWizard(false);
+    refreshOnboarding();
+  };
+  
+  const handleCloseOnboarding = () => {
+    setShowOnboardingWizard(false);
+    dismissOnboarding();
+  };
 
   if (loading) {
     return (
@@ -255,7 +328,7 @@ export function DashboardPage() {
         <div className="space-y-8">
           {/* Email Verification Alert */}
           <EmailVerificationAlert />
-          
+
           {/* Mobile-only page title (Header shows title on lg+) */}
           <h1 className="text-2xl font-bold lg:hidden">Tableau de bord</h1>
           {/* Quick Actions Bar - Improved */}
@@ -412,27 +485,27 @@ export function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date de début</label>
-                <input 
-                  type="date" 
-                  value={dateFrom} 
-                  onChange={(e)=>setDateFrom(e.target.value)} 
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" 
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date de fin</label>
-                <input 
-                  type="date" 
-                  value={dateTo} 
-                  onChange={(e)=>setDateTo(e.target.value)} 
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" 
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Devise</label>
-                <select 
-                  value={currency} 
-                  onChange={(e)=>setCurrency(e.target.value as Currency)} 
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as Currency)}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                 >
                   <option value="CHF">🇨🇭 CHF</option>
@@ -442,9 +515,9 @@ export function DashboardPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Granularité</label>
-                <select 
-                  value={granularity} 
-                  onChange={(e)=>setGranularity(e.target.value as any)} 
+                <select
+                  value={granularity}
+                  onChange={(e) => setGranularity(e.target.value as 'daily' | 'weekly' | 'monthly' | 'yearly')}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                 >
                   <option value="daily">📅 Quotidien</option>
@@ -456,35 +529,35 @@ export function DashboardPage() {
             </div>
             {/* Quick date range buttons */}
             <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-              <button 
+              <button
                 onClick={() => {
                   const today = new Date();
                   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                  setDateFrom(startOfMonth.toISOString().slice(0,10));
-                  setDateTo(today.toISOString().slice(0,10));
+                  setDateFrom(startOfMonth.toISOString().slice(0, 10));
+                  setDateTo(today.toISOString().slice(0, 10));
                 }}
                 className="px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
               >
                 Ce mois
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const today = new Date();
                   const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                   const endLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-                  setDateFrom(lastMonth.toISOString().slice(0,10));
-                  setDateTo(endLastMonth.toISOString().slice(0,10));
+                  setDateFrom(lastMonth.toISOString().slice(0, 10));
+                  setDateTo(endLastMonth.toISOString().slice(0, 10));
                 }}
                 className="px-3 py-1.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
               >
                 Mois dernier
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const today = new Date();
                   const startOfYear = new Date(today.getFullYear(), 0, 1);
-                  setDateFrom(startOfYear.toISOString().slice(0,10));
-                  setDateTo(today.toISOString().slice(0,10));
+                  setDateFrom(startOfYear.toISOString().slice(0, 10));
+                  setDateTo(today.toISOString().slice(0, 10));
                 }}
                 className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
               >
@@ -501,8 +574,8 @@ export function DashboardPage() {
                 <div className="flex-1">
                   <h3 className="font-semibold mb-1">Erreur de chargement</h3>
                   <p className="text-sm">{dashError}</p>
-                  <button 
-                    onClick={() => window.location.reload()} 
+                  <button
+                    onClick={() => window.location.reload()}
                     className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
                   >
                     Recharger la page
@@ -511,7 +584,7 @@ export function DashboardPage() {
               </div>
             </div>
           )}
-          
+
           {/* Smart hints and tips */}
           {kpis && (
             <div className="space-y-3">
@@ -534,7 +607,7 @@ export function DashboardPage() {
                   <div className="flex-1">
                     <h4 className="font-semibold text-blue-900 mb-1">Aucune facture dans cette période</h4>
                     <p className="text-sm text-blue-800">Créez votre première facture ou ajustez la période de filtrage.</p>
-                    <button 
+                    <button
                       onClick={() => navigate('/invoices/new')}
                       className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-800"
                     >
@@ -588,43 +661,43 @@ export function DashboardPage() {
                 </div>
               )}
               {series.length > 0 && (
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-80" style={{ minHeight: '320px' }}>
+                  <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                     <ComposedChart data={series} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorCA" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.9}/>
-                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.7}/>
+                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.9} />
+                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.7} />
                         </linearGradient>
                         <linearGradient id="colorCharges" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.9}/>
-                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.7}/>
+                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.9} />
+                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.7} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-                      <XAxis 
-                        dataKey="period" 
-                        stroke="#6B7280" 
+                      <XAxis
+                        dataKey="period"
+                        stroke="#6B7280"
                         tick={{ fontSize: 12 }}
                         tickLine={false}
                       />
-                      <YAxis 
-                        stroke="#6B7280" 
+                      <YAxis
+                        stroke="#6B7280"
                         tick={{ fontSize: 12 }}
                         tickLine={false}
                         axisLine={false}
                       />
-                      <Tooltip 
-                        formatter={(v: any) => new Intl.NumberFormat('fr-CH', { style: 'currency', currency: currency }).format(Number(v))}
+                      <Tooltip
+                        formatter={(v: number | string) => new Intl.NumberFormat('fr-CH', { style: 'currency', currency: currency }).format(Number(v))}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
                       />
-                      <Legend 
+                      <Legend
                         wrapperStyle={{ paddingTop: '20px' }}
                         iconType="circle"
                       />
                       <ReferenceLine y={0} stroke="#D1D5DB" strokeDasharray="3 3" />
-                      <Bar dataKey="caPaid" name="CA HT" fill="url(#colorCA)" radius={[8,8,0,0]} maxBarSize={48} />
-                      <Bar dataKey="charges" name="Charges" fill="url(#colorCharges)" radius={[8,8,0,0]} maxBarSize={48} />
+                      <Bar dataKey="caPaid" name="CA HT" fill="url(#colorCA)" radius={[8, 8, 0, 0]} maxBarSize={48} />
+                      <Bar dataKey="charges" name="Charges" fill="url(#colorCharges)" radius={[8, 8, 0, 0]} maxBarSize={48} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -634,7 +707,7 @@ export function DashboardPage() {
             {/* Analytics donut */}
             <div className="surface p-6 rounded-2xl shadow-lg border border-gray-100">
               <h3 className="text-xl font-bold text-gray-800 mb-4">Répartition des factures</h3>
-              <div className="relative h-72">
+              <div className="relative h-72" style={{ minHeight: '288px' }}>
                 {pieData.every(d => d.value === 0) ? (
                   <div className="h-full flex items-center justify-center text-gray-400">
                     <div className="text-center">
@@ -647,42 +720,42 @@ export function DashboardPage() {
                   </div>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                       <PieChart>
                         <defs>
                           <filter id="shadow" height="130%">
-                            <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
-                            <feOffset dx="0" dy="3" result="offsetblur"/>
+                            <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
+                            <feOffset dx="0" dy="3" result="offsetblur" />
                             <feComponentTransfer>
-                              <feFuncA type="linear" slope="0.2"/>
+                              <feFuncA type="linear" slope="0.2" />
                             </feComponentTransfer>
                             <feMerge>
-                              <feMergeNode/>
-                              <feMergeNode in="SourceGraphic"/>
+                              <feMergeNode />
+                              <feMergeNode in="SourceGraphic" />
                             </feMerge>
                           </filter>
                         </defs>
-                        <Pie 
-                          data={pieData} 
-                          dataKey="value" 
-                          nameKey="name" 
-                          cx="50%" 
-                          cy="50%" 
-                          innerRadius={60} 
-                          outerRadius={100} 
+                        <Pie
+                          data={pieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
                           paddingAngle={2}
                           stroke="#ffffff"
                           strokeWidth={2}
                         >
                           {pieData.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
+                            <Cell
+                              key={`cell-${index}`}
                               fill={entry.name === 'Payée' ? '#10B981' : entry.name === 'En retard' ? '#F59E0B' : entry.name === 'Envoyée' ? '#3B82F6' : '#9CA3AF'}
                             />
                           ))}
                         </Pie>
-                        <Tooltip 
-                          formatter={(value: any, name: string) => [`${value} factures`, name]}
+                        <Tooltip
+                          formatter={(value: number | string, name: string) => [`${value} factures`, name]}
                           contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
                         />
                       </PieChart>
@@ -690,8 +763,8 @@ export function DashboardPage() {
                     {/* Center label */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       {status && (() => {
-                        const total = (status.draft||0)+(status.sent||0)+(status.paid||0)+(status.overdue||0);
-                        const pct = total>0 ? Math.round((status.paid/total)*100) : 0;
+                        const total = (status.draft || 0) + (status.sent || 0) + (status.paid || 0) + (status.overdue || 0);
+                        const pct = total > 0 ? Math.round((status.paid / total) * 100) : 0;
                         return (
                           <div className="text-center">
                             <div className="text-4xl font-bold text-gray-800">{pct}%</div>
@@ -713,10 +786,29 @@ export function DashboardPage() {
           <SuccessMessage />
         </div>
       </main>
+      
+      {/* Welcome Modal */}
+      {showWelcome && (
+        <WelcomeModal
+          onClose={handleCloseWelcome}
+          onStartOnboarding={handleStartOnboarding}
+          companyName={userName}
+        />
+      )}
+      
+      {/* Onboarding Wizard */}
+      {showOnboardingWizard && (
+        <OnboardingWizard
+          onComplete={handleCompleteOnboarding}
+          onClose={handleCloseOnboarding}
+        />
+      )}
     </div>
   );
 }
 
+/* Reserved for future use */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function LoadingView() {
   return (
     <div
@@ -737,9 +829,11 @@ function LoadingView() {
   );
 }
 
+/* Reserved for future use */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function ErrorView({ error }: { error: string }) {
   const { refreshData } = useDashboardData();
-  
+
   return (
     <div
       className="min-h-screen"
@@ -806,39 +900,41 @@ type FinancialSummaryLite = {
   clientGrowthRate?: number;
 } | null;
 
+/* Reserved for future use */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SummaryCards({ financialSummary }: { financialSummary: FinancialSummaryLite }) {
   return (
     <div>
       <h2 className="text-xl font-semibold text-primary mb-6">Vue d'ensemble</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <SummaryCard 
-          title="Chiffre d'affaires" 
-          value={financialSummary?.totalRevenue || 0} 
+        <SummaryCard
+          title="Chiffre d'affaires"
+          value={financialSummary?.totalRevenue || 0}
           change={financialSummary?.revenueGrowthRate}
-          icon="💰" 
+          icon="💰"
           color="blue"
           isCurrency={true}
           currency={financialSummary?.currency || 'CHF'}
         />
-        <SummaryCard 
-          title="Factures" 
+        <SummaryCard
+          title="Factures"
           value={financialSummary?.totalInvoices || 0}
           change={financialSummary?.invoiceGrowthRate}
-          icon="📄" 
+          icon="📄"
           color="green"
         />
-        <SummaryCard 
-          title="Clients" 
+        <SummaryCard
+          title="Clients"
           value={financialSummary?.activeClients || 0}
           change={financialSummary?.clientGrowthRate}
-          icon="👥" 
+          icon="👥"
           color="yellow"
         />
-        <SummaryCard 
-          title="En retard" 
+        <SummaryCard
+          title="En retard"
           value={financialSummary?.overdueInvoices || 0}
           amount={financialSummary?.overdueAmount}
-          icon="⏰" 
+          icon="⏰"
           color="red"
           isCurrency={false}
           currency={financialSummary?.currency || 'CHF'}

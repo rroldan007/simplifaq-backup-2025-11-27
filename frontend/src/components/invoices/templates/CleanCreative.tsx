@@ -1,8 +1,20 @@
 import React from 'react';
 import type { InvoicePreviewData } from './ElegantClassic';
+import { LineDiscountDisplay } from './LineDiscountDisplay';
 
 // CleanCreative: navy accent, airy spacing, subtle separators
-export const CleanCreative: React.FC<{ data: InvoicePreviewData; accentColor?: string; showHeader?: boolean }> = ({ data, accentColor = '#6366F1', showHeader = true }) => {
+export const CleanCreative: React.FC<{ 
+  data: InvoicePreviewData; 
+  accentColor?: string; 
+  showHeader?: boolean;
+  logoPosition?: 'left' | 'center' | 'right';
+  logoSize?: 'small' | 'medium' | 'large';
+  fontColorHeader?: string;
+  fontColorBody?: string;
+  tableHeadColor?: string;
+  headerBgColor?: string;
+  altRowColor?: string;
+}> = ({ data, accentColor = '#6366F1', showHeader = true, headerBgColor, altRowColor }) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;
     const normalized = unit.toLowerCase();
@@ -68,7 +80,15 @@ export const CleanCreative: React.FC<{ data: InvoicePreviewData; accentColor?: s
             <tbody>
               {data.items.map((it, i) => (
                 <tr key={i} className="border-t border-slate-200">
-                  <td className="px-4 py-2 text-slate-800">{it.description}</td>
+                  <td className="px-4 py-2 text-slate-800">
+                    <div>{it.description}</div>
+                    <LineDiscountDisplay
+                      lineDiscountValue={it.lineDiscountValue}
+                      lineDiscountType={it.lineDiscountType}
+                      discountAmount={it.discountAmount}
+                      currency={data.currency}
+                    />
+                  </td>
                   <td className="px-4 py-2 text-right text-slate-700">{it.quantity.toFixed(resolveDecimals(it.unit))}</td>
                   <td className="px-4 py-2 text-right text-slate-700">{it.unitPrice.toFixed(2)} {data.currency}</td>
                   <td className="px-4 py-2 text-right font-semibold text-slate-900">{it.total.toFixed(2)} {data.currency}</td>

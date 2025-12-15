@@ -24,7 +24,8 @@ interface Invoice {
   status: string;
   issueDate: string;
   dueDate: string;
-  total: number;
+  amount: number;
+  total?: number;
   currency: string;
   paymentStatus?: string;
 }
@@ -117,20 +118,18 @@ export function ClientDetailModal({ clientId, onClose }: ClientDetailModalProps)
         setClient(clientData);
 
         // Load client invoices using clientId filter
-        const invoicesResponse: any = await api.getInvoices({ 
+        const invoicesResponse = await api.getInvoices({ 
           clientId: clientId,
           limit: 100 
         });
         
         // Normalize response
-        const clientInvoices = Array.isArray(invoicesResponse)
-          ? invoicesResponse
-          : invoicesResponse.invoices || [];
-        
-        setInvoices(clientInvoices as Invoice[]);
-      } catch (err: any) {
+        const invoices = invoicesResponse?.invoices || [];        
+        setInvoices(invoices as Invoice[]);
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Erreur lors du chargement des données';
         console.error('Error loading client data:', err);
-        setError(err.message || 'Erreur lors du chargement des données');
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -143,11 +142,11 @@ export function ClientDetailModal({ clientId, onClose }: ClientDetailModalProps)
     `${client?.firstName || ''} ${client?.lastName || ''}`.trim() || 
     'Client';
 
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.amount || inv.total || 0), 0);
   const paidInvoices = invoices.filter(inv => 
     inv.status?.toLowerCase() === 'paid' || inv.paymentStatus?.toLowerCase() === 'paid'
   );
-  const totalPaid = paidInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const totalPaid = paidInvoices.reduce((sum, inv) => sum + (inv.amount || inv.total || 0), 0);
   const totalPending = totalInvoiced - totalPaid;
 
   return (
@@ -305,7 +304,7 @@ export function ClientDetailModal({ clientId, onClose }: ClientDetailModalProps)
                           </div>
                           <div className="text-right">
                             <div className="text-lg font-semibold text-gray-900">
-                              {formatCurrency(invoice.total, invoice.currency)}
+                              {formatCurrency(invoice.amount || invoice.total || 0, invoice.currency)}
                             </div>
                           </div>
                         </div>

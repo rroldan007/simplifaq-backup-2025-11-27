@@ -98,9 +98,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   // Fonctions utilitaires pour la gestion de l'authentification
-  // Normalize any user payload to guarantee presence of nested address
-  const normalizeUser = (u: any): User => {
-    if (!u) return u as User;
+  // Normalize user payload to guarantee presence of nested address
+  type RawUser = Partial<User> & { street?: string; postalCode?: string; city?: string; canton?: string; country?: string };
+  const normalizeUser = (u: RawUser | null): User => {
+    if (!u) return u as unknown as User;
     const address = {
       street: u.address?.street ?? u.street ?? '',
       postalCode: u.address?.postalCode ?? u.postalCode ?? '',
@@ -452,10 +453,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error('Réponse invalide du serveur');
       }
 
-      const { user, token, refreshToken, expiresIn } = data.data;
+      const { user, token, refreshToken, expiresAt: expiresAtString } = data.data;
 
-      // Calculate token expiration time
-      const expiresAt = expiresIn ? Date.now() + (expiresIn * 1000) : Date.now() + (60 * 60 * 1000);
+      // Calculate token expiration time from ISO string
+      const expiresAt = expiresAtString ? new Date(expiresAtString).getTime() : Date.now() + (60 * 60 * 1000);
 
       // Use enhanced setAuthSuccess function that integrates with TokenManager
       setAuthSuccess(user, token, refreshToken);
@@ -556,7 +557,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error('Réponse invalide du serveur');
       }
 
-      const { user, requiresEmailConfirmation, message } = responseData.data;
+      const { user, requiresEmailConfirmation } = responseData.data;
 
       // Si la confirmation par email est requise, ne pas authentifier l'utilisateur
       if (requiresEmailConfirmation) {
@@ -688,7 +689,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
 
     // Utiliser le stockage sécurisé
-    const normalized = normalizeUser(user as any);
+    const normalized = normalizeUser(user as RawUser);
     secureStorage.setItem(USER_KEY, JSON.stringify(normalized));
     dispatch({ type: 'UPDATE_USER', payload: normalized });
   };

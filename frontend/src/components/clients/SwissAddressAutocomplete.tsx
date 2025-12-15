@@ -122,13 +122,14 @@ export function SwissAddressAutocomplete({
           setErrorText('Aucun résultat trouvé');
         }
         
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Ignore abort errors
-        if (err.name === 'AbortError') return;
+        const error = err as { name?: string; message?: string };
+        if (error.name === 'AbortError') return;
         
         console.debug('SwissAddressAutocomplete fetch error', err);
         setItems([]);
-        setErrorText(err.message || 'Erreur réseau');
+        setErrorText(error.message || 'Erreur réseau');
         setOpen(false);
       } finally {
         setLoading(false);
@@ -213,7 +214,7 @@ export function SwissAddressAutocomplete({
       {label && <label className="block text-sm text-slate-600 mb-1">{label}</label>}
       {nativeInput ? (
         <input
-          ref={inputRef as any}
+          ref={inputRef as React.RefObject<HTMLInputElement>}
           value={value}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={handleInputFocus}

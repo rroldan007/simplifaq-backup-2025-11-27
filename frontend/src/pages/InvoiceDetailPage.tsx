@@ -28,6 +28,7 @@ type InvoiceForDetail = {
   currency?: string;
   language?: 'fr' | 'de' | 'it' | 'en';
   user?: { quantityDecimals?: 2 | 3 } | null;
+  payments?: { id: string; amount: number; paymentDate: string; notes?: string }[];
 };
 
 const InvoiceDetailPage: React.FC = () => {
@@ -100,7 +101,7 @@ const InvoiceDetailPage: React.FC = () => {
             frequence: undefined,
             prochaineDateRecurrence: undefined,
             dateFinRecurrence: undefined,
-          } as any);
+          } as unknown as Parameters<typeof api.updateInvoice>[1]);
           setInvoice(updated as unknown as InvoiceForDetail);
         } catch (e2) {
           const msg2 = e2 && typeof e2 === 'object' && 'message' in e2 && typeof (e2 as { message?: unknown }).message === 'string'
@@ -157,8 +158,9 @@ const InvoiceDetailPage: React.FC = () => {
     if (!id || !invoice) return;
     
     try {
-      const template = (currentUser as any)?.pdfTemplate;
-      const accentColor = (currentUser as any)?.pdfPrimaryColor;
+      const userWithSettings = currentUser as { pdfTemplate?: string; pdfPrimaryColor?: string } | null;
+      const template = userWithSettings?.pdfTemplate;
+      const accentColor = userWithSettings?.pdfPrimaryColor;
 
       console.log('Downloading PDF for invoice:', invoice.invoiceNumber);
       console.log('Current user pdfTemplate:', template);
@@ -193,7 +195,7 @@ const InvoiceDetailPage: React.FC = () => {
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `facture-${invoice.invoiceNumber || invoice.id}.pdf`;
+      a.download = `${invoice.invoiceNumber || invoice.id}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -291,7 +293,7 @@ const InvoiceDetailPage: React.FC = () => {
   return (
     <>
       <EnhancedInvoiceDetailsView
-        invoice={{ ...invoice, user: (invoice.user || undefined) as any }}
+        invoice={{ ...invoice, user: invoice.user || undefined }}
         onStatusChange={handleStatusChange}
         onEdit={handleEdit}
         onSend={handleSend}
@@ -317,6 +319,7 @@ const InvoiceDetailPage: React.FC = () => {
             invoiceId={invoice.id}
             invoiceNumber={invoice.invoiceNumber}
             totalAmount={invoice.total}
+            remainingAmount={Math.max(0, invoice.total - (invoice.payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0))}
             onPaymentAdded={handlePaymentAdded}
           />
           <SendInvoiceEmailModal
@@ -324,8 +327,8 @@ const InvoiceDetailPage: React.FC = () => {
             onClose={() => setIsSendEmailModalOpen(false)}
             invoiceId={invoice.id}
             invoiceNumber={invoice.invoiceNumber}
-            clientEmail={(invoice as any).client?.email}
-            clientName={(invoice as any).client?.companyName || `${(invoice as any).client?.firstName || ''} ${(invoice as any).client?.lastName || ''}`.trim()}
+            clientEmail={(invoice as unknown as { client?: { email?: string } }).client?.email}
+            clientName={(invoice as unknown as { client?: { companyName?: string; firstName?: string; lastName?: string } }).client?.companyName || `${(invoice as unknown as { client?: { firstName?: string } }).client?.firstName || ''} ${(invoice as unknown as { client?: { lastName?: string } }).client?.lastName || ''}`.trim()}
             onSuccess={handleEmailSent}
           />
         </>

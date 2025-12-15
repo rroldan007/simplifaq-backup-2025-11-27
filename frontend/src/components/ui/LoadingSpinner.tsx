@@ -129,7 +129,7 @@ export function FullPageLoading({
         <div className="mb-4">
           <LoadingSpinner size="xl" />
         </div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Simplifaq</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">SimpliFaq</h2>
         <p className="text-gray-600">{text}</p>
       </div>
     </div>
@@ -172,7 +172,7 @@ export function TableLoading({ rows = 5, columns = 4, className }: TableLoadingP
             <div key={index} className="h-4 bg-gray-300 rounded"></div>
           ))}
         </div>
-        
+
         {/* Lignes du tableau */}
         {Array.from({ length: rows }).map((_, rowIndex) => (
           <div key={rowIndex} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>

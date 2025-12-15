@@ -7,6 +7,7 @@ jest.mock('../../services/api');
 const mockApi = api as jest.Mocked<typeof api>;
 
 describe('useDashboardData', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockFinancialSummary: any = { // Use 'any' to simplify mock data
     period: { from: '2024-01-01', to: '2024-01-31' },
     invoices: { total: 12, draft: 1, sent: 2, paid: 8, overdue: 1 },
@@ -24,6 +25,7 @@ describe('useDashboardData', () => {
     clientGrowthRate: 0.1
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockRecentInvoices: any = [ // Use 'any' to bypass strict type checking in test mock
     {
       id: '1',

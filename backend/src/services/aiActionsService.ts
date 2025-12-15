@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
  */
 
 export interface ActionRequest {
-  actionType: 'create_expense' | 'create_invoice' | 'create_client' | 'create_product' | 'search_data';
+  actionType: 'create_expense' | 'create_invoice' | 'create_smart_invoice' | 'create_client' | 'create_product' | 'search_data';
   parameters: any;
   requiresConfirmation?: boolean;
 }
@@ -25,7 +25,7 @@ export class AIActionsService {
    */
   private async findBestAccount(userId: string, label: string): Promise<any> {
     const labelLower = label.toLowerCase();
-    
+
     // Get all user's active EXPENSE accounts
     const accounts = await prisma.account.findMany({
       where: {
@@ -78,7 +78,7 @@ export class AIActionsService {
     }
 
     // No match found, use first account or one with 6000/6700 code (general expenses)
-    const defaultAccount = accounts.find(acc => 
+    const defaultAccount = accounts.find(acc =>
       acc.code === '6000' || acc.code === '6700' || acc.name.toLowerCase().includes('autres') || acc.name.toLowerCase().includes('general')
     ) || accounts[0];
 
@@ -102,10 +102,10 @@ export class AIActionsService {
   }): Promise<ActionResult> {
     try {
       console.log('[AIActionsService] Creating expense:', params);
-      
+
       // Get or find appropriate account
       let account;
-      
+
       if (params.accountId) {
         // Get account info for confirmation message
         account = await prisma.account.findUnique({
@@ -350,9 +350,9 @@ export class AIActionsService {
         success: true,
         data: invoice,
         message: `✅ Factura ${invoiceNumber} creada exitosamente para ${clientName}\n` +
-                 `Subtotal: ${subtotal.toFixed(2)} ${invoice.currency}\n` +
-                 `IVA: ${totalTva.toFixed(2)} ${invoice.currency}\n` +
-                 `Total: ${total.toFixed(2)} ${invoice.currency}`
+          `Subtotal: ${subtotal.toFixed(2)} ${invoice.currency}\n` +
+          `IVA: ${totalTva.toFixed(2)} ${invoice.currency}\n` +
+          `Total: ${total.toFixed(2)} ${invoice.currency}`
       };
     } catch (error: any) {
       console.error('[AIActionsService] Error creating invoice:', error);
@@ -371,7 +371,7 @@ export class AIActionsService {
     try {
       // Look for JSON action request in the response
       const jsonMatch = aiResponse.match(/\{[\s\S]*"action"[\s\S]*\}/);
-      
+
       if (jsonMatch) {
         const actionData = JSON.parse(jsonMatch[0]);
         return {
@@ -395,22 +395,273 @@ export class AIActionsService {
     switch (actionRequest.actionType) {
       case 'create_expense':
         return await this.createExpense(userId, actionRequest.parameters);
-      
+
       case 'create_client':
         return await this.createClient(userId, actionRequest.parameters);
-      
+
       case 'create_product':
         return await this.createProduct(userId, actionRequest.parameters);
-      
+
       case 'create_invoice':
         return await this.createInvoice(userId, actionRequest.parameters);
-      
+
+      case 'create_smart_invoice':
+        return await this.createSmartInvoice(userId, actionRequest.parameters);
+
       default:
         return {
           success: false,
           error: 'Unknown action type',
           message: `Acción no reconocida: ${actionRequest.actionType}`
         };
+    }
+  }
+
+  /**
+   * Find best matching client by name
+   */
+  async findBestClient(userId: string, name: string): Promise<any> {
+    if (!name) return null;
+    const search = name.toLowerCase().trim();
+
+    // 1. Exact match on company name
+    const exactCompany = await prisma.client.findFirst({
+      where: { userId, companyName: { equals: search } }
+    });
+    if (exactCompany) return exactCompany;
+
+    // 2. Partial match on company name
+    const partialCompany = await prisma.client.findFirst({
+      where: { userId, companyName: { contains: search } }
+    });
+    if (partialCompany) return partialCompany;
+
+    // 3. Search in first/last name
+    const person = await prisma.client.findFirst({
+      where: {
+        userId,
+        OR: [
+          { firstName: { contains: search } },
+          { lastName: { contains: search } }
+        ]
+      }
+    });
+    if (person) return person;
+
+    // 4. Fuzzy match (Levenshtein) on all clients
+    // Fetch all clients (lightweight select) and compute distance
+    const allClients = await prisma.client.findMany({
+      where: { userId },
+      select: { id: true, companyName: true, firstName: true, lastName: true }
+    });
+
+    let bestMatch = null;
+    let minDistance = Infinity;
+    const threshold = 3; // Max edits allowed
+
+    for (const c of allClients) {
+      const name = (c.companyName || `${c.firstName} ${c.lastName}`).toLowerCase();
+      const dist = this.levenshtein(search, name);
+
+      // Normalize distance by length to handle short/long names fairness? 
+      // For now simple distance.
+      if (dist < minDistance && dist <= threshold) {
+        minDistance = dist;
+        bestMatch = c;
+      }
+    }
+
+    if (bestMatch) {
+      return await prisma.client.findUnique({ where: { id: bestMatch.id } });
+    }
+
+    return null;
+  }
+
+  /**
+   * Find best matching product by name with synonyms
+   */
+  async findBestProduct(userId: string, name: string, synonyms: string[] = []): Promise<any> {
+    if (!name) return null;
+    const searchTerms = [name, ...synonyms].map(s => s.toLowerCase().trim());
+
+    // 1. Exact match for any term
+    const exact = await prisma.product.findFirst({
+      where: {
+        userId,
+        name: { in: searchTerms }
+      }
+    });
+    if (exact) return exact;
+
+    // 2. Partial match for any term
+    // Prisma doesn't support OR inside contains easily for array, so loop
+    for (const term of searchTerms) {
+      const partial = await prisma.product.findFirst({
+        where: { userId, name: { contains: term } }
+      });
+      if (partial) return partial;
+    }
+
+    // 3. Fuzzy match
+    const allProducts = await prisma.product.findMany({
+      where: { userId },
+      select: { id: true, name: true }
+    });
+
+    let bestMatch = null;
+    let minDistance = Infinity;
+    const threshold = 3;
+
+    for (const p of allProducts) {
+      const pName = p.name.toLowerCase();
+
+      for (const term of searchTerms) {
+        const dist = this.levenshtein(term, pName);
+        if (dist < minDistance && dist <= threshold) {
+          minDistance = dist;
+          bestMatch = p;
+        }
+      }
+    }
+
+    if (bestMatch) {
+      return await prisma.product.findUnique({ where: { id: bestMatch.id } });
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate Levenshtein distance between two strings
+   */
+  private levenshtein(a: string, b: string): number {
+    const matrix = [];
+
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) == a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            Math.min(
+              matrix[i][j - 1] + 1, // insertion
+              matrix[i - 1][j] + 1 // deletion
+            )
+          );
+        }
+      }
+    }
+
+    return matrix[b.length][a.length];
+  }
+
+  /**
+   * Create a smart invoice by resolving names to IDs
+   */
+  async createSmartInvoice(userId: string, params: {
+    clientName: string;
+    items: Array<{
+      productName: string;
+      synonyms?: string[];
+      quantity: number;
+      unitPrice?: number;
+      tvaRate?: number;
+      description?: string;
+    }>;
+    issueDate?: Date;
+    dueDate?: Date;
+    currency?: string;
+    notes?: string;
+  }): Promise<ActionResult> {
+    try {
+      console.log('[AIActionsService] Creating SMART invoice:', params);
+
+      // 1. Resolve Client
+      const client = await this.findBestClient(userId, params.clientName);
+      if (!client) {
+        return {
+          success: false,
+          message: `❌ No encontré al cliente "${params.clientName}". ¿Quieres crearlo primero?`
+        };
+      }
+
+      const clientMatchMsg = `✅ Cliente: ${client.companyName || client.firstName} (coincide con "${params.clientName}")`;
+
+      // 2. Resolve Products
+      const resolvedItems = [];
+      const missingProducts = [];
+      const productMatchMsgs = [];
+
+      for (const item of params.items) {
+        let product = await this.findBestProduct(userId, item.productName, item.synonyms);
+
+        if (product) {
+          resolvedItems.push({
+            productId: product.id,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice ?? product.unitPrice,
+            tvaRate: item.tvaRate ?? product.tvaRate,
+            description: item.description ?? product.name
+          });
+          productMatchMsgs.push(`✅ Producto: ${product.name} (coincide con "${item.productName}")`);
+        } else {
+          if (item.unitPrice !== undefined && item.tvaRate !== undefined) {
+            // Treat as custom item if price/tva provided, but warn
+            resolvedItems.push({
+              productId: undefined, // Will fail if DB requires it, but let's try or handle in createInvoice
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              tvaRate: item.tvaRate,
+              description: item.description || item.productName
+            });
+            productMatchMsgs.push(`⚠️ Producto nuevo/custom: ${item.productName}`);
+          } else {
+            missingProducts.push(item.productName);
+          }
+        }
+      }
+
+      if (missingProducts.length > 0) {
+        return {
+          success: false,
+          message: `❌ No encontré los siguientes productos: ${missingProducts.join(', ')}. Por favor verifícalos o créalos.`
+        };
+      }
+
+      // 3. Create Invoice using resolved IDs
+      const result = await this.createInvoice(userId, {
+        clientId: client.id,
+        items: resolvedItems as any, // Cast to avoid strict type issues with optional productId
+        issueDate: params.issueDate,
+        dueDate: params.dueDate,
+        currency: params.currency,
+        notes: params.notes
+      });
+
+      if (result.success) {
+        // Append match details to success message
+        result.message = `${clientMatchMsg}\n${productMatchMsgs.join('\n')}\n\n${result.message}`;
+      }
+
+      return result;
+
+    } catch (error: any) {
+      console.error('[AIActionsService] Error creating smart invoice:', error);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Error al procesar la factura inteligente'
+      };
     }
   }
 
@@ -422,31 +673,31 @@ export class AIActionsService {
       case 'create_expense':
         const { label, amount, supplier, date, currency } = actionRequest.parameters;
         return `¿Confirmas registrar este gasto?\n\n` +
-               `📄 Descripción: ${label}\n` +
-               `💰 Monto: ${amount} ${currency || 'CHF'}\n` +
-               `🏢 Proveedor: ${supplier || 'No especificado'}\n` +
-               `📅 Fecha: ${date ? new Date(date).toLocaleDateString() : 'Hoy'}`;
+          `📄 Descripción: ${label}\n` +
+          `💰 Monto: ${amount} ${currency || 'CHF'}\n` +
+          `🏢 Proveedor: ${supplier || 'No especificado'}\n` +
+          `📅 Fecha: ${date ? new Date(date).toLocaleDateString() : 'Hoy'}`;
 
       case 'create_client':
         const clientParams = actionRequest.parameters;
         const clientName = clientParams.companyName || `${clientParams.firstName} ${clientParams.lastName}`;
         return `¿Confirmas crear este cliente?\n\n` +
-               `👤 Nombre: ${clientName}\n` +
-               `📧 Email: ${clientParams.email}\n` +
-               `🏙️ Ciudad: ${clientParams.city}`;
+          `👤 Nombre: ${clientName}\n` +
+          `📧 Email: ${clientParams.email}\n` +
+          `🏙️ Ciudad: ${clientParams.city}`;
 
       case 'create_product':
         const productParams = actionRequest.parameters;
         return `¿Confirmas crear este producto?\n\n` +
-               `📦 Producto: ${productParams.name}\n` +
-               `💰 Precio: ${productParams.unitPrice} CHF\n` +
-               `📊 IVA: ${productParams.tvaRate}%`;
+          `📦 Producto: ${productParams.name}\n` +
+          `💰 Precio: ${productParams.unitPrice} CHF\n` +
+          `📊 IVA: ${productParams.tvaRate}%`;
 
       case 'create_invoice':
         const invoiceParams = actionRequest.parameters;
         let subtotal = 0;
         let totalTva = 0;
-        
+
         if (invoiceParams.items && Array.isArray(invoiceParams.items)) {
           invoiceParams.items.forEach((item: any) => {
             const itemTotal = item.quantity * item.unitPrice;
@@ -455,22 +706,32 @@ export class AIActionsService {
             totalTva += itemTva;
           });
         }
-        
+
         const total = subtotal + totalTva;
         const curr = invoiceParams.currency || 'CHF';
-        
+
         let itemsList = '';
         if (invoiceParams.items && Array.isArray(invoiceParams.items)) {
-          itemsList = invoiceParams.items.map((item: any) => 
+          itemsList = invoiceParams.items.map((item: any) =>
             `  - ${item.description || 'Producto'} x ${item.quantity} @ ${item.unitPrice} ${curr} = ${(item.quantity * item.unitPrice).toFixed(2)} ${curr}`
           ).join('\n');
         }
-        
+
         return `¿Confirmas crear esta factura?\n\n` +
-               `📋 Productos:\n${itemsList}\n\n` +
-               `💵 Subtotal: ${subtotal.toFixed(2)} ${curr}\n` +
-               `📊 IVA: ${totalTva.toFixed(2)} ${curr}\n` +
-               `💰 Total: ${total.toFixed(2)} ${curr}`;
+          `📋 Productos:\n${itemsList}\n\n` +
+          `💵 Subtotal: ${subtotal.toFixed(2)} ${curr}\n` +
+          `📊 IVA: ${totalTva.toFixed(2)} ${curr}\n` +
+          `💰 Total: ${total.toFixed(2)} ${curr}`;
+
+      case 'create_smart_invoice':
+        const smartParams = actionRequest.parameters;
+        const smartItems = smartParams.items || [];
+        const smartTotal = smartItems.reduce((acc: number, item: any) => acc + (item.quantity * (item.unitPrice || 0)), 0);
+
+        return `¿Confirmas crear esta factura (Smart)?\n\n` +
+          `👤 Cliente: ${smartParams.clientName}\n` +
+          `📋 Productos: ${smartItems.length}\n` +
+          `💰 Total aprox: ${smartTotal.toFixed(2)} ${smartParams.currency || 'CHF'}`;
 
       default:
         return '¿Confirmas ejecutar esta acción?';

@@ -39,7 +39,7 @@ export function QuoteList({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
     (localStorage.getItem('quotes_view_mode') as 'grid' | 'list') || 'grid'
   );
-  useEffect(() => { try { localStorage.setItem('quotes_view_mode', viewMode); } catch {} }, [viewMode]);
+  useEffect(() => { try { localStorage.setItem('quotes_view_mode', viewMode); } catch { /* ignore storage errors */ } }, [viewMode]);
 
   // Filter quotes
   const filteredQuotes = useMemo(() => {
@@ -152,7 +152,7 @@ export function QuoteList({
           {/* Status filter */}
           <select
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as any)}
+            onChange={(e) => setSelectedStatus(e.target.value as 'all' | 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired')}
             className="px-4 py-2 border rounded-md focus:ring-blue-500"
             style={{
               borderColor: 'var(--color-border-primary)',

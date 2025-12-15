@@ -5,7 +5,8 @@ const prisma = new PrismaClient();
 export type OnboardingStep = 
   | 'company_info' 
   | 'logo' 
-  | 'financial' 
+  | 'financial'
+  | 'smtp'
   | 'client' 
   | 'product' 
   | 'invoice'
@@ -17,6 +18,7 @@ export interface OnboardingStatus {
   companyInfoCompleted: boolean;
   logoUploaded: boolean;
   financialInfoCompleted: boolean;
+  smtpConfigured: boolean;
   firstClientCreated: boolean;
   firstProductCreated: boolean;
   firstInvoiceCreated: boolean;
@@ -26,6 +28,8 @@ export interface OnboardingStatus {
   skippedSteps: string[];
   progress: number;
   nextStep: OnboardingStep | null;
+  welcomeMessageShown: boolean;
+  welcomeMessageShownAt: Date | null;
 }
 
 /**
@@ -50,6 +54,7 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
 
   return {
     ...onboarding,
+    skippedSteps: onboarding.skippedSteps,
     progress,
     nextStep
   };
@@ -77,6 +82,10 @@ export async function completeOnboardingStep(
       break;
     case 'financial':
       updateData.financialInfoCompleted = true;
+      updateData.currentStep = 'smtp';
+      break;
+    case 'smtp':
+      updateData.smtpConfigured = true;
       updateData.currentStep = 'client';
       break;
     case 'client':
@@ -105,6 +114,7 @@ export async function completeOnboardingStep(
 
   return {
     ...updated,
+    skippedSteps: updated.skippedSteps,
     progress,
     nextStep
   };
@@ -125,7 +135,7 @@ export async function skipOnboardingStep(
   const updated = await prisma.userOnboarding.update({
     where: { userId },
     data: {
-      skippedSteps,
+      skippedSteps: skippedSteps,
       currentStep: nextStep
     }
   });
@@ -135,6 +145,7 @@ export async function skipOnboardingStep(
 
   return {
     ...updated,
+    skippedSteps: updated.skippedSteps,
     progress,
     nextStep: next
   };
@@ -147,23 +158,28 @@ export async function resetOnboarding(userId: string): Promise<OnboardingStatus>
   const updated = await prisma.userOnboarding.update({
     where: { userId },
     data: {
-      companyInfoCompleted: false,
-      logoUploaded: false,
-      financialInfoCompleted: false,
-      firstClientCreated: false,
-      firstProductCreated: false,
-      firstInvoiceCreated: false,
+      skippedSteps: [],
       isCompleted: false,
       completedAt: null,
       currentStep: 'company_info',
-      skippedSteps: []
+      companyInfoCompleted: false,
+      logoUploaded: false,
+      financialInfoCompleted: false,
+      smtpConfigured: false,
+      firstClientCreated: false,
+      firstProductCreated: false,
+      firstInvoiceCreated: false
     }
   });
 
+  const progress = calculateProgress(updated);
+  const nextStep = determineNextStep(updated);
+
   return {
     ...updated,
-    progress: 0,
-    nextStep: 'company_info'
+    skippedSteps: updated.skippedSteps,
+    progress,
+    nextStep
   };
 }
 
@@ -242,6 +258,7 @@ export async function autoUpdateOnboarding(userId: string): Promise<OnboardingSt
 
     return {
       ...updated,
+      skippedSteps: updated.skippedSteps,
       progress,
       nextStep
     };
@@ -253,10 +270,12 @@ export async function autoUpdateOnboarding(userId: string): Promise<OnboardingSt
 // Helper functions
 
 function calculateProgress(onboarding: any): number {
+  const skippedSteps = onboarding.skippedSteps || [];
   const steps = [
     onboarding.companyInfoCompleted,
     onboarding.logoUploaded,
     onboarding.financialInfoCompleted,
+    onboarding.smtpConfigured,
     onboarding.firstClientCreated,
     onboarding.firstProductCreated,
     onboarding.firstInvoiceCreated
@@ -269,9 +288,12 @@ function calculateProgress(onboarding: any): number {
 function determineNextStep(onboarding: any): OnboardingStep | null {
   if (onboarding.isCompleted) return null;
 
+  const skippedSteps = onboarding.skippedSteps || [];
+
   if (!onboarding.companyInfoCompleted) return 'company_info';
-  if (!onboarding.logoUploaded && !onboarding.skippedSteps.includes('logo')) return 'logo';
+  if (!onboarding.logoUploaded && !skippedSteps.includes('logo')) return 'logo';
   if (!onboarding.financialInfoCompleted) return 'financial';
+  if (!onboarding.smtpConfigured && !skippedSteps.includes('smtp')) return 'smtp';
   if (!onboarding.firstClientCreated) return 'client';
   if (!onboarding.firstProductCreated) return 'product';
   if (!onboarding.firstInvoiceCreated) return 'invoice';
@@ -280,7 +302,31 @@ function determineNextStep(onboarding: any): OnboardingStep | null {
 }
 
 function getNextStepAfterSkip(step: OnboardingStep): OnboardingStep {
-  const stepOrder: OnboardingStep[] = ['company_info', 'logo', 'financial', 'client', 'product', 'invoice', 'completed'];
+  const stepOrder: OnboardingStep[] = ['company_info', 'logo', 'financial', 'smtp', 'client', 'product', 'invoice', 'completed'];
   const currentIndex = stepOrder.indexOf(step);
   return stepOrder[currentIndex + 1] || 'completed';
+}
+
+/**
+ * Mark welcome message as shown
+ */
+export async function markWelcomeMessageShown(userId: string): Promise<OnboardingStatus> {
+  const onboarding = await getOnboardingStatus(userId);
+
+  const updated = await prisma.userOnboarding.update({
+    where: { userId },
+    data: {
+      welcomeMessageShown: true
+    }
+  });
+
+  const progress = calculateProgress(updated);
+  const nextStep = determineNextStep(updated);
+
+  return {
+    ...updated,
+    skippedSteps: updated.skippedSteps,
+    progress,
+    nextStep
+  };
 }

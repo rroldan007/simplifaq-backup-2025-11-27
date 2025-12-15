@@ -20,10 +20,10 @@ global.localStorage = localStorageMock as unknown as Storage;
 global.fetch = jest.fn();
 
 // Wrapper avec AuthProvider et Router
-function TestWrapper({ 
-  children, 
-  initialEntries = ['/dashboard'] 
-}: { 
+function TestWrapper({
+  children,
+  initialEntries = ['/dashboard']
+}: {
   children: React.ReactNode;
   initialEntries?: string[];
 }) {
@@ -46,7 +46,7 @@ describe('Layout', () => {
     const mockUser = {
       id: '1',
       email: 'test@simplifaq.ch',
-      companyName: 'Simplifaq SA',
+      companyName: 'SimpliFaq SA',
       firstName: 'Jean',
       lastName: 'Dupont',
     };
@@ -93,7 +93,7 @@ describe('Layout', () => {
 
     expect(screen.getByText('Jean Dupont')).toBeInTheDocument();
     expect(screen.getByText('test@simplifaq.ch')).toBeInTheDocument();
-    expect(screen.getByText('Simplifaq SA')).toBeInTheDocument();
+    expect(screen.getByText('SimpliFaq SA')).toBeInTheDocument();
   });
 
   it('should display user initials', () => {
@@ -122,7 +122,7 @@ describe('Layout', () => {
 
     // Le bouton menu mobile devrait être présent (même s'il est caché par CSS)
     const menuButtons = screen.getAllByRole('button');
-    const mobileMenuButton = menuButtons.find(button => 
+    const mobileMenuButton = menuButtons.find(button =>
       button.querySelector('svg')?.getAttribute('viewBox') === '0 0 24 24'
     );
     expect(mobileMenuButton).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe('Layout', () => {
 
   it('should toggle mobile sidebar when menu button is clicked', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <Layout />
@@ -139,13 +139,13 @@ describe('Layout', () => {
 
     // Trouver le bouton menu mobile
     const menuButtons = screen.getAllByRole('button');
-    const mobileMenuButton = menuButtons.find(button => 
+    const mobileMenuButton = menuButtons.find(button =>
       button.querySelector('svg')?.getAttribute('viewBox') === '0 0 24 24'
     );
 
     if (mobileMenuButton) {
       await user.click(mobileMenuButton);
-      
+
       // Vérifier que la sidebar a la classe pour être visible
       const sidebar = screen.getByRole('navigation').closest('div');
       expect(sidebar).toHaveClass('translate-x-0');
@@ -154,7 +154,7 @@ describe('Layout', () => {
 
   it('should close mobile sidebar when navigation link is clicked', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <Layout />
@@ -163,17 +163,17 @@ describe('Layout', () => {
 
     // Ouvrir d'abord la sidebar mobile
     const menuButtons = screen.getAllByRole('button');
-    const mobileMenuButton = menuButtons.find(button => 
+    const mobileMenuButton = menuButtons.find(button =>
       button.querySelector('svg')?.getAttribute('viewBox') === '0 0 24 24'
     );
 
     if (mobileMenuButton) {
       await user.click(mobileMenuButton);
-      
+
       // Cliquer sur un lien de navigation
       const invoicesLink = screen.getByText('Factures');
       await user.click(invoicesLink);
-      
+
       // La sidebar devrait se fermer
       const sidebar = screen.getByRole('navigation').closest('div');
       expect(sidebar).toHaveClass('-translate-x-full');
@@ -182,7 +182,7 @@ describe('Layout', () => {
 
   it('should close mobile sidebar when close button is clicked', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <Layout />
@@ -191,22 +191,22 @@ describe('Layout', () => {
 
     // Ouvrir d'abord la sidebar mobile
     const menuButtons = screen.getAllByRole('button');
-    const mobileMenuButton = menuButtons.find(button => 
+    const mobileMenuButton = menuButtons.find(button =>
       button.querySelector('svg')?.getAttribute('viewBox') === '0 0 24 24'
     );
 
     if (mobileMenuButton) {
       await user.click(mobileMenuButton);
-      
+
       // Trouver et cliquer sur le bouton fermer
       const closeButtons = screen.getAllByRole('button');
-      const closeButton = closeButtons.find(button => 
+      const closeButton = closeButtons.find(button =>
         button.querySelector('svg')?.querySelector('path')?.getAttribute('d')?.includes('M6 18L18 6M6 6l12 12')
       );
 
       if (closeButton) {
         await user.click(closeButton);
-        
+
         // La sidebar devrait se fermer
         const sidebar = screen.getByRole('navigation').closest('div');
         expect(sidebar).toHaveClass('-translate-x-full');
@@ -216,7 +216,7 @@ describe('Layout', () => {
 
   it('should close mobile sidebar when overlay is clicked', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <Layout />
@@ -225,18 +225,18 @@ describe('Layout', () => {
 
     // Ouvrir d'abord la sidebar mobile
     const menuButtons = screen.getAllByRole('button');
-    const mobileMenuButton = menuButtons.find(button => 
+    const mobileMenuButton = menuButtons.find(button =>
       button.querySelector('svg')?.getAttribute('viewBox') === '0 0 24 24'
     );
 
     if (mobileMenuButton) {
       await user.click(mobileMenuButton);
-      
+
       // Trouver et cliquer sur l'overlay
       const overlay = document.querySelector('.bg-black.bg-opacity-50');
       if (overlay) {
         fireEvent.click(overlay);
-        
+
         // La sidebar devrait se fermer
         const sidebar = screen.getByRole('navigation').closest('div');
         expect(sidebar).toHaveClass('-translate-x-full');
@@ -244,14 +244,14 @@ describe('Layout', () => {
     }
   });
 
-  it('should render Simplifaq logo', () => {
+  it('should render SimpliFaq logo', () => {
     render(
       <TestWrapper>
         <Layout />
       </TestWrapper>
     );
 
-    expect(screen.getByText('Simplifaq')).toBeInTheDocument();
+    expect(screen.getByText('SimpliFaq')).toBeInTheDocument();
     expect(screen.getByText('S')).toBeInTheDocument(); // Logo icon
   });
 
@@ -267,7 +267,7 @@ describe('Layout', () => {
 
     // Vérifier que tous les liens de navigation sont présents
     const links = screen.getAllByRole('link');
-    const navigationLinks = links.filter(link => 
+    const navigationLinks = links.filter(link =>
       link.getAttribute('href')?.startsWith('/')
     );
 

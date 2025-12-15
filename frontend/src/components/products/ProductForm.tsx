@@ -47,6 +47,9 @@ export function ProductForm({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Mode de saisie du prix: true = TTC (prix avec TVA), false = HT (prix hors taxe)
+  const [priceModeIsTTC, setPriceModeIsTTC] = useState<boolean>(false);
+  
   // Keep a string buffer for the unit price input to allow '.' and intermediate values
   const [unitPriceInput, setUnitPriceInput] = useState<string>(() => {
     const v = (initialData?.unitPrice ?? 0) as number;
@@ -85,6 +88,14 @@ export function ProductForm({
   const updateFormData = (field: keyof ProductFormData, value: ProductFormData[keyof ProductFormData]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
+    // Si on change le taux de TVA et qu'on est en mode TTC, recalculer l'affichage
+    if (field === 'tvaRate' && priceModeIsTTC && formData.unitPrice > 0) {
+      const newRate = value as number;
+      const priceTTC = formData.unitPrice * (1 + newRate / 100);
+      const roundedTTC = Math.round(priceTTC * 20) / 20;
+      setUnitPriceInput(roundedTTC.toFixed(2).replace('.', ','));
+    }
+    
     // Clear error when field is updated
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -102,7 +113,13 @@ export function ProductForm({
       const normalizedValue = value.replace(',', '.');
       const numericValue = parseFloat(normalizedValue);
       if (!Number.isNaN(numericValue)) {
-        updateFormData('unitPrice', numericValue);
+        // Si le mode est TTC, convertir en HT
+        if (priceModeIsTTC) {
+          const priceHT = numericValue / (1 + formData.tvaRate / 100);
+          updateFormData('unitPrice', priceHT);
+        } else {
+          updateFormData('unitPrice', numericValue);
+        }
       }
     } else {
       // Only separator or empty, keep numeric at 0
@@ -115,7 +132,14 @@ export function ProductForm({
     const rounded = Math.round(formData.unitPrice * 20) / 20; // 1/20 = 0.05
     updateFormData('unitPrice', rounded);
     // Normalize displayed input to two decimals with comma
-    setUnitPriceInput(rounded > 0 ? rounded.toFixed(2).replace('.', ',') : '');
+    // Si le mode est TTC, afficher le prix TTC
+    if (priceModeIsTTC) {
+      const priceTTC = rounded * (1 + formData.tvaRate / 100);
+      const roundedTTC = Math.round(priceTTC * 20) / 20;
+      setUnitPriceInput(roundedTTC > 0 ? roundedTTC.toFixed(2).replace('.', ',') : '');
+    } else {
+      setUnitPriceInput(rounded > 0 ? rounded.toFixed(2).replace('.', ',') : '');
+    }
   };
 
   // Removed unused formatPriceForDisplay helper
@@ -229,6 +253,26 @@ export function ProductForm({
     return formData.unitPrice - calculateDiscountedPrice();
   };
 
+  // Basculer entre le mode TTC et HT
+  const togglePriceMode = () => {
+    const newMode = !priceModeIsTTC;
+    setPriceModeIsTTC(newMode);
+    
+    // Actualiser l'affichage du prix selon le nouveau mode
+    if (formData.unitPrice > 0) {
+      if (newMode) {
+        // Passer en mode TTC: afficher le prix avec TVA
+        const priceTTC = formData.unitPrice * (1 + formData.tvaRate / 100);
+        const roundedTTC = Math.round(priceTTC * 20) / 20;
+        setUnitPriceInput(roundedTTC.toFixed(2).replace('.', ','));
+      } else {
+        // Passer en mode HT: afficher le prix HT actuel
+        const rounded = Math.round(formData.unitPrice * 20) / 20;
+        setUnitPriceInput(rounded.toFixed(2).replace('.', ','));
+      }
+    }
+  };
+
   const getUnitLabel = (unit: string) => {
     const unitObj = UNITS.find(u => u.value === unit);
     return unitObj ? unitObj.label : unit;
@@ -308,9 +352,25 @@ export function ProductForm({
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Prix unitaire HT *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Prix unitaire {priceModeIsTTC ? 'TTC' : 'HT'} *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={togglePriceMode}
+                    className="flex items-center space-x-2 px-3 py-1 text-xs font-medium rounded-full transition-colors"
+                    style={{
+                      backgroundColor: priceModeIsTTC ? '#DBEAFE' : '#F1F5F9',
+                      color: priceModeIsTTC ? '#1E40AF' : '#475569'
+                    }}
+                  >
+                    <span>{priceModeIsTTC ? '💰 TTC' : '📝 HT'}</span>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                  </button>
+                </div>
                 <Input
                   type="text"
                   value={unitPriceInput}
@@ -323,7 +383,10 @@ export function ProductForm({
                   title="Utilisez des pas de 0.05 (ex: 10,00 · 10,05 · 10,10)"
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Prix hors taxes en {currency} (pas de 0.05)
+                  {priceModeIsTTC 
+                    ? `Prix avec TVA incluse (${formData.tvaRate}%)`
+                    : `Prix hors taxes en ${currency} (pas de 0.05)`
+                  }
                 </p>
               </div>
               
@@ -373,6 +436,20 @@ export function ProductForm({
               {errors.tvaRate && (
                 <p className="text-sm text-red-600 mt-1">{errors.tvaRate}</p>
               )}
+            </div>
+
+            {/* Info box about TTC/HT switch */}
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+              <div className="flex items-start space-x-2">
+                <span className="text-blue-600 text-sm">ℹ️</span>
+                <p className="text-xs text-blue-700">
+                  <strong>Mode de saisie du prix :</strong> Utilisez le bouton {priceModeIsTTC ? '💰 TTC' : '📝 HT'} au-dessus 
+                  pour basculer entre le prix TTC (avec TVA) et HT (hors taxe). 
+                  {priceModeIsTTC 
+                    ? ' Le prix HT sera calculé automatiquement.' 
+                    : ' Vous pouvez aussi saisir le prix TTC si vous le connaissez.'}
+                </p>
+              </div>
             </div>
 
             {/* Price breakdown */}
@@ -592,6 +669,7 @@ export function ProductForm({
               <ul className="text-sm text-blue-700 space-y-1">
                 <li>• Utilisez des noms descriptifs</li>
                 <li>• Vérifiez le taux de TVA applicable</li>
+                <li>• Utilisez le switch TTC/HT pour saisir le prix avec ou sans TVA</li>
                 <li>• Ajoutez une description détaillée</li>
                 <li>• Choisissez l'unité appropriée</li>
               </ul>

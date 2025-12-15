@@ -84,7 +84,8 @@ class AdminApiServiceRefactored {
     const response: ApiResponse = await this.api.post('/auth/login', data);
     
     if (response.success && response.data) {
-      const payload = response.data as any;
+      type LoginPayload = { accessToken?: string; token?: string };
+      const payload = response.data as LoginPayload;
       const token = payload.accessToken || payload.token;
       
       if (token) {

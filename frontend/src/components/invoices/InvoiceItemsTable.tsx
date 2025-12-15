@@ -151,11 +151,31 @@ export function InvoiceItemsTable({
   const updateMultipleFields = (index: number, updates: Partial<InvoiceItem>) => {
     if (readOnly) return;
     const updatedItems = [...items];
+    
+    console.log('[InvoiceItemsTable] updateMultipleFields - BEFORE:', {
+      index,
+      currentTvaRate: updatedItems[index].tvaRate,
+      updatesTvaRate: updates.tvaRate,
+      updates
+    });
+    
     updatedItems[index] = { ...updatedItems[index], ...updates };
     
     // Always recalculate total when updating multiple fields
     const item = updatedItems[index];
+    
+    console.log('[InvoiceItemsTable] updateMultipleFields - AFTER spread:', {
+      index,
+      itemTvaRate: item.tvaRate,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineDiscountValue: item.lineDiscountValue,
+      lineDiscountType: item.lineDiscountType
+    });
+    
     updatedItems[index].total = calculateItemTotal(item.quantity, item.unitPrice, item.tvaRate, item.lineDiscountValue, item.lineDiscountType);
+    
+    console.log('[InvoiceItemsTable] updateMultipleFields - Final total:', updatedItems[index].total);
     
     // Update discount calculation fields
     const subtotalBefore = item.quantity * item.unitPrice;
@@ -284,7 +304,7 @@ export function InvoiceItemsTable({
   const totals = calculateTotals();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-visible">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900">
           Articles et services
@@ -344,7 +364,7 @@ export function InvoiceItemsTable({
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-visible">
                 {items.map((item, index) => (
                   <SortableInvoiceItem
                     key={item.id}

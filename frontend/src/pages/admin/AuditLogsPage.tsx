@@ -21,6 +21,7 @@ interface AuditLog {
 }
 
 export const AuditLogsPage: React.FC = () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [logs, setLogs] = useState<AuditLog[]>([
     {
       id: '1',

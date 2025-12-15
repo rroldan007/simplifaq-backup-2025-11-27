@@ -29,7 +29,7 @@ COPY . .
 COPY --from=deps /app/node_modules ./node_modules
 
 # Build arguments for environment variables
-ARG VITE_API_URL=http://localhost:3000
+ARG VITE_API_URL=https://my.simplifaq.ch/api
 ARG VITE_APP_NAME="SimpliFaq"
 ARG VITE_APP_VERSION=1.0.0
 ARG VITE_SENTRY_DSN=""

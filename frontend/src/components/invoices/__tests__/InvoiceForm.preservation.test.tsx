@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -253,7 +255,7 @@ describe('InvoiceForm Data Preservation Integration', () => {
     // Ensure no pending timers leak between tests and restore real timers
     try {
       jest.runOnlyPendingTimers();
-    } catch (_) {
+    } catch {
       // ignore if none pending
     }
     jest.useRealTimers();

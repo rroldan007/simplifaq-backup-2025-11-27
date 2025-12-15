@@ -1,14 +1,11 @@
 import React from 'react';
 import { 
-  Eye, 
   Pencil, 
   Trash2, 
   Download, 
   Send,
   Copy,
-  MoreHorizontal,
   CheckCircle2,
-  Clock,
   FileText,
   AlertCircle,
   XCircle

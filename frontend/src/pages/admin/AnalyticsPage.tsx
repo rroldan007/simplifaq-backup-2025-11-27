@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, TrendingUp, DollarSign, Activity, RefreshCw } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface AnalyticsData {
   users: {
@@ -29,6 +30,14 @@ interface AnalyticsData {
     avgSessionDuration: number;
   };
 }
+
+type StatCardProps = {
+  title: string;
+  value: string | number;
+  change?: number;
+  icon: LucideIcon;
+  color: string;
+};
 
 export const AnalyticsPage: React.FC = () => {
   const [data, setData] = useState<AnalyticsData | null>(null);
@@ -66,7 +75,7 @@ export const AnalyticsPage: React.FC = () => {
     loadAnalytics();
   }, [loadAnalytics]);
 
-  const StatCard = ({ title, value, change, icon: Icon, color }: any) => (
+  const StatCard: React.FC<StatCardProps> = ({ title, value, change, icon: Icon, color }) => (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
       <div className="flex items-center justify-between">
         <div>

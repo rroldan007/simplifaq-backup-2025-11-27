@@ -275,46 +275,186 @@ export function TVAReport({
             </div>
           </Card>
 
-          {/* TVA by Rate */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+          {/* TVA by Rate - Card View */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">
               Détail par taux de TVA
             </h3>
             
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {data.tvaRates.map((rate, index) => {
+                const getTVAInfo = (rateValue: number) => {
+                  if (rateValue === 8.1) {
+                    return {
+                      color: 'red',
+                      icon: '🔴',
+                      label: 'Taux normal',
+                      description: 'Services et biens standard',
+                      bgClass: 'bg-red-50',
+                      borderClass: 'border-red-200',
+                      textClass: 'text-red-900',
+                      accentClass: 'text-red-600'
+                    };
+                  } else if (rateValue === 2.6) {
+                    return {
+                      color: 'blue',
+                      icon: '🔵',
+                      label: 'Taux réduit',
+                      description: 'Denrées alimentaires, médicaments, etc.',
+                      bgClass: 'bg-blue-50',
+                      borderClass: 'border-blue-200',
+                      textClass: 'text-blue-900',
+                      accentClass: 'text-blue-600'
+                    };
+                  } else if (rateValue === 3.8) {
+                    return {
+                      color: 'purple',
+                      icon: '🟣',
+                      label: 'Taux spécial hébergement',
+                      description: 'Prestations d\'hébergement',
+                      bgClass: 'bg-purple-50',
+                      borderClass: 'border-purple-200',
+                      textClass: 'text-purple-900',
+                      accentClass: 'text-purple-600'
+                    };
+                  } else if (rateValue === 0) {
+                    return {
+                      color: 'gray',
+                      icon: '⚪',
+                      label: 'Exonéré de TVA',
+                      description: 'Exportations, services financiers, etc.',
+                      bgClass: 'bg-gray-50',
+                      borderClass: 'border-gray-200',
+                      textClass: 'text-gray-900',
+                      accentClass: 'text-gray-600'
+                    };
+                  } else {
+                    return {
+                      color: 'green',
+                      icon: '🟢',
+                      label: `Taux ${rateValue}%`,
+                      description: 'Autre taux',
+                      bgClass: 'bg-green-50',
+                      borderClass: 'border-green-200',
+                      textClass: 'text-green-900',
+                      accentClass: 'text-green-600'
+                    };
+                  }
+                };
+                
+                const info = getTVAInfo(rate.rate);
+                
+                return (
+                  <Card key={index} className={`p-6 ${info.bgClass} border-2 ${info.borderClass}`}>
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-3xl">{info.icon}</span>
+                        <div>
+                          <h4 className={`font-bold text-lg ${info.textClass}`}>
+                            {info.label}
+                          </h4>
+                          <p className={`text-sm ${info.accentClass}`}>
+                            TVA {rate.rate}% - {info.description}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`text-right ${info.accentClass} font-bold text-2xl`}>
+                        {rate.rate}%
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <div className={`text-xs ${info.accentClass} mb-1`}>
+                          Montant HT facturé
+                        </div>
+                        <div className={`text-xl font-bold ${info.textClass}`}>
+                          {formatCurrency(rate.totalNet)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={`text-xs ${info.accentClass} mb-1`}>
+                          TVA collectée
+                        </div>
+                        <div className={`text-xl font-bold ${info.textClass}`}>
+                          {formatCurrency(rate.totalTva)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={`text-xs ${info.accentClass} mb-1`}>
+                          Total TTC
+                        </div>
+                        <div className={`text-lg font-semibold ${info.textClass}`}>
+                          {formatCurrency(rate.totalGross)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={`text-xs ${info.accentClass} mb-1`}>
+                          Nombre de factures
+                        </div>
+                        <div className={`text-lg font-semibold ${info.textClass}`}>
+                          {rate.invoices.length} facture{rate.invoices.length > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {rate.invoices.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-opacity-30" style={{ borderColor: info.accentClass.replace('text-', '') }}>
+                        <details className="cursor-pointer">
+                          <summary className={`text-sm font-medium ${info.accentClass} hover:underline`}>
+                            Voir les {rate.invoices.length} facture{rate.invoices.length > 1 ? 's' : ''}
+                          </summary>
+                          <div className="mt-2 space-y-1">
+                            {rate.invoices.map((invoice, idx) => (
+                              <div key={idx} className={`text-xs ${info.textClass} bg-white bg-opacity-50 px-2 py-1 rounded`}>
+                                {invoice}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Summary Table */}
+          <Card className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 border-2 border-slate-300">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+              📊 Tableau récapitulatif
+            </h3>
+            
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full bg-white rounded-lg shadow-sm">
                 <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">
-                      Taux TVA
+                  <tr className="bg-slate-800 text-white">
+                    <th className="text-left py-3 px-4 font-medium">
+                      Type de TVA
                     </th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-700">
-                      Nb. factures
+                    <th className="text-right py-3 px-4 font-medium">
+                      Factures
                     </th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-700">
+                    <th className="text-right py-3 px-4 font-medium">
                       CA HT
                     </th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-700">
+                    <th className="text-right py-3 px-4 font-medium">
                       Montant TVA
                     </th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-700">
+                    <th className="text-right py-3 px-4 font-medium">
                       Total TTC
+                    </th>
+                    <th className="text-right py-3 px-4 font-medium">
+                      % du CA
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.tvaRates.map((rate, index) => (
-                    <tr key={index} className="border-b border-slate-100">
+                    <tr key={index} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-4">
-                        <div className="flex items-center space-x-2">
-                          <span className={`w-3 h-3 rounded-full ${
-                            rate.rate === 0 ? 'bg-slate-400' :
-                            rate.rate === 3.5 ? 'bg-blue-400' :
-                            rate.rate === 8.1 ? 'bg-amber-400' :
-                            'bg-green-400'
-                          }`}></span>
-                          <span className="font-medium">{rate.rateLabel}</span>
-                        </div>
+                        <span className="font-medium">{rate.rateLabel}</span>
                       </td>
                       <td className="py-3 px-4 text-right">
                         {rate.invoices.length}
@@ -325,26 +465,32 @@ export function TVAReport({
                       <td className="py-3 px-4 text-right font-medium">
                         {formatCurrency(rate.totalTva)}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold">
+                      <td className="py-3 px-4 text-right font-semibold">
                         {formatCurrency(rate.totalGross)}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {((rate.totalNet / data.summary.totalNet) * 100).toFixed(1)}%
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-slate-300 bg-slate-50">
-                    <td className="py-3 px-4 font-bold">Total</td>
-                    <td className="py-3 px-4 text-right font-bold">
+                  <tr className="border-t-2 border-slate-400 bg-slate-800 text-white font-bold">
+                    <td className="py-3 px-4">TOTAL</td>
+                    <td className="py-3 px-4 text-right">
                       {data.tvaRates.reduce((sum, rate) => sum + rate.invoices.length, 0)}
                     </td>
-                    <td className="py-3 px-4 text-right font-bold">
+                    <td className="py-3 px-4 text-right">
                       {formatCurrency(data.summary.totalNet)}
                     </td>
-                    <td className="py-3 px-4 text-right font-bold">
+                    <td className="py-3 px-4 text-right">
                       {formatCurrency(data.summary.totalTva)}
                     </td>
-                    <td className="py-3 px-4 text-right font-bold">
+                    <td className="py-3 px-4 text-right">
                       {formatCurrency(data.summary.totalGross)}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      100%
                     </td>
                   </tr>
                 </tfoot>

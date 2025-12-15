@@ -4,7 +4,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, CreditCard, Calendar, AlertCircle } from 'lucide-react';
-import { adminApi } from '../../services/adminApi';
+// adminApi reserved for future use
+// import { adminApi } from '../../services/adminApi';
 
 interface Subscription {
   id: string;
@@ -62,7 +63,8 @@ export const UserSubscriptionsPage: React.FC = () => {
       
       if (result.success && result.data) {
         // Mapear usuarios a formato de suscripción
-        const userSubscriptions = result.data.users.map((u: any) => ({
+        type RawUserSub = { id: string; subscription?: { id?: string; planId?: string; status?: string; currentPeriodStart?: string; currentPeriodEnd?: string; cancelAtPeriodEnd?: boolean; stripeCustomerId?: string; stripeSubscriptionId?: string }; createdAt?: string; email?: string; companyName?: string; subscriptionPlan?: string };
+        const userSubscriptions = result.data.users.map((u: RawUserSub) => ({
           id: u.subscription?.id || u.id,
           userId: u.id,
           planId: u.subscription?.planId || 'none',

@@ -220,9 +220,9 @@ export async function updateUserSmtpConfig(req: Request, res: Response): Promise
           replyTo: data.replyTo,
           provider: data.provider,
           apiKey: encryptedApiKey,
-          enableAutoSend: data.enableAutoSend,
-          includeFooter: data.includeFooter,
-          sendCopyToSender: data.sendCopyToSender,
+          enableAutoSend: data.enableAutoSend ?? false,
+          includeFooter: data.includeFooter ?? true,
+          sendCopyToSender: data.sendCopyToSender ?? false,
           dailyLimit,
           isVerified: false, // Reset verification when config changes
           lastTestedAt: null,

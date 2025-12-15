@@ -9,14 +9,14 @@ export default function NewInvoicePage() {
   const location = useLocation();
   const { createInvoice, notifications, removeNotification } = useInvoices();
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Get preselected client from navigation state
-  const preselectedClient = (location.state as any)?.preselectedClient;
+  const preselectedClient = (location.state as { preselectedClient?: unknown } | null)?.preselectedClient;
 
   const handleCancel = () => {
     console.log('🚨 CANCEL TRIGGERED - NewInvoicePage handleCancel called');
     console.trace('Cancel call stack');
-    
+
     // Add a small delay to prevent accidental cancellations from modal events
     const userConfirmed = window.confirm('Êtes-vous sûr de vouloir annuler la création de cette facture ? Toutes les données non sauvegardées seront perdues.');
     if (userConfirmed) {
@@ -41,15 +41,62 @@ export default function NewInvoicePage() {
         return;
       }
 
+      console.log('[NewInvoicePage] RAW data.items:', data.items);
+      console.log('[NewInvoicePage] Global discount:', {
+        globalDiscountValue: data.globalDiscountValue,
+        globalDiscountType: data.globalDiscountType,
+        globalDiscountNote: data.globalDiscountNote,
+      });
+
       const rawItems = (data.items || []).map((it, idx: number) => {
         const description = (it.description || '').trim();
         const quantity = sanitizeNumber(it.quantity, 0);
         const unitPrice = sanitizeNumber(it.unitPrice, 0);
         const tvaRate = sanitizeNumber(it.tvaRate ?? 0, 0);
         const order = typeof it.order === 'number' ? it.order : idx;
-        const total = quantity * unitPrice;
-        const productId = (it as any).productId || undefined;
-        return { description, quantity, unitPrice, tvaRate, total, order, productId };
+        const productId = it.productId || undefined;
+        const unit = it.unit || undefined;
+
+        // Line discount - Access directly from InvoiceItem type
+        const lineDiscountValue = it.lineDiscountValue;
+        const lineDiscountType = it.lineDiscountType;
+        const lineDiscountSource = it.lineDiscountSource || 'NONE';
+
+        console.log(`[NewInvoicePage] Item ${idx} discount fields:`, {
+          description,
+          lineDiscountValue,
+          lineDiscountType,
+          lineDiscountSource,
+        });
+
+        const subtotalBefore = quantity * unitPrice;
+        let discount = 0;
+        if (lineDiscountValue && lineDiscountValue > 0 && lineDiscountType) {
+          discount = lineDiscountType === 'PERCENT'
+            ? subtotalBefore * (lineDiscountValue / 100)
+            : Math.min(lineDiscountValue, subtotalBefore);
+        }
+        const total = Math.max(0, subtotalBefore - discount);
+
+        const itemPayload = {
+          description,
+          quantity,
+          unitPrice,
+          tvaRate,
+          total,
+          order,
+          productId,
+          unit,
+          lineDiscountSource,
+          // Include discount fields if present
+          ...(lineDiscountSource !== 'NONE' && lineDiscountValue !== undefined && lineDiscountType ? {
+            lineDiscountValue,
+            lineDiscountType,
+          } : {}),
+        };
+
+        console.log(`[NewInvoicePage] Item ${idx} payload:`, itemPayload);
+        return itemPayload;
       });
 
       const filteredItems = rawItems.filter((it) => it.description.length > 0 && it.quantity > 0);
@@ -90,7 +137,12 @@ export default function NewInvoicePage() {
       if (created) {
         // Wait for form data and user context (nextInvoiceNumber) to refresh before navigating
         setTimeout(() => {
-          navigate('/invoices');
+          const params = new URLSearchParams(location.search);
+          if (params.get('from') === 'onboarding') {
+            navigate('/dashboard');
+          } else {
+            navigate('/invoices');
+          }
         }, 300);
       }
     } finally {

@@ -1,6 +1,17 @@
 import React from 'react';
+import { LineDiscountDisplay } from './LineDiscountDisplay';
 
-type Item = { description: string; quantity: number; unitPrice: number; total: number; unit?: string };
+type Item = { 
+  description: string; 
+  quantity: number; 
+  unitPrice: number; 
+  total: number; 
+  unit?: string;
+  lineDiscountValue?: number;
+  lineDiscountType?: 'PERCENT' | 'AMOUNT';
+  subtotalBeforeDiscount?: number;
+  discountAmount?: number;
+};
 export type InvoicePreviewData = {
   companyName: string;
   companyAddress: string;
@@ -24,60 +35,97 @@ export type InvoicePreviewData = {
   quantityDecimals: 2 | 3;
 };
 
-export const ElegantClassic: React.FC<{ data: InvoicePreviewData; accentColor?: string; showHeader?: boolean }> = ({ data, accentColor = '#4F46E5', showHeader = true }) => {
+export const ElegantClassic: React.FC<{ 
+  data: InvoicePreviewData; 
+  accentColor?: string; 
+  showHeader?: boolean;
+  logoPosition?: 'left' | 'center' | 'right';
+  logoSize?: 'small' | 'medium' | 'large';
+  fontColorHeader?: string;
+  fontColorBody?: string;
+  tableHeadColor?: string;
+  headerBgColor?: string;
+  altRowColor?: string;
+}> = ({ 
+  data, 
+  accentColor = '#000000', 
+  showHeader = true,
+  logoPosition = 'left',
+  logoSize = 'medium',
+  fontColorHeader = '#000000',
+  fontColorBody = '#111111',
+  tableHeadColor = '#FAFAFA',
+  headerBgColor = '#FFFFFF',
+  altRowColor = '#FFFFFF'
+}) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;
     const normalized = unit.toLowerCase();
     return (normalized.includes('kg') || normalized.includes('kilogram')) ? 3 : data.quantityDecimals;
   };
 
+  const logoSizeClass = {
+    small: 'w-8 h-8',
+    medium: 'w-12 h-12',
+    large: 'w-16 h-16'
+  }[logoSize];
+
+  const logoImgSizeClass = {
+    small: 'max-h-6 max-w-[1.5rem]',
+    medium: 'max-h-10 max-w-[2.5rem]',
+    large: 'max-h-14 max-w-[3.5rem]'
+  }[logoSize];
+
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="text-white px-6 py-4"
-        style={{ backgroundColor: accentColor }}>
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
+      {/* Header Section: White background by default to match PDF */}
+      <div className={`px-6 py-6 ${logoPosition === 'center' ? 'text-center' : ''}`}
+        style={{ color: fontColorHeader || '#1F2937' }}>
+        <div className={`flex ${logoPosition === 'right' ? 'flex-row-reverse' : logoPosition === 'center' ? 'flex-col' : 'flex-row'} justify-between items-start gap-4`}>
+          
+          {/* Left Side: Logo + Company Info (side by side like PDF) */}
+          <div className="flex items-start gap-3">
             {data.logoUrl && (
-              <div className="w-12 h-12 bg-white rounded-md p-1 flex items-center justify-center">
+              <div className={`${logoSizeClass} flex-shrink-0 flex items-center justify-center`}>
                 <img 
                   src={data.logoUrl} 
-                  alt={`${data.companyName} logo`}
-                  className="max-h-10 max-w-[2.5rem] object-contain"
-                  onError={(e) => {
-                    // Si falla la carga de la imagen, ocultar el contenedor
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.parentElement?.classList.add('hidden');
-                  }}
+                  alt="Logo"
+                  className={`${logoImgSizeClass} object-contain`}
                 />
               </div>
             )}
-            {showHeader && <h2 className="text-xl font-semibold">{data.companyName}</h2>}
+            
+            {/* Company Info next to logo (like PDF) */}
+            <div className="text-xs" style={{ color: fontColorBody || '#1e293b' }}>
+              {showHeader && <div className="font-bold mb-1 text-sm">{data.companyName}</div>}
+              <div className="whitespace-pre-line opacity-80 leading-tight">{data.companyAddress}</div>
+            </div>
           </div>
-          <div className="text-sm opacity-90">
-            <div>Facture #{data.invoiceNumber}</div>
-            <div>Émise: {data.issueDate}</div>
-            <div>Échéance: {data.dueDate}</div>
+
+          {/* Right Side: Invoice Title & Number */}
+          <div className="text-right">
+            <div className="text-2xl font-bold mb-1" style={{ color: accentColor }}>FACTURE</div>
+            <div className="text-sm opacity-70">#{data.invoiceNumber}</div>
+            <div className="text-xs opacity-60 mt-2">
+              <div>Émise: {data.issueDate}</div>
+              <div>Échéance: {data.dueDate}</div>
+            </div>
           </div>
         </div>
       </div>
-      <div className="p-6">
-        <div className="grid grid-cols-2 gap-6 text-sm">
-          <div>
-            <div className="font-semibold text-slate-800 mb-1">De</div>
-            <div className="text-slate-700 whitespace-pre-line">{data.companyAddress}</div>
-          </div>
-          <div>
-            <div className="font-semibold text-slate-800 mb-1">À</div>
-            <div className="text-slate-700 whitespace-pre-line">{data.clientName}\n{data.clientAddress}</div>
-          </div>
+      <div className="p-6" style={{ color: fontColorBody }}>
+        {/* Client Info (Destinataire) */}
+        <div className="mb-6">
+          <div className="text-xs font-semibold mb-1 opacity-60" style={{ color: fontColorBody || '#1e293b' }}>Destinataire:</div>
+          <div className="text-sm font-medium">{data.clientName}</div>
+          <div className="text-xs opacity-80 whitespace-pre-line">{data.clientAddress}</div>
         </div>
 
         <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead
-              className="text-white"
-              style={{ backgroundColor: accentColor }}
+              className=""
+              style={{ backgroundColor: tableHeadColor || accentColor, color: fontColorHeader || 'white' }}
             >
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Description</th>
@@ -88,11 +136,19 @@ export const ElegantClassic: React.FC<{ data: InvoicePreviewData; accentColor?: 
             </thead>
             <tbody>
               {data.items.map((it, i) => (
-                <tr key={i} className="border-t">
-                  <td className="px-4 py-2 text-slate-800">{it.description}</td>
-                  <td className="px-4 py-2 text-right">{it.quantity.toFixed(resolveDecimals(it.unit))}</td>
-                  <td className="px-4 py-2 text-right">{it.unitPrice.toFixed(2)} {data.currency}</td>
-                  <td className="px-4 py-2 text-right font-medium">{it.total.toFixed(2)} {data.currency}</td>
+                <tr key={i} className="border-t border-slate-100">
+                  <td className="px-4 py-2" style={{ color: fontColorBody || '#1e293b' }}>
+                    <div>{it.description}</div>
+                    <LineDiscountDisplay
+                      lineDiscountValue={it.lineDiscountValue}
+                      lineDiscountType={it.lineDiscountType}
+                      discountAmount={it.discountAmount}
+                      currency={data.currency}
+                    />
+                  </td>
+                  <td className="px-4 py-2 text-right opacity-80">{it.quantity.toFixed(resolveDecimals(it.unit))}</td>
+                  <td className="px-4 py-2 text-right opacity-80">{it.unitPrice.toFixed(2)} {data.currency}</td>
+                  <td className="px-4 py-2 text-right font-medium" style={{ color: fontColorBody || '#1e293b' }}>{it.total.toFixed(2)} {data.currency}</td>
                 </tr>
               ))}
             </tbody>
@@ -101,7 +157,7 @@ export const ElegantClassic: React.FC<{ data: InvoicePreviewData; accentColor?: 
 
         <div className="mt-6 flex justify-end">
           <div className="w-full md:w-72 space-y-1 text-sm">
-            <div className="flex justify-between text-slate-600">
+            <div className="flex justify-between opacity-80">
               <span>Sous-total</span>
               <span>{data.subtotal.toFixed(2)} {data.currency}</span>
             </div>
@@ -114,13 +170,16 @@ export const ElegantClassic: React.FC<{ data: InvoicePreviewData; accentColor?: 
                 <span>-{data.discount.amount.toFixed(2)} {data.currency}</span>
               </div>
             )}
-            <div className="flex justify-between text-slate-600">
+            <div className="flex justify-between text-slate-600 mb-2">
               <span>TVA</span>
               <span>{data.tax.toFixed(2)} {data.currency}</span>
             </div>
-            <div className="flex justify-between text-slate-800 text-base font-semibold border-t pt-2">
+            <div className="flex justify-between items-center text-base font-bold border-t-2 pt-2"
+                 style={{ 
+                   borderColor: accentColor
+                 }}>
               <span>Total</span>
-              <span style={{ color: accentColor }}>{data.total.toFixed(2)} {data.currency}</span>
+              <span>{data.total.toFixed(2)} {data.currency}</span>
             </div>
           </div>
         </div>

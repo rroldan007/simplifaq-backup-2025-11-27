@@ -10,7 +10,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   selectedTemplate,
   onTemplateChange
 }) => {
-  const { templates, defaultTemplate, loading } = useTemplates();
+  const { templates, loading } = useTemplates();
+  // Note: defaultTemplate is available from useTemplates but not currently used
 
   // Fallback templates si no se pueden cargar desde la API
   const fallbackTemplates = [

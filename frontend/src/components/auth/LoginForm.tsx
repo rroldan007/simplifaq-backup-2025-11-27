@@ -64,7 +64,7 @@ export function LoginForm({
   // Gestion de la soumission du formulaire
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -88,7 +88,7 @@ export function LoginForm({
   ) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Effacer l'erreur du champ modifié
     if (errors[field as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -103,7 +103,7 @@ export function LoginForm({
           Connexion
         </h1>
         <p className="text-secondary">
-          Connectez-vous à votre compte Simplifaq
+          Connectez-vous à votre compte SimpliFaq
         </p>
       </div>
 

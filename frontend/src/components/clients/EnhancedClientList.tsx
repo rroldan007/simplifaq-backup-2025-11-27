@@ -60,7 +60,7 @@ export const EnhancedClientList: React.FC<EnhancedClientListProps> = ({
   );
   const [fabOpen, setFabOpen] = useState(false);
   useEffect(() => {
-    try { localStorage.setItem('clients_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('clients_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Brief FAB highlight on mount

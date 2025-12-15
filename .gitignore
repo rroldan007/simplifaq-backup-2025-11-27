@@ -59,3 +59,19 @@ ssl/
 # Backup files
 backups/
 *.backup
+
+# Uploads (imágenes de usuarios)
+uploads/
+backend/uploads/
+
+# Archivos markdown temporales
+*.md
+!README.md
+!CHANGELOG.md
+
+# Backups
+simplifaq-backup-*/
+
+# Scripts temporales
+rollback.sh
+sync-to-test.sh

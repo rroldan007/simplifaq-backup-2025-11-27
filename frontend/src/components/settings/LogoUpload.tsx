@@ -34,7 +34,9 @@ export const LogoUpload: React.FC<LogoUploadProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const src = currentLogoUrl || (user as any)?.logoUrl || (user as any)?.logo_path || (user as any)?.logoPath || '';
+    type UserWithLogo = { logoUrl?: string; logo_path?: string; logoPath?: string };
+    const userLogo = user as UserWithLogo | null;
+    const src = currentLogoUrl || userLogo?.logoUrl || userLogo?.logo_path || userLogo?.logoPath || '';
     if (src) {
       const url = src.startsWith('http') ? src : `${SERVER_BASE_URL}/${src.replace(/^\//, '')}`;
       setPreviewUrl(url);
@@ -64,10 +66,10 @@ export const LogoUpload: React.FC<LogoUploadProps> = ({
 
     try {
       const formData = new FormData();
-      formData.append('logo', file);
+      formData.append('file', file); // Backend espera campo 'file'
 
       const requestConfig = {
-        url: `${API_BASE_URL}/logo/upload`,
+        url: `${API_BASE_URL}/upload/logo`, // Ruta correcta
         method: 'POST',
         body: formData
       };
@@ -87,15 +89,18 @@ export const LogoUpload: React.FC<LogoUploadProps> = ({
       }
 
       const data = await processedResponse.json();
+      console.log('[LOGO] Upload response:', data);
       setSuccess('Logo téléchargé avec succès');
       // Update preview immediately from response
-      if (data && typeof data.logoUrl === 'string' && data.logoUrl.length > 0) {
-        const src: string = data.logoUrl;
-        const url = src.startsWith('http') ? src : `${SERVER_BASE_URL}/${src.replace(/^\//, '')}`;
+      // Backend returns { success: true, data: { url, logoUrl, ... } }
+      const logoUrl = data?.data?.url || data?.data?.logoUrl || data?.logoUrl;
+      if (logoUrl && typeof logoUrl === 'string' && logoUrl.length > 0) {
+        const url = logoUrl.startsWith('http') ? logoUrl : `${SERVER_BASE_URL}/${logoUrl.replace(/^\//, '')}`;
         setPreviewUrl(url);
       }
       if (user && data.user) {
-        const u = data.user as any;
+        type RawUser = { address?: { street?: string; postalCode?: string; city?: string; canton?: string; country?: string }; street?: string; postalCode?: string; city?: string; canton?: string; country?: string };
+        const u = data.user as RawUser;
         const normalized = {
           ...u,
           address: {
@@ -147,7 +152,8 @@ export const LogoUpload: React.FC<LogoUploadProps> = ({
       // Clear preview immediately
       setPreviewUrl(null);
       if (user && data.user) {
-        const u = data.user as any;
+        type RawUserDelete = { address?: { street?: string; postalCode?: string; city?: string; canton?: string; country?: string }; street?: string; postalCode?: string; city?: string; canton?: string; country?: string };
+        const u = data.user as RawUserDelete;
         const normalized = {
           ...u,
           address: {

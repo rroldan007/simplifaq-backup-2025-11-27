@@ -16,12 +16,25 @@ interface Plan {
   maxInvoicesPerMonth: number;
   maxClientsTotal: number;
   maxProductsTotal: number;
-  hasEmailSupport: boolean;
-  hasPrioritySupport: boolean;
+  storageLimit: number;
+  // Module access - Core modules
+  hasInvoices: boolean;
+  hasQuotes: boolean;
+  hasExpenses: boolean;
+  // Module access - Advanced features
+  hasAIAssistant: boolean;
   hasAdvancedReports: boolean;
   hasApiAccess: boolean;
   hasCustomBranding: boolean;
-  storageLimit: number;
+  // Module access - Future features
+  hasMultiUser: boolean;
+  maxUsers: number;
+  hasMultiCompany: boolean;
+  maxCompanies: number;
+  // Support features
+  hasEmailSupport: boolean;
+  hasPrioritySupport: boolean;
+  // Swiss-specific features
   hasSwissQRBill: boolean;
   hasMultiCurrency: boolean;
   hasMultiLanguage: boolean;
@@ -42,12 +55,25 @@ interface FormData {
   maxInvoicesPerMonth: string;
   maxClientsTotal: string;
   maxProductsTotal: string;
-  hasEmailSupport: boolean;
-  hasPrioritySupport: boolean;
+  storageLimit: string;
+  // Module access - Core modules
+  hasInvoices: boolean;
+  hasQuotes: boolean;
+  hasExpenses: boolean;
+  // Module access - Advanced features
+  hasAIAssistant: boolean;
   hasAdvancedReports: boolean;
   hasApiAccess: boolean;
   hasCustomBranding: boolean;
-  storageLimit: string;
+  // Module access - Future features
+  hasMultiUser: boolean;
+  maxUsers: string;
+  hasMultiCompany: boolean;
+  maxCompanies: string;
+  // Support features
+  hasEmailSupport: boolean;
+  hasPrioritySupport: boolean;
+  // Swiss-specific features
   hasSwissQRBill: boolean;
   hasMultiCurrency: boolean;
   hasMultiLanguage: boolean;
@@ -72,12 +98,25 @@ export const PlansPage: React.FC = () => {
     maxInvoicesPerMonth: '10',
     maxClientsTotal: '50',
     maxProductsTotal: '20',
-    hasEmailSupport: false,
-    hasPrioritySupport: false,
+    storageLimit: '100',
+    // Module access - Core modules
+    hasInvoices: true,
+    hasQuotes: false,
+    hasExpenses: false,
+    // Module access - Advanced features
+    hasAIAssistant: false,
     hasAdvancedReports: false,
     hasApiAccess: false,
     hasCustomBranding: false,
-    storageLimit: '100',
+    // Module access - Future features
+    hasMultiUser: false,
+    maxUsers: '1',
+    hasMultiCompany: false,
+    maxCompanies: '1',
+    // Support features
+    hasEmailSupport: false,
+    hasPrioritySupport: false,
+    // Swiss-specific features
     hasSwissQRBill: true,
     hasMultiCurrency: false,
     hasMultiLanguage: false,
@@ -141,12 +180,25 @@ export const PlansPage: React.FC = () => {
         maxInvoicesPerMonth: parseInt(formData.maxInvoicesPerMonth),
         maxClientsTotal: parseInt(formData.maxClientsTotal),
         maxProductsTotal: parseInt(formData.maxProductsTotal),
-        hasEmailSupport: formData.hasEmailSupport,
-        hasPrioritySupport: formData.hasPrioritySupport,
+        storageLimit: parseInt(formData.storageLimit),
+        // Module access - Core modules
+        hasInvoices: formData.hasInvoices,
+        hasQuotes: formData.hasQuotes,
+        hasExpenses: formData.hasExpenses,
+        // Module access - Advanced features
+        hasAIAssistant: formData.hasAIAssistant,
         hasAdvancedReports: formData.hasAdvancedReports,
         hasApiAccess: formData.hasApiAccess,
         hasCustomBranding: formData.hasCustomBranding,
-        storageLimit: parseInt(formData.storageLimit),
+        // Module access - Future features
+        hasMultiUser: formData.hasMultiUser,
+        maxUsers: parseInt(formData.maxUsers),
+        hasMultiCompany: formData.hasMultiCompany,
+        maxCompanies: parseInt(formData.maxCompanies),
+        // Support features
+        hasEmailSupport: formData.hasEmailSupport,
+        hasPrioritySupport: formData.hasPrioritySupport,
+        // Swiss-specific features
         hasSwissQRBill: formData.hasSwissQRBill,
         hasMultiCurrency: formData.hasMultiCurrency,
         hasMultiLanguage: formData.hasMultiLanguage,
@@ -180,9 +232,9 @@ export const PlansPage: React.FC = () => {
       setEditingPlan(null);
       await loadPlans();
       resetForm();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to save plan:', err);
-      setError(err.message || 'Error al guardar plan');
+      setError(err instanceof Error ? err.message : 'Error al guardar plan');
     }
   };
 
@@ -198,12 +250,25 @@ export const PlansPage: React.FC = () => {
       maxInvoicesPerMonth: plan.maxInvoicesPerMonth.toString(),
       maxClientsTotal: plan.maxClientsTotal.toString(),
       maxProductsTotal: plan.maxProductsTotal.toString(),
-      hasEmailSupport: plan.hasEmailSupport,
-      hasPrioritySupport: plan.hasPrioritySupport,
+      storageLimit: plan.storageLimit.toString(),
+      // Module access - Core modules
+      hasInvoices: plan.hasInvoices,
+      hasQuotes: plan.hasQuotes,
+      hasExpenses: plan.hasExpenses,
+      // Module access - Advanced features
+      hasAIAssistant: plan.hasAIAssistant,
       hasAdvancedReports: plan.hasAdvancedReports,
       hasApiAccess: plan.hasApiAccess,
       hasCustomBranding: plan.hasCustomBranding,
-      storageLimit: plan.storageLimit.toString(),
+      // Module access - Future features
+      hasMultiUser: plan.hasMultiUser,
+      maxUsers: plan.maxUsers.toString(),
+      hasMultiCompany: plan.hasMultiCompany,
+      maxCompanies: plan.maxCompanies.toString(),
+      // Support features
+      hasEmailSupport: plan.hasEmailSupport,
+      hasPrioritySupport: plan.hasPrioritySupport,
+      // Swiss-specific features
       hasSwissQRBill: plan.hasSwissQRBill,
       hasMultiCurrency: plan.hasMultiCurrency,
       hasMultiLanguage: plan.hasMultiLanguage,
@@ -247,12 +312,25 @@ export const PlansPage: React.FC = () => {
       maxInvoicesPerMonth: '10',
       maxClientsTotal: '50',
       maxProductsTotal: '20',
-      hasEmailSupport: false,
-      hasPrioritySupport: false,
+      storageLimit: '100',
+      // Module access - Core modules
+      hasInvoices: true,
+      hasQuotes: false,
+      hasExpenses: false,
+      // Module access - Advanced features
+      hasAIAssistant: false,
       hasAdvancedReports: false,
       hasApiAccess: false,
       hasCustomBranding: false,
-      storageLimit: '100',
+      // Module access - Future features
+      hasMultiUser: false,
+      maxUsers: '1',
+      hasMultiCompany: false,
+      maxCompanies: '1',
+      // Support features
+      hasEmailSupport: false,
+      hasPrioritySupport: false,
+      // Swiss-specific features
       hasSwissQRBill: true,
       hasMultiCurrency: false,
       hasMultiLanguage: false,
@@ -508,95 +586,211 @@ export const PlansPage: React.FC = () => {
 
               {/* Features */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Fonctionnalités</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasEmailSupport"
-                      checked={formData.hasEmailSupport}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Support Email</span>
-                  </label>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Modules et Fonctionnalités</h3>
+                
+                {/* Core Modules */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">📦 Modules Principaux</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pl-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasInvoices"
+                        checked={formData.hasInvoices}
+                        onChange={handleInputChange}
+                        className="rounded"
+                        disabled
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">📄 Facturation (obligatoire)</span>
+                    </label>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasPrioritySupport"
-                      checked={formData.hasPrioritySupport}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Support Prioritaire</span>
-                  </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasQuotes"
+                        checked={formData.hasQuotes}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">📋 Devis / Cotisations</span>
+                    </label>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasAdvancedReports"
-                      checked={formData.hasAdvancedReports}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Rapports Avancés</span>
-                  </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasExpenses"
+                        checked={formData.hasExpenses}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">💰 Dépenses / Charges</span>
+                    </label>
+                  </div>
+                </div>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasApiAccess"
-                      checked={formData.hasApiAccess}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Accès API</span>
-                  </label>
+                {/* Advanced Features */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">⚡ Fonctionnalités Avancées</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pl-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasAIAssistant"
+                        checked={formData.hasAIAssistant}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">🤖 Assistant IA</span>
+                    </label>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasCustomBranding"
-                      checked={formData.hasCustomBranding}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Branding Personnalisé</span>
-                  </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasAdvancedReports"
+                        checked={formData.hasAdvancedReports}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">📊 Rapports Avancés</span>
+                    </label>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasSwissQRBill"
-                      checked={formData.hasSwissQRBill}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">🇨🇭 QR-Bill Suisse</span>
-                  </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasApiAccess"
+                        checked={formData.hasApiAccess}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">🔌 Accès API</span>
+                    </label>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasMultiCurrency"
-                      checked={formData.hasMultiCurrency}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Multi-Devises</span>
-                  </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasCustomBranding"
+                        checked={formData.hasCustomBranding}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">🎨 Branding Personnalisé</span>
+                    </label>
+                  </div>
+                </div>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="hasMultiLanguage"
-                      checked={formData.hasMultiLanguage}
-                      onChange={handleInputChange}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Multi-Langues</span>
-                  </label>
+                {/* Future Features */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🚀 Fonctionnalités Futures</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
+                    <div>
+                      <label className="flex items-center gap-2 mb-2">
+                        <input
+                          type="checkbox"
+                          name="hasMultiUser"
+                          checked={formData.hasMultiUser}
+                          onChange={handleInputChange}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">👥 Multi-utilisateur (à venir)</span>
+                      </label>
+                      {formData.hasMultiUser && (
+                        <input
+                          type="number"
+                          name="maxUsers"
+                          value={formData.maxUsers}
+                          onChange={handleInputChange}
+                          min="1"
+                          placeholder="Nombre d'utilisateurs"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-2 mb-2">
+                        <input
+                          type="checkbox"
+                          name="hasMultiCompany"
+                          checked={formData.hasMultiCompany}
+                          onChange={handleInputChange}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">🏢 Multi-entreprise (à venir)</span>
+                      </label>
+                      {formData.hasMultiCompany && (
+                        <input
+                          type="number"
+                          name="maxCompanies"
+                          value={formData.maxCompanies}
+                          onChange={handleInputChange}
+                          min="1"
+                          placeholder="Nombre d'entreprises (ex: 2, 3, 10)"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Support & Swiss Features */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🇨🇭 Support & Fonctionnalités Suisses</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pl-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasEmailSupport"
+                        checked={formData.hasEmailSupport}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">📧 Support Email</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasPrioritySupport"
+                        checked={formData.hasPrioritySupport}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">⚡ Support Prioritaire</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasSwissQRBill"
+                        checked={formData.hasSwissQRBill}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">🇨🇭 QR-Bill Suisse</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasMultiCurrency"
+                        checked={formData.hasMultiCurrency}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">💱 Multi-Devises</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasMultiLanguage"
+                        checked={formData.hasMultiLanguage}
+                        onChange={handleInputChange}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">🌐 Multi-Langues</span>
+                    </label>
+                  </div>
                 </div>
               </div>
 

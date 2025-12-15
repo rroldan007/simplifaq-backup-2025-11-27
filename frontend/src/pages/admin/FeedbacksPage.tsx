@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 interface Feedback {
@@ -46,12 +46,7 @@ export const FeedbacksPage: React.FC = () => {
 
   const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-  useEffect(() => {
-    loadStats();
-    loadFeedbacks();
-  }, [pagination.page, secteurFilter, problemeFilter]);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const token = localStorage.getItem('adminToken');
       const response = await axios.get(`${API_BASE}/feedback/stats`, {
@@ -61,9 +56,9 @@ export const FeedbacksPage: React.FC = () => {
     } catch (error) {
       console.error('Error loading stats:', error);
     }
-  };
+  }, [API_BASE]);
 
-  const loadFeedbacks = async () => {
+  const loadFeedbacks = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
@@ -86,7 +81,12 @@ export const FeedbacksPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_BASE, pagination.page, pagination.limit, secteurFilter, problemeFilter]);
+
+  useEffect(() => {
+    loadStats();
+    loadFeedbacks();
+  }, [loadStats, loadFeedbacks]);
 
   const getStarRating = (rating: number) => {
     return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);

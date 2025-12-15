@@ -4,7 +4,6 @@ import { featureFlagDescriptions, type FeatureFlags } from '../../config/feature
 import { motion } from 'framer-motion';
 import { 
   Sparkles, 
-  Eye, 
   Zap, 
   Layers, 
   Bot, 
@@ -21,16 +20,11 @@ import {
   CheckCircle,
   Save,
   Keyboard,
-  Coins,
-  UserSquare,
-  Landmark,
-  Clock,
-  GanttChartSquare,
   Palette,
-  Code
+  type LucideIcon
 } from 'lucide-react';
 
-const FEATURE_ICONS: Record<keyof FeatureFlags, any> = {
+const FEATURE_ICONS: Record<keyof FeatureFlags, LucideIcon> = {
   modernInvoiceUI: FileText,
   animatedTransitions: Zap,
   advancedFilters: Layers,

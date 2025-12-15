@@ -43,8 +43,8 @@ export function NewDevisPage() {
             const tvaRate = sanitizeNumber(it.tvaRate ?? 0, 0);
             const order = typeof it.order === 'number' ? it.order : idx;
             const total = quantity * unitPrice;
-            const productId = (it as any).productId || undefined;
-            const unitRaw = (it as any).unit;
+            const productId = (it as unknown as { productId?: string }).productId || undefined;
+            const unitRaw = (it as unknown as { unit?: string }).unit;
             const unit = typeof unitRaw === 'string' ? unitRaw.trim() : undefined;
             return { description, quantity, unitPrice, tvaRate, total, order, productId, unit };
           })
@@ -57,7 +57,7 @@ export function NewDevisPage() {
         isQuote: true,
       } as const;
 
-      const created = await createInvoice(payload as any);
+      const created = await createInvoice(payload as Parameters<typeof createInvoice>[0]);
       if (created) {
         setTimeout(() => {
           navigate('/devis');

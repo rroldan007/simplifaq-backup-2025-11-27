@@ -28,6 +28,22 @@ export interface TvaSummary {
   tvaCollected: number;
   tvaDeductible: number;
   tvaNet: number;
+  tvaCollectedBreakdown: Array<{
+    rate: number;
+    rateLabel: string;
+    invoiceCount: number;
+    invoices: string[];
+    totalNet: number;
+    totalTva: number;
+    totalGross: number;
+  }>;
+  tvaDeductibleBreakdown: Array<{
+    rate: number;
+    rateLabel: string;
+    count: number;
+    baseAmount: number;
+    tvaAmount: number;
+  }>;
   currency: Currency;
   period: {
     from: string;
@@ -91,29 +107,29 @@ export const expensesApi = {
     const headers = await authHeaders();
     const res = await fetch(`${API_BASE_URL}/expenses/${id}`, { method: 'DELETE', headers });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({} as { error?: { message?: string } }));
       throw new Error(data?.error?.message || 'Erreur suppression');
     }
   },
   async getPnL(params: { dateFrom: string; dateTo: string; currency: Currency }): Promise<{ revenue: number; charges: number; utilite: number; tva: number; currency: Currency }> {
     const headers = await authHeaders();
-    const qs = new URLSearchParams(params as any);
+    const qs = new URLSearchParams(params);
     const res = await fetch(`${API_BASE_URL}/expenses/pnl?${qs.toString()}`, { headers });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error?.message || 'Erreur P&L');
-    const raw = (data?.data || {}) as any;
+    const raw = (data?.data || {}) as { revenue?: number; ca?: number; charges?: number; tva?: number; utilite?: number; currency?: Currency };
     const revenue = Number(raw.revenue ?? raw.ca ?? 0);
     const charges = Number(raw.charges ?? 0);
     const tva = Number(raw.tva ?? 0);
     const utilite = Number(
       raw.utilite ?? (Number.isFinite(revenue) && Number.isFinite(charges) ? revenue - charges : 0)
     );
-    const currency = (raw.currency as Currency) || params.currency;
+    const currency = raw.currency || params.currency;
     return { revenue, charges, utilite, tva, currency };
   },
   async getTvaSummary(params: { dateFrom: string; dateTo: string; currency: Currency }): Promise<TvaSummary> {
     const headers = await authHeaders();
-    const qs = new URLSearchParams(params as any);
+    const qs = new URLSearchParams(params);
     const res = await fetch(`${API_BASE_URL}/expenses/tva-summary?${qs.toString()}`, { headers });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error?.message || 'Erreur TVA');

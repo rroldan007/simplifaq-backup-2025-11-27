@@ -40,7 +40,7 @@ export function EmailVerificationAlert() {
         setResendStatus('error');
         setMessage(result.error?.message || 'Erreur lors de l\'envoi de l\'email.');
       }
-    } catch (error) {
+    } catch {
       setResendStatus('error');
       setMessage('Erreur de connexion. Veuillez réessayer.');
     } finally {

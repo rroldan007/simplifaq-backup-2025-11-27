@@ -58,7 +58,8 @@ export default function NewQuotePage() {
         return;
       }
 
-      const payload: any = {
+      type QuotePayload = { clientId: string; validUntil?: string; items: { description: string; quantity: number; unitPrice: number; tvaRate: number; total: number; order: number; productId?: string; unit?: string }[]; notes: string; terms: string; language: string; currency: string };
+      const payload: QuotePayload = {
         clientId: data.client.id,
         validUntil: data.dueDate || undefined, // Use dueDate as validUntil for quotes
         items: (data.items || [])
@@ -69,8 +70,8 @@ export default function NewQuotePage() {
             const tvaRate = sanitizeNumber(it.tvaRate ?? 8.1, 8.1);
             const order = typeof it.order === 'number' ? it.order : idx;
             const total = quantity * unitPrice;
-            const productId = (it as any).productId || undefined;
-            const unitRaw = (it as any).unit;
+            const productId = (it as unknown as { productId?: string }).productId || undefined;
+            const unitRaw = (it as unknown as { unit?: string }).unit;
             const unit = typeof unitRaw === 'string' ? unitRaw.trim() : undefined;
             return { description, quantity, unitPrice, tvaRate, total, order, productId, unit };
           })
@@ -132,12 +133,12 @@ export default function NewQuotePage() {
       lastName: existingQuote.client.lastName || '',
       email: existingQuote.client.email || '',
       address: {
-        street: (existingQuote.client as any).street || '',
-        city: (existingQuote.client as any).city || '',
-        postalCode: (existingQuote.client as any).postalCode || '',
-        country: (existingQuote.client as any).country || 'Suisse',
+        street: (existingQuote.client as unknown as { street?: string }).street || '',
+        city: (existingQuote.client as unknown as { city?: string }).city || '',
+        postalCode: (existingQuote.client as unknown as { postalCode?: string }).postalCode || '',
+        country: (existingQuote.client as unknown as { country?: string }).country || 'Suisse',
       },
-      vatNumber: (existingQuote.client as any).vatNumber,
+      vatNumber: (existingQuote.client as unknown as { vatNumber?: string }).vatNumber,
     } : null,
     issueDate: existingQuote.issueDate?.slice(0, 10) || new Date().toISOString().slice(0, 10),
     dueDate: existingQuote.validUntil?.slice(0, 10) || '',
@@ -149,16 +150,16 @@ export default function NewQuotePage() {
       tvaRate: item.tvaRate || 8.1,
       total: item.total || (item.quantity || 1) * (item.unitPrice || 0),
       order: item.order || 0,
-      productId: (item as any).productId,
-      unit: (item as any).unit,
+      productId: (item as unknown as { productId?: string }).productId,
+      unit: (item as unknown as { unit?: string }).unit,
     })),
     notes: existingQuote.notes || '',
     terms: existingQuote.terms || '',
     language: (existingQuote.language || 'fr') as 'fr' | 'de' | 'it' | 'en',
     currency: (existingQuote.currency || 'CHF') as 'CHF' | 'EUR',
-    globalDiscountValue: (existingQuote as any).globalDiscountValue || undefined,
-    globalDiscountType: (existingQuote as any).globalDiscountType || undefined,
-    globalDiscountNote: (existingQuote as any).globalDiscountNote || undefined,
+    globalDiscountValue: (existingQuote as unknown as { globalDiscountValue?: number }).globalDiscountValue || undefined,
+    globalDiscountType: (existingQuote as unknown as { globalDiscountType?: string }).globalDiscountType || undefined,
+    globalDiscountNote: (existingQuote as unknown as { globalDiscountNote?: string }).globalDiscountNote || undefined,
   } : undefined;
 
   return (

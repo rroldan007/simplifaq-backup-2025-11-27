@@ -43,7 +43,7 @@ describe('LoginForm', () => {
     );
 
     expect(screen.getByText('Connexion')).toBeInTheDocument();
-    expect(screen.getByText('Connectez-vous à votre compte Simplifaq')).toBeInTheDocument();
+    expect(screen.getByText('Connectez-vous à votre compte SimpliFaq')).toBeInTheDocument();
     expect(screen.getByLabelText('Adresse email')).toBeInTheDocument();
     expect(screen.getByLabelText('Mot de passe')).toBeInTheDocument();
     expect(screen.getByText('Se souvenir de moi')).toBeInTheDocument();
@@ -52,7 +52,7 @@ describe('LoginForm', () => {
 
   it('should show validation errors for empty fields', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <LoginForm />
@@ -70,7 +70,7 @@ describe('LoginForm', () => {
 
   it('should show validation error for invalid email', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <LoginForm />
@@ -90,7 +90,7 @@ describe('LoginForm', () => {
 
   it('should show validation error for short password', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <LoginForm />
@@ -112,7 +112,7 @@ describe('LoginForm', () => {
 
   it('should submit form with valid data', async () => {
     const user = userEvent.setup();
-    
+
     (fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -160,7 +160,7 @@ describe('LoginForm', () => {
 
   it('should show loading state during submission', async () => {
     const user = userEvent.setup();
-    
+
     // Mock une réponse lente
     (fetch as jest.Mock).mockImplementationOnce(
       () => new Promise(resolve => setTimeout(resolve, 1000))
@@ -186,7 +186,7 @@ describe('LoginForm', () => {
 
   it('should toggle password visibility', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <LoginForm />
@@ -207,7 +207,7 @@ describe('LoginForm', () => {
 
   it('should handle remember me checkbox', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <LoginForm />
@@ -228,7 +228,7 @@ describe('LoginForm', () => {
   it('should call onSwitchToRegister when register link is clicked', async () => {
     const user = userEvent.setup();
     const onSwitchToRegister = jest.fn();
-    
+
     render(
       <TestWrapper>
         <LoginForm onSwitchToRegister={onSwitchToRegister} />
@@ -244,7 +244,7 @@ describe('LoginForm', () => {
   it('should call onForgotPassword when forgot password link is clicked', async () => {
     const user = userEvent.setup();
     const onForgotPassword = jest.fn();
-    
+
     render(
       <TestWrapper>
         <LoginForm onForgotPassword={onForgotPassword} />
@@ -259,7 +259,7 @@ describe('LoginForm', () => {
 
   it('should display server error message', async () => {
     const user = userEvent.setup();
-    
+
     (fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       json: async () => ({
@@ -291,7 +291,7 @@ describe('LoginForm', () => {
 
   it('should clear field errors when user starts typing', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <TestWrapper>
         <LoginForm />

@@ -51,7 +51,7 @@ class AdminService {
           port: parseInt(process.env.SMTP_PORT || '587'),
           secure: process.env.SMTP_SECURE === 'true',
           user: process.env.SMTP_USER || '',
-          fromEmail: process.env.SMTP_FROM_EMAIL || 'noreply@simplifaq.com',
+          fromEmail: process.env.EMAIL_FROM || process.env.SMTP_USER || 'contact@simplifaq.ch',
           fromName: process.env.SMTP_FROM_NAME || 'SimpliFaq',
           provider: 'smtp',
           includeUnsubscribe: true,
@@ -134,13 +134,26 @@ class AdminService {
         orderBy: { [sortBy]: sortOrder },
         include: {
           subscription: true,
+          invoices: {
+            select: {
+              id: true,
+            },
+          },
         },
       }),
       prisma.user.count({ where }),
     ]);
 
+    // Add stats to users
+    const usersWithStats = users.map(user => ({
+      ...user,
+      stats: {
+        invoiceCount: user.invoices?.length || 0,
+      },
+    }));
+
     return {
-      users,
+      users: usersWithStats,
       pagination: {
         page,
         limit,

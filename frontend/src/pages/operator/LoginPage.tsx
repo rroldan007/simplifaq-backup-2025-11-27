@@ -19,7 +19,7 @@ export function OperatorLoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      const from = (location.state as any)?.from?.pathname || '/operator/dashboard';
+      const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/operator/dashboard';
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, location]);
@@ -42,8 +42,8 @@ export function OperatorLoginPage() {
       if (!result.success) {
         setError(result.error || 'Login failed');
       }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }

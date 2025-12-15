@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InvoiceList } from '../components/invoices/InvoiceList';
 import { ModernInvoiceList } from '../components/invoices/ModernInvoiceList';
 import { SendEmailModal } from '../components/invoices/SendEmailModal';
 import { EmailHistoryModal } from '../components/invoices/EmailHistoryModal';
 import { NotificationContainer } from '../components/ui/Notification';
-import { useInvoices, type Invoice } from '../hooks/useInvoices';
+import { useInvoices } from '../hooks/useInvoices';
 import { useFeature } from '../hooks/useFeatureFlags';
 
 export function InvoicesPage() {

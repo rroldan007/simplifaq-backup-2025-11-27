@@ -1,7 +1,19 @@
 import React from 'react';
 import type { InvoicePreviewData } from './ElegantClassic';
+import { LineDiscountDisplay } from './LineDiscountDisplay';
 
-export const CreativePremium: React.FC<{ data: InvoicePreviewData; accentColor?: string; showHeader?: boolean }> = ({ data, accentColor = '#8B5CF6', showHeader = true }) => {
+export const CreativePremium: React.FC<{ 
+  data: InvoicePreviewData; 
+  accentColor?: string; 
+  showHeader?: boolean;
+  logoPosition?: 'left' | 'center' | 'right';
+  logoSize?: 'small' | 'medium' | 'large';
+  fontColorHeader?: string;
+  fontColorBody?: string;
+  tableHeadColor?: string;
+  headerBgColor?: string;
+  altRowColor?: string;
+}> = ({ data, accentColor = '#8B5CF6', showHeader = true, headerBgColor, altRowColor }) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;
     const normalized = unit.toLowerCase();
@@ -73,7 +85,15 @@ export const CreativePremium: React.FC<{ data: InvoicePreviewData; accentColor?:
             <tbody>
               {data.items.map((it, i) => (
                 <tr key={i} className="border-t">
-                  <td className="px-4 py-2 text-slate-800">{it.description}</td>
+                  <td className="px-4 py-2 text-slate-800">
+                    <div>{it.description}</div>
+                    <LineDiscountDisplay
+                      lineDiscountValue={it.lineDiscountValue}
+                      lineDiscountType={it.lineDiscountType}
+                      discountAmount={it.discountAmount}
+                      currency={data.currency}
+                    />
+                  </td>
                   <td className="px-4 py-2 text-right">{it.quantity.toFixed(resolveDecimals(it.unit))}</td>
                   <td className="px-4 py-2 text-right">{it.unitPrice.toFixed(2)} {data.currency}</td>
                   <td className="px-4 py-2 text-right font-medium">{it.total.toFixed(2)} {data.currency}</td>
@@ -102,7 +122,11 @@ export const CreativePremium: React.FC<{ data: InvoicePreviewData; accentColor?:
               <span>TVA</span>
               <span>{data.tax.toFixed(2)} {data.currency}</span>
             </div>
-            <div className="flex justify-between text-slate-900 text-base font-semibold border-t pt-2">
+            <div className="flex justify-between text-base font-semibold border-t-2 pt-2"
+                 style={{ 
+                   borderColor: accentColor,
+                   color: '#111827'
+                 }}>
               <span>Total</span>
               <span>{data.total.toFixed(2)} {data.currency}</span>
             </div>

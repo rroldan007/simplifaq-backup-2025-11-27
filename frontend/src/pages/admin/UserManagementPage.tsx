@@ -5,12 +5,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardContent } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
-import { useAdminAuth as useAdminAuthRefactored } from '../../hooks/useAdminAuthRefactored';
-import { adminApiService } from '../../services/adminApiServiceRefactored';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
+import { adminApi } from '../../services/adminApi';
 
 interface User {
   id: string;
@@ -30,8 +30,10 @@ interface User {
   emailConfirmedAt?: string;
 }
 
+type RawUser = { id: string; email: string; firstName?: string; lastName?: string; companyName?: string; subscriptionPlan?: string; isActive?: boolean; createdAt?: string; lastLogin?: string; subscription?: { status?: string }; stats?: { invoiceCount?: number }; emailConfirmed?: boolean; emailConfirmedAt?: string };
+
 interface AdminUsersResponse {
-  users: any[];
+  users: RawUser[];
   pagination?: {
     totalPages?: number;
     totalCount?: number;
@@ -39,13 +41,13 @@ interface AdminUsersResponse {
 }
 
 export const UserManagementPage: React.FC = () => {
-  const { isAuthenticated, hasPermission } = useAdminAuthRefactored();
+  const { isAuthenticated, hasPermission } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'active' | 'inactive' | 'all'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -68,17 +70,18 @@ export const UserManagementPage: React.FC = () => {
   useEffect(() => {
     const loadPlans = async () => {
       try {
-        const response = await adminApiService.getPlans();
+        const response = await adminApi.getPlans();
         if (!response.success || !response.data) return;
 
-        const rawData = response.data as { plans?: any[] } | any[];
+        type RawPlan = { id?: string; name: string; price?: number; displayName?: string; currency?: string };
+        const rawData = response.data as { plans?: RawPlan[] } | RawPlan[];
         const plansArray = Array.isArray(rawData)
           ? rawData
           : Array.isArray(rawData.plans)
             ? rawData.plans
             : [];
 
-        setAvailablePlans(plansArray.map((plan: any) => ({
+        setAvailablePlans(plansArray.map((plan) => ({
           id: plan.id || plan.name,
           name: plan.name,
           price: plan.price,
@@ -120,7 +123,7 @@ export const UserManagementPage: React.FC = () => {
 
       console.log('[UserManagement] Fetching users with params:', params);
 
-      const response = await adminApiService.getUsers(params);
+      const response = await adminApi.getUsers(params);
 
       if (response.success && response.data) {
         const data = response.data as AdminUsersResponse;
@@ -129,23 +132,31 @@ export const UserManagementPage: React.FC = () => {
           return;
         }
 
-        const mappedUsers: User[] = data.users.map((u: any) => ({
-          id: u.id,
-          email: u.email,
-          firstName: u.firstName || '',
-          lastName: u.lastName || '',
-          company: u.companyName || '',
-          role: u.subscriptionPlan === 'premium' ? 'premium' : u.subscriptionPlan === 'admin' ? 'admin' : 'user',
-          status: u.isActive ? 'active' : 'inactive',
-          plan: u.subscriptionPlan || 'free',
-          createdAt: u.createdAt,
-          lastLogin: u.lastLogin || undefined,
-          subscriptionStatus: u.subscription?.status || (u.subscriptionPlan !== 'free' ? 'active' : 'inactive'),
-          totalInvoices: u.stats?.invoiceCount || 0,
-          totalRevenue: 0,
-          emailConfirmed: u.emailConfirmed || false,
-          emailConfirmedAt: u.emailConfirmedAt || undefined,
-        }));
+        const mappedUsers: User[] = data.users.map((u) => {
+          const subStatus = u.subscription?.status;
+          const subscriptionStatus: 'active' | 'inactive' | 'trial' | 'expired' = 
+            (subStatus === 'active' || subStatus === 'trial' || subStatus === 'expired') 
+              ? subStatus 
+              : (u.subscriptionPlan !== 'free' ? 'active' : 'inactive');
+          
+          return {
+            id: u.id,
+            email: u.email,
+            firstName: u.firstName || '',
+            lastName: u.lastName || '',
+            company: u.companyName || '',
+            role: u.subscriptionPlan === 'premium' ? 'premium' : u.subscriptionPlan === 'admin' ? 'admin' : 'user',
+            status: u.isActive ? 'active' : 'inactive',
+            plan: u.subscriptionPlan || 'free',
+            createdAt: u.createdAt || new Date().toISOString(),
+            lastLogin: u.lastLogin || undefined,
+            subscriptionStatus,
+            totalInvoices: u.stats?.invoiceCount || 0,
+            totalRevenue: 0,
+            emailConfirmed: u.emailConfirmed || false,
+            emailConfirmedAt: u.emailConfirmedAt || undefined,
+          };
+        });
         
         setUsers(mappedUsers);
         
@@ -265,7 +276,8 @@ export const UserManagementPage: React.FC = () => {
     );
   };
 
-  const getEmailVerificationBadge = (emailConfirmed: boolean, emailConfirmedAt?: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getEmailVerificationBadge = (emailConfirmed: boolean, _emailConfirmedAt?: string) => {
     if (emailConfirmed) {
       return (
         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
@@ -307,7 +319,7 @@ export const UserManagementPage: React.FC = () => {
         subscriptionPlan: formData.plan || 'free',
       };
 
-      const response = await adminApiService.createUser(userData);
+      const response = await adminApi.createUser(userData);
       
       if (response.success) {
         setShowCreateModal(false);
@@ -338,7 +350,7 @@ export const UserManagementPage: React.FC = () => {
         isActive: formData.status === 'active',
       };
 
-      const response = await adminApiService.updateUser(selectedUser.id, userData);
+      const response = await adminApi.updateUser(selectedUser.id, userData);
       
       if (response.success) {
         setShowEditModal(false);
@@ -369,7 +381,7 @@ export const UserManagementPage: React.FC = () => {
   const handleDeleteUser = async (userId: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.')) {
       try {
-        const response = await adminApiService.deleteUserPermanently(userId);
+        const response = await adminApi.deleteUserPermanently(userId);
         
         if (response.success) {
           fetchUsers(); // Refresh the list
@@ -391,7 +403,7 @@ export const UserManagementPage: React.FC = () => {
 
       const newStatus = user.status === 'active' ? 'inactive' : 'active';
       
-      const response = await adminApiService.updateUser(userId, {
+      const response = await adminApi.updateUser(userId, {
         isActive: newStatus === 'active',
       });
       
@@ -481,7 +493,7 @@ export const UserManagementPage: React.FC = () => {
           </select>
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => setFilterStatus(e.target.value as 'active' | 'inactive' | 'all')}
             className="px-3 py-2 rounded-md input-theme focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tous les statuts</option>
@@ -1004,14 +1016,14 @@ export const UserManagementPage: React.FC = () => {
                     const planName = selectedPlanDetails?.name || selectedPlan;
 
                     // New endpoint using SubscriptionManagementService (preferred)
-                    const response = await adminApiService.changeUserPlan(selectedUser.id, {
+                    const response = await adminApi.changeUserPlan(selectedUser.id, {
                       planId,
                       immediate: true,
                     });
 
                     if (!response.success) {
                       // _old fallback: legacy user update route (remove when new endpoint is stable)
-                      const legacyResponse = await adminApiService.updateUser(selectedUser.id, {
+                      const legacyResponse = await adminApi.updateUser(selectedUser.id, {
                         subscriptionPlan: planName,
                       });
 

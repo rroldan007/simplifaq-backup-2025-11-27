@@ -19,22 +19,12 @@ export function SummaryCard({
   change,
   amount,
   icon,
-  color,
   isCurrency = false,
   currency = 'CHF',
   isPercent = false,
   tooltipLabel,
 }: SummaryCardProps) {
-  // Keep prop for backward compatibility, but align with app neutral theme
-  const colorClasses = {
-    blue: '',
-    green: '',
-    yellow: '',
-    red: '',
-    purple: '',
-    indigo: '',
-    pink: '',
-  } as const;
+  // Note: color prop is kept for backward compatibility but not currently used
 
   const formatValue = (val: number) => {
     if (isCurrency) {

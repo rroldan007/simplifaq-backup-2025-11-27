@@ -433,6 +433,207 @@ export async function reactivateSubscription(req: AuthRequest, res: Response) {
 }
 
 /**
+ * GET /api/subscriptions/current
+ * Get current user's subscription with full plan details (simplified version)
+ */
+export async function getCurrentSubscription(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user!.id;
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      include: {
+        plan: true,
+      },
+    });
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Aucun abonnement trouvé',
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      data: subscription,
+    });
+  } catch (error) {
+    console.error('Get current subscription error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Erreur lors de la récupération de l\'abonnement',
+      },
+    });
+  }
+}
+
+/**
+ * GET /api/subscriptions/usage
+ * Get current user's usage statistics
+ */
+export async function getUsageStats(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user!.id;
+
+    // Get subscription to know limits
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      include: { plan: true },
+    });
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Aucun abonnement trouvé',
+        },
+      });
+    }
+
+    // Count current month's invoices
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const invoicesThisMonth = await prisma.invoice.count({
+      where: {
+        userId,
+        createdAt: {
+          gte: startOfMonth,
+        },
+      },
+    });
+
+    // Count total clients
+    const clientsTotal = await prisma.client.count({
+      where: { userId },
+    });
+
+    // Count total products
+    const productsTotal = await prisma.product.count({
+      where: { userId },
+    });
+
+    // Calculate storage used
+    const storageUsed = subscription.storageUsed || 0;
+
+    res.json({
+      success: true,
+      data: {
+        invoicesThisMonth,
+        invoicesLimit: subscription.plan.maxInvoicesPerMonth,
+        clientsTotal,
+        clientsLimit: subscription.plan.maxClientsTotal,
+        productsTotal,
+        productsLimit: subscription.plan.maxProductsTotal,
+        storageUsed,
+        storageLimit: subscription.plan.storageLimit,
+      },
+    });
+  } catch (error) {
+    console.error('Get usage stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Erreur lors de la récupération de l\'utilisation',
+      },
+    });
+  }
+}
+
+/**
+ * POST /api/subscriptions/change-plan
+ * Change the user's subscription plan (without Stripe for now)
+ */
+export async function changePlan(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user!.id;
+    const { planId } = req.body;
+
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'L\'ID du plan est requis',
+        },
+      });
+    }
+
+    // Verify plan exists and is active
+    const plan = await prisma.plan.findUnique({
+      where: { id: planId },
+    });
+
+    if (!plan || !plan.isActive) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'INVALID_PLAN',
+          message: 'Plan invalide ou inactif',
+        },
+      });
+    }
+
+    // Get or create subscription
+    let subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+
+    if (subscription) {
+      // Update existing subscription
+      subscription = await prisma.subscription.update({
+        where: { userId },
+        data: {
+          planId,
+          status: 'active',
+          cancelAtPeriodEnd: false,
+          cancelledAt: null,
+        },
+      });
+    } else {
+      // Create new subscription
+      const now = new Date();
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+      subscription = await prisma.subscription.create({
+        data: {
+          userId,
+          planId,
+          status: 'active',
+          currentPeriodStart: now,
+          currentPeriodEnd: nextMonth,
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      data: subscription,
+      message: 'Plan changé avec succès',
+    });
+  } catch (error) {
+    console.error('Change plan error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Erreur lors du changement de plan',
+      },
+    });
+  }
+}
+
+/**
  * GET /api/plans
  * Get all available plans (public endpoint)
  */

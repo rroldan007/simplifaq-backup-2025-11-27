@@ -75,7 +75,7 @@ class AdminApiService {
 
   constructor() {
     this.api = axios.create({
-            baseURL: `${import.meta.env.VITE_API_URL}/admin`,
+            baseURL: '/api/admin',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -180,6 +180,10 @@ class AdminApiService {
     return this.api.put(`/users/${userId}/status`, { isActive });
   }
 
+  async changeUserPlan(userId: string, data: { planId: string; immediate?: boolean }): Promise<ApiResponse> {
+    return this.api.post(`/users/${userId}/change-plan`, data);
+  }
+
   // Subscription management endpoints
   async getSubscriptions(params: SubscriptionSearchParams = {}): Promise<ApiResponse> {
     return this.api.get('/subscriptions', { params });
@@ -235,15 +239,6 @@ class AdminApiService {
 
   async getSwissComplianceAnalytics(params: AnalyticsParams = {}): Promise<ApiResponse> {
     return this.api.get('/analytics/swiss-compliance', { params });
-  }
-
-  // System management endpoints
-  async getSystemConfig(): Promise<ApiResponse> {
-    return this.api.get('/system/config');
-  }
-
-  async updateSystemConfig(key: string, value: unknown): Promise<ApiResponse> {
-    return this.api.put('/system/config', { key, value });
   }
 
   async getAdminLogs(params: { page?: number; limit?: number } = {}): Promise<ApiResponse> {
@@ -317,15 +312,50 @@ class AdminApiService {
 
   // Monitoring endpoints
   async getSystemHealth(): Promise<ApiResponse> {
-    return this.api.get('/monitoring/health');
+    // Use general health endpoint since /system/health doesn't exist
+    return this.api.get('/health');
+  }
+
+  async getSystemLogs(params: Record<string, unknown> = {}): Promise<ApiResponse> {
+    return this.api.get('/monitoring/logs', { params });
+  }
+
+  async getRecentActivity(params: Record<string, unknown> = {}): Promise<ApiResponse> {
+    return this.api.get('/analytics/recent-activity', { params });
   }
 
   async getTopUsers(params: Record<string, unknown> = {}): Promise<ApiResponse> {
     return this.api.get('/analytics/top-users', { params });
   }
 
-  async getRecentActivity(params: Record<string, unknown> = {}): Promise<ApiResponse> {
-    return this.api.get('/analytics/recent-activity', { params });
+  // System settings endpoints
+  async getSystemConfig(): Promise<ApiResponse> {
+    return this.api.get('/system/config');
+  }
+
+  async updateSystemConfig(config: Record<string, unknown>): Promise<ApiResponse> {
+    return this.api.put('/system/config', config);
+  }
+
+  async clearCache(): Promise<ApiResponse> {
+    return this.api.post('/system/cache/clear');
+  }
+
+  // SMTP Configuration endpoints
+  async getSmtpConfig(): Promise<ApiResponse> {
+    return this.api.get('/smtp/config');
+  }
+
+  async updateSmtpConfig(config: Record<string, unknown>): Promise<ApiResponse> {
+    return this.api.post('/smtp/config', config);
+  }
+
+  async testSmtpConfig(testEmail: string, configId?: string): Promise<ApiResponse> {
+    return this.api.post('/smtp/config/test', { testEmail, configId });
+  }
+
+  async getSmtpStats(): Promise<ApiResponse> {
+    return this.api.get('/smtp/stats');
   }
 
   // Settings endpoints

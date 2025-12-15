@@ -170,7 +170,7 @@ router.get('/search', async (req, res) => {
     const url = new URL('https://api3.geo.admin.ch/rest/services/api/SearchServer');
     url.searchParams.set('type', 'locations');
     url.searchParams.set('searchText', query);
-    url.searchParams.set('origins', 'address,street');
+    url.searchParams.set('origins', 'address');
     url.searchParams.set('lang', lang);
     url.searchParams.set('limit', limit);
 

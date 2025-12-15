@@ -287,6 +287,17 @@ export const validateInput = {
   }
 };
 
+// Events that are too frequent to log in development console
+const QUIET_EVENTS = [
+  'FORM_DATA_PRESERVED',
+  'FORM_DATA_RETRIEVED',
+  'FORM_DATA_REMOVED',
+  'API_REQUEST_SUCCESS',
+  'TOKEN_REFRESH_SCHEDULED',
+  'CROSS_TAB_EVENT_BROADCASTED',
+  'CROSS_TAB_EVENTS_CLEANED',
+];
+
 // Security audit logging
 export const securityLogger = {
   logSecurityEvent: (event: string, details: Record<string, unknown> = {}): void => {
@@ -299,7 +310,8 @@ export const securityLogger = {
     };
 
     // In production, this should be sent to a secure logging service
-    if (process.env.NODE_ENV === 'development') {
+    // In development, only log important events to reduce console noise
+    if (process.env.NODE_ENV === 'development' && !QUIET_EVENTS.includes(event)) {
       console.warn('Security Event:', logEntry);
     }
 

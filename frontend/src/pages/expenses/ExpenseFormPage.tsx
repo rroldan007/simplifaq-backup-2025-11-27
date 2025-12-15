@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { expensesApi, type Account, type Expense, type Currency } from '../../services/expensesApi';
-import { ArrowLeft, Save, X, Receipt, Calendar, DollarSign, FileText, Tag, User, Calculator, TrendingDown, Upload, Camera, FileImage, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { expensesApi, type Account, type Currency } from '../../services/expensesApi';
+import { ArrowLeft, Save, X, Receipt, Calendar, DollarSign, FileText, Tag, User, Calculator, TrendingDown, Upload, FileImage, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 
 const ExpenseFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +14,8 @@ const ExpenseFormPage: React.FC = () => {
   
   // États pour l'analyse de facture
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  type AnalysisResult = { date?: string; label?: string; amount?: number; tvaRate?: number; supplier?: string; notes?: string; confidence?: number; summary?: string };
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -60,8 +61,8 @@ const ExpenseFormPage: React.FC = () => {
             });
           }
         }
-      } catch (e: any) {
-        setError(e?.message || 'Erreur de chargement');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Erreur de chargement');
       } finally {
         setLoading(false);
       }
@@ -114,8 +115,8 @@ const ExpenseFormPage: React.FC = () => {
         notes: extracted.notes || '',
       });
       
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'analyse de la facture');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de l\'analyse de la facture');
       setAnalysisResult(null);
     } finally {
       setAnalyzing(false);
@@ -167,12 +168,11 @@ const ExpenseFormPage: React.FC = () => {
           tvaRate: form.tvaRate ? Number(form.tvaRate) : undefined,
           supplier: form.supplier || undefined,
           notes: form.notes || undefined,
-          id: '' as any, // will be ignored by API typing
-        } as any);
+        });
       }
       navigate('/expenses');
-    } catch (e: any) {
-      setError(e?.message || 'Erreur lors de l\'enregistrement');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de l\'enregistrement');
     } finally {
       setSaving(false);
     }

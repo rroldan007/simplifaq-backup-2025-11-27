@@ -19,7 +19,7 @@ export function SimpleLoginForm({
     password: '',
     rememberMe: false,
   });
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -28,7 +28,7 @@ export function SimpleLoginForm({
   ) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -36,7 +36,7 @@ export function SimpleLoginForm({
   };
 
   const validateForm = () => {
-    const newErrors: {[key: string]: string} = {};
+    const newErrors: { [key: string]: string } = {};
 
     if (!formData.email.trim()) {
       newErrors.email = 'L\'adresse email est obligatoire';
@@ -56,13 +56,13 @@ export function SimpleLoginForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
-    
+
     try {
       // Delegate to AuthContext to ensure consistent API base + secureStorage
       await login({
@@ -72,11 +72,23 @@ export function SimpleLoginForm({
 
       // Redirect to dashboard on success
       navigate('/dashboard', { replace: true });
-    } catch (error) {
+    } catch (error: unknown) {
+      // Enhanced error logging to debug empty error objects
+      console.error('Login error type:', typeof error);
       console.error('Login error:', error);
-      setErrors({ 
-        general: error instanceof Error ? error.message : 'Erreur de connexion' 
-      });
+      if (error && typeof error === 'object') {
+        console.error('Login error keys:', Object.keys(error));
+        console.error('Login error message:', (error as { message?: string }).message);
+      }
+
+      let errorMessage = 'Erreur de connexion';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String((error as { message: unknown }).message);
+      }
+
+      setErrors({ general: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +102,7 @@ export function SimpleLoginForm({
           Connexion
         </h1>
         <p className="text-secondary">
-          Connectez-vous à votre compte Simplifaq
+          Connectez-vous à votre compte SimpliFaq
         </p>
       </div>
 
@@ -171,8 +183,8 @@ export function SimpleLoginForm({
           disabled={isLoading}
           className={`
             w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white
-            ${isLoading 
-              ? 'bg-gray-400 cursor-not-allowed' 
+            ${isLoading
+              ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
             }
           `}

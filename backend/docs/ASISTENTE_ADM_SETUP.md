@@ -4,8 +4,8 @@
 Agregar las siguientes claves en `.env` / `.env.production`:
 
 ```
-ASISTENTE_BASE_URL=https://asistente.simplifaq.cloud
-ASISTENTE_API_KEY=<api_key_proporcionada_por_vps>
+ASISTENTE_BASE_URL=https://ia.simplifaq.cloud
+ASISTENTE_API_KEY=7542790518742e8d2192a2bc1d33f3498c187ef9c4a7a4c4735a138d0c6ff9a3
 ASISTENTE_TIMEOUT_MS=30000
 ```
 

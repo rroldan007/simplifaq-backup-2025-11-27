@@ -42,7 +42,7 @@ export function Header({ className }: HeaderProps) {
 
   const getPageTitle = (): string => {
     const path = location.pathname;
-    
+
     if (path === '/dashboard') return 'Tableau de bord';
     if (path.startsWith('/invoices')) return 'Factures';
     if (path.startsWith('/clients')) return 'Clients';
@@ -50,8 +50,8 @@ export function Header({ className }: HeaderProps) {
     if (path.startsWith('/reports')) return 'Rapports';
     if (path.startsWith('/expenses')) return 'Charges';
     if (path.startsWith('/settings')) return 'Paramètres';
-    
-    return 'Simplifaq';
+
+    return 'SimpliFaq';
   };
 
   return (
@@ -76,7 +76,7 @@ export function Header({ className }: HeaderProps) {
           <div className="flex items-center space-x-4">
             {/* Theme toggle using ThemeContext */}
             <HeaderThemeToggle />
-            
+
             {/* Notifications */}
             <button
               className="p-2 rounded-lg focus:outline-none focus:ring-2"
@@ -132,6 +132,10 @@ export function Header({ className }: HeaderProps) {
                       <CreditCard className="w-4 h-4 mr-3" />
                       Facturation
                     </Link>
+                    <Link to="/settings/subscription" className="flex items-center px-4 py-2 text-sm rounded-md" style={{ color: 'var(--color-text-primary)' }}>
+                      <CreditCard className="w-4 h-4 mr-3" />
+                      Mon abonnement
+                    </Link>
                     <Link to="/settings/features" className="flex items-center px-4 py-2 text-sm rounded-md" style={{ color: 'var(--color-text-primary)' }}>
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -161,7 +165,7 @@ export function Header({ className }: HeaderProps) {
 
   function getBreadcrumbText(): string {
     const path = location.pathname;
-    
+
     if (path === '/dashboard') return 'Vue d\'ensemble de votre activité';
     if (path === '/invoices') return 'Gérez vos factures et suivez vos paiements';
     if (path === '/invoices/new') return 'Créer une nouvelle facture';
@@ -183,7 +187,7 @@ export function Header({ className }: HeaderProps) {
     if (path === '/settings/profile') return 'Informations personnelles';
     if (path === '/settings/company') return 'Informations de l\'entreprise';
     if (path === '/settings/billing') return 'Paramètres de facturation';
-    
+
     return '';
   }
 }
@@ -198,8 +202,8 @@ function HeaderThemeToggle() {
       className={`
         relative p-2 rounded-lg text-sm font-medium
         transition-all duration-300 ease-out transform hover:scale-105 active:scale-95
-        ${isDark 
-          ? 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30' 
+        ${isDark
+          ? 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30'
           : 'bg-amber-400/20 text-amber-700 hover:bg-amber-400/30 border border-amber-500/30'
         }
         backdrop-blur-sm shadow-sm hover:shadow-md

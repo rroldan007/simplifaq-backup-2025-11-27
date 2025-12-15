@@ -58,7 +58,7 @@ export function ClientList({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
     (localStorage.getItem('clients_view_mode') as 'grid' | 'list') || 'grid'
   );
-  useEffect(() => { try { localStorage.setItem('clients_view_mode', viewMode); } catch {} }, [viewMode]);
+  useEffect(() => { try { localStorage.setItem('clients_view_mode', viewMode); } catch { /* ignore storage errors */ } }, [viewMode]);
 
   // Filter and search clients
   const filteredClients = useMemo(() => {

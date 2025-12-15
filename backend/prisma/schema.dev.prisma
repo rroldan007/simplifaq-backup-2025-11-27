@@ -63,12 +63,34 @@ model User {
   pdfPrimaryColor            String   @default("#4F46E5") // Primary color for header/accents
   pdfTemplate                String   @default("swiss_classic") // Template: swiss_classic, european_minimal, swiss_blue, german_formal
   
+  // Advanced PDF Customization
+  pdfLogoPosition     String   @default("left") // left, center, right
+  pdfLogoSize         String   @default("medium") // small, medium, large
+  
+  // Custom Colors (Granular Override) - If null, use theme defaults
+  pdfFontColorHeader  String?  // Override header text color
+  pdfFontColorBody    String?  // Override body text color
+  pdfTableHeadColor   String?  // Override table header background
+  pdfTotalBgColor     String?  // Override total block background color
+  pdfTotalTextColor   String?  // Override total block text color
+  
   // Header Information Display Settings
   pdfShowVAT                 Boolean  @default(true)   // Show VAT number in header
   pdfShowPhone               Boolean  @default(true)   // Show phone in header
   pdfShowEmail               Boolean  @default(true)   // Show email in header
   pdfShowWebsite             Boolean  @default(true)   // Show website in header
   pdfShowIBAN                Boolean  @default(false)  // Show IBAN in header (in addition to QR Bill)
+
+  // Password Reset
+  resetToken                 String?  // Hashed reset token
+  resetTokenExpires          DateTime? // Token expiration date
+
+  // Newsletter & LPD Compliance
+  subscribeNewsletter        Boolean   @default(false) // Newsletter subscription status
+  emailConfirmed             Boolean   @default(false) // Email confirmed via LPD double opt-in
+  emailConfirmToken          String?   // Email confirmation token
+  emailConfirmTokenExpires   DateTime? // Email confirmation token expiration (24 hours)
+  emailConfirmedAt           DateTime? // When email was confirmed
 
   // Relations
   clients        Client[]
@@ -81,6 +103,7 @@ model User {
   accounts       Account[]       @relation("UserAccounts")
   expenses       Expense[]       @relation("UserExpenses")
   assistantActions AssistantAction[]
+  onboarding     UserOnboarding? // User onboarding progress
 
   @@map("users")
 }
@@ -204,6 +227,7 @@ model Invoice {
   items    InvoiceItem[]
   payments Payment[]
 
+  @@unique([invoiceNumber, userId])
   @@map("invoices")
 }
 
@@ -215,6 +239,7 @@ model InvoiceItem {
   description String
   quantity    Float   // SQLite uses Float instead of Decimal (supports 3 decimals via UI formatting)
   unitPrice   Float
+  unit        String? // Unit of measurement (e.g., 'kg', 'Kilogramme', 'piece')
   tvaRate     Float   // Swiss TVA rates: 0.00, 3.50, 8.10
   total       Float
   order       Int     @default(0) // For ordering items
@@ -270,9 +295,18 @@ model QuoteItem {
   description String
   quantity    Float
   unitPrice   Float
+  unit        String? // Unit of measurement (e.g., 'kg', 'Kilogramme', 'piece')
   tvaRate     Float
   total       Float
   order       Int     @default(0)
+
+  // Line-level discount fields (same as InvoiceItem)
+  lineDiscountValue      Float?  // Discount value (percentage or fixed amount)
+  lineDiscountType       String? // PERCENT or AMOUNT
+  lineDiscountSource     String  @default("NONE") // FROM_PRODUCT, MANUAL, or NONE
+  subtotalBeforeDiscount Float?  // Subtotal before applying line discount
+  discountAmount         Float?  // Calculated discount amount
+  subtotalAfterDiscount  Float?  // Subtotal after applying line discount
 
   quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
@@ -389,22 +423,42 @@ model Plan {
   price               Float             // Monthly price in CHF (SQLite uses Float)
   currency            String            @default("CHF")
   isActive            Boolean           @default(true)
+  
   // Feature limits
   maxInvoicesPerMonth Int               @default(10)
   maxClientsTotal     Int               @default(50)
   maxProductsTotal    Int               @default(20)
+  storageLimit        Int               @default(100) // MB
+  
+  // Module access - Core modules
+  hasInvoices         Boolean           @default(true)  // Facturation (always enabled)
+  hasQuotes           Boolean           @default(false) // Devis/Cotisations
+  hasExpenses         Boolean           @default(false) // Dépenses/Charges
+  
+  // Module access - Advanced features
+  hasAIAssistant      Boolean           @default(false) // Assistant IA
+  hasAdvancedReports  Boolean           @default(false) // Rapports avancés
+  hasApiAccess        Boolean           @default(false) // Accès API
+  hasCustomBranding   Boolean           @default(false) // Branding personnalisé
+  
+  // Module access - Future features
+  hasMultiUser        Boolean           @default(false) // Multi-utilisateur (à venir)
+  maxUsers            Int               @default(1)     // Nombre d'utilisateurs max
+  hasMultiCompany     Boolean           @default(false) // Multi-entreprise (à venir)
+  maxCompanies        Int               @default(1)     // Nombre d'entreprises (1, 2, 3, 10...)
+  
+  // Support features
   hasEmailSupport     Boolean           @default(false)
   hasPrioritySupport  Boolean           @default(false)
-  hasAdvancedReports  Boolean           @default(false)
-  hasApiAccess        Boolean           @default(false)
-  hasCustomBranding   Boolean           @default(false)
-  storageLimit        Int               @default(100) // MB
+  
   // Swiss-specific features
   hasSwissQRBill      Boolean           @default(true)
   hasMultiCurrency    Boolean           @default(false)
   hasMultiLanguage    Boolean           @default(false)
+  
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+  
   // Relations
   subscriptions       Subscription[]
   entitlements        PlanEntitlement[]
@@ -853,8 +907,9 @@ model UserSmtpConfig {
   isVerified      Boolean  @default(false) // Set to true after successful test
   lastTestedAt    DateTime?
   // User Preferences
-  enableAutoSend  Boolean  @default(false) // Auto-send invoices when generated
-  includeFooter   Boolean  @default(true) // Include Swiss compliance footer
+  enableAutoSend    Boolean  @default(false) // Auto-send invoices when generated
+  includeFooter     Boolean  @default(true) // Include Swiss compliance footer
+  sendCopyToSender  Boolean  @default(false) // Send a copy to sender when sending emails
   // Rate Limiting (per day, enforced by user's plan)
   dailyLimit      Int      @default(1000) // Max emails per day (from plan)
   emailsSentToday Int      @default(0) // Counter reset daily
@@ -945,22 +1000,56 @@ model Account {
 }
 
 model Expense {
-  id        String   @id @default(cuid())
-  userId    String
-  accountId String
-  date      DateTime
-  label     String
-  amount    Float    // TTC (SQLite uses Float instead of Decimal)
-  currency  String   @default("CHF") // CHF | EUR | USD
-  tvaRate   Float?   // (SQLite uses Float instead of Decimal)
-  supplier  String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String
+  accountId     String
+  date          DateTime
+  label         String
+  amount        Float    // TTC (SQLite uses Float instead of Decimal)
+  currency      String   @default("CHF") // CHF | EUR | USD
+  tvaRate       Float?   // (SQLite uses Float instead of Decimal)
+  tvaDeductible Float?   // TVA déductible calculée automatiquement
+  supplier      String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user    User    @relation("UserExpenses", fields: [userId], references: [id], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [id])
 
   @@index([userId, date])
   @@map("expenses")
+}
+
+// Onboarding Model - Track user onboarding progress
+model UserOnboarding {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  
+  // Onboarding steps completion
+  companyInfoCompleted    Boolean  @default(false)
+  logoUploaded            Boolean  @default(false)
+  financialInfoCompleted  Boolean  @default(false)
+  smtpConfigured          Boolean  @default(false)
+  firstClientCreated      Boolean  @default(false)
+  firstProductCreated     Boolean  @default(false)
+  firstInvoiceCreated     Boolean  @default(false)
+  
+  // Onboarding status
+  isCompleted             Boolean  @default(false)
+  completedAt             DateTime?
+  currentStep             String   @default("company_info") // company_info, logo, financial, smtp, client, product, invoice
+  skippedSteps            String   @default("[]")
+  
+  // Welcome message
+  welcomeMessageShown     Boolean  @default(false)
+  welcomeMessageShownAt   DateTime?
+  
+  // Timestamps
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_onboarding")
 }

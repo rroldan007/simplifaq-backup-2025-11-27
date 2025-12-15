@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Server, Send, CheckCircle, XCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { useAdminAuth } from '../../hooks/useAdminAuthRefactored';
-import { adminApiService } from '../../services/adminApiServiceRefactored';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
+import { adminApi } from '../../services/adminApi';
 import { adminConfigService, type SmtpConfig } from '../../services/adminConfigService';
 
 interface SmtpStats {
@@ -44,10 +44,10 @@ export const SmtpConfigPage: React.FC = () => {
         return;
       }
 
-      const response = await adminApiService.getSmtpConfig();
+      const response = await adminApi.getSmtpConfig();
       
-      if (response.success && response.data) {
-        setConfig(response.data);
+      if (response.success && response.data?.config) {
+        setConfig(response.data.config);
       }
     } catch (error) {
       console.error('Error loading SMTP config:', error);
@@ -63,10 +63,10 @@ export const SmtpConfigPage: React.FC = () => {
         return;
       }
 
-      const response = await adminApiService.getSmtpStats();
+      const response = await adminApi.getSmtpStats();
       
-      if (response.success && response.data) {
-        setStats(response.data);
+      if (response.success && response.data?.stats) {
+        setStats(response.data.stats);
       }
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -88,7 +88,7 @@ export const SmtpConfigPage: React.FC = () => {
 
     setSaving(true);
     try {
-      const response = await adminApiService.updateSmtpConfig(config);
+      const response = await adminApi.updateSmtpConfig(config);
       
       if (response.success) {
         setMessage({ type: 'success', text: 'Configuration SMTP enregistrée avec succès' });
@@ -117,7 +117,7 @@ export const SmtpConfigPage: React.FC = () => {
 
     setTesting(true);
     try {
-      const response = await adminApiService.testSmtpConfig(testEmail);
+      const response = await adminApi.testSmtpConfig(testEmail);
       
       if (response.success) {
         setMessage({ type: 'success', text: 'Email de test envoyé avec succès' });
@@ -133,6 +133,7 @@ export const SmtpConfigPage: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 5000);

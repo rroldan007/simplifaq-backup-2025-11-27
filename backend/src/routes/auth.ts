@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { registerCompany, login, getProfile, logout, updateProfile, refreshToken, changePassword, confirmEmail, resendConfirmationEmail } from '../controllers/authController';
+import { registerCompany, login, getProfile, logout, updateProfile, refreshToken, changePassword, confirmEmail, resendConfirmationEmail, deleteAccount } from '../controllers/authController';
 import { forgotPassword, resetPassword } from '../controllers/passwordResetController';
 import { authenticateToken, rateLimitAuth } from '../middleware/auth';
 import { 
@@ -114,6 +114,17 @@ router.post('/change-password',
   authenticateToken,
   auditLogger('CHANGE_PASSWORD'),
   changePassword
+);
+
+/**
+ * @route POST /api/auth/delete-account
+ * @desc Delete user account permanently (requires password confirmation)
+ * @access Private
+ */
+router.post('/delete-account',
+  authenticateToken,
+  auditLogger('DELETE_ACCOUNT'),
+  deleteAccount
 );
 
 /**

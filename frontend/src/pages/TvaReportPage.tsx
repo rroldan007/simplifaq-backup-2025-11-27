@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  FileText, 
-  Download, 
-  Calendar, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  FileText,
+  Download,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
   DollarSign,
   AlertCircle,
   CheckCircle,
@@ -14,9 +14,9 @@ import {
 import { motion } from 'framer-motion';
 import { expensesApi, type Currency, type TvaSummary } from '../services/expensesApi';
 
-const formatAmount = (n: number) => new Intl.NumberFormat('fr-CH', { 
-  minimumFractionDigits: 2, 
-  maximumFractionDigits: 2 
+const formatAmount = (n: number) => new Intl.NumberFormat('fr-CH', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
 }).format(n);
 
 const formatDate = (dateString: string) => {
@@ -31,7 +31,7 @@ const formatDate = (dateString: string) => {
 const getQuarters = () => {
   const currentYear = new Date().getFullYear();
   const quarters = [];
-  
+
   for (let year = currentYear; year >= currentYear - 2; year--) {
     quarters.push(
       { label: `Q4 ${year}`, from: `${year}-10-01`, to: `${year}-12-31`, year },
@@ -40,7 +40,7 @@ const getQuarters = () => {
       { label: `Q1 ${year}`, from: `${year}-01-01`, to: `${year}-03-31`, year }
     );
   }
-  
+
   return quarters;
 };
 
@@ -64,8 +64,8 @@ export function TvaReportPage() {
         currency
       });
       setTvaSummary(res);
-    } catch (e: any) {
-      setError(e?.message || 'Erreur lors du chargement');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du chargement');
     } finally {
       setLoading(false);
     }
@@ -77,9 +77,9 @@ export function TvaReportPage() {
 
   const handleExportPDF = () => {
     if (!tvaSummary) return;
-    
+
     // Create a simple text report
-    const report = `
+    let report = `
 RAPPORT TVA - ${selectedQuarter.label}
 Période: ${formatDate(selectedQuarter.from)} - ${formatDate(selectedQuarter.to)}
 Devise: ${currency}
@@ -87,8 +87,23 @@ Devise: ${currency}
 ═══════════════════════════════════════════════════════
 
 TVA COLLECTÉE (Facturas pagadas)
-Montant: ${formatAmount(tvaSummary.tvaCollected)} ${currency}
+Montant Total: ${formatAmount(tvaSummary.tvaCollected)} ${currency}
 
+Détail par taux:
+`;
+
+    if (tvaSummary.tvaCollectedBreakdown && tvaSummary.tvaCollectedBreakdown.length > 0) {
+      tvaSummary.tvaCollectedBreakdown.forEach(b => {
+        report += `- ${b.rateLabel}: ${formatAmount(b.totalTva)} ${currency} (Base: ${formatAmount(b.totalNet)})\n`;
+        if (b.invoices && b.invoices.length > 0) {
+          report += `  Factures: ${b.invoices.join(', ')}\n`;
+        }
+      });
+    } else {
+      report += `Aucune donnée détaillée disponible.\n`;
+    }
+
+    report += `
 TVA DÉDUCTIBLE (Impôt préalable)
 Montant: ${formatAmount(tvaSummary.tvaDeductible)} ${currency}
 
@@ -245,31 +260,28 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
               </div>
 
               {/* TVA Nette */}
-              <div className={`rounded-2xl p-6 border-2 shadow-sm ${
-                tvaSummary.tvaNet >= 0
-                  ? 'bg-gradient-to-br from-red-50 to-rose-100 border-red-300'
-                  : 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-300'
-              }`}>
+              <div className={`rounded-2xl p-6 border-2 shadow-sm ${tvaSummary.tvaNet >= 0
+                ? 'bg-gradient-to-br from-red-50 to-rose-100 border-red-300'
+                : 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-300'
+                }`}>
                 <div className="flex items-center justify-between mb-4">
                   <DollarSign className={`w-8 h-8 ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`} />
                   <AlertCircle className={`w-5 h-5 ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-green-500'}`} />
                 </div>
-                <p className={`text-sm font-medium uppercase tracking-wide mb-2 ${
-                  tvaSummary.tvaNet >= 0 ? 'text-red-700' : 'text-green-700'
-                }`}>
+                <p className={`text-sm font-medium uppercase tracking-wide mb-2 ${tvaSummary.tvaNet >= 0 ? 'text-red-700' : 'text-green-700'
+                  }`}>
                   TVA Nette {tvaSummary.tvaNet >= 0 ? 'à payer' : 'à récupérer'}
                 </p>
-                <p className={`text-3xl font-bold mb-1 ${
-                  tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'
-                }`}>
+                <p className={`text-3xl font-bold mb-1 ${tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'
+                  }`}>
                   {formatAmount(Math.abs(tvaSummary.tvaNet))}
                 </p>
                 <p className={`text-sm ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {currency}
                 </p>
                 <p className={`text-xs mt-3 ${tvaSummary.tvaNet >= 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  {tvaSummary.tvaNet >= 0 
-                    ? 'Montant à verser à l\'AFC' 
+                  {tvaSummary.tvaNet >= 0
+                    ? 'Montant à verser à l\'AFC'
                     : 'Montant à récupérer de l\'AFC'}
                 </p>
               </div>
@@ -298,11 +310,41 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
 
                 {/* Calculations */}
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
-                    <span className="font-medium text-slate-700">TVA Collectée (chiffre 200)</span>
-                    <span className="text-lg font-bold text-green-900">
-                      {formatAmount(tvaSummary.tvaCollected)} {currency}
-                    </span>
+                  <div className="bg-green-50 rounded-lg overflow-hidden">
+                    <div className="flex justify-between items-center p-4">
+                      <span className="font-medium text-slate-700">TVA Collectée (chiffre 200)</span>
+                      <span className="text-lg font-bold text-green-900">
+                        {formatAmount(tvaSummary.tvaCollected)} {currency}
+                      </span>
+                    </div>
+
+                    {/* Breakdown inside the Detail section */}
+                    {tvaSummary.tvaCollectedBreakdown && tvaSummary.tvaCollectedBreakdown.length > 0 && (
+                      <div className="px-4 pb-4 space-y-2 border-t border-green-100 pt-2">
+                        {tvaSummary.tvaCollectedBreakdown.map((breakdown, idx) => (
+                          <div key={idx} className="bg-white bg-opacity-60 rounded p-2 text-sm">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-medium text-green-800">{breakdown.rateLabel}</span>
+                              <span className="font-bold text-green-700">{formatAmount(breakdown.totalTva)} {currency}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-green-600">
+                              <span>Base: {formatAmount(breakdown.totalNet)} {currency}</span>
+                              <span>{breakdown.invoiceCount} facture(s)</span>
+                            </div>
+                            {breakdown.invoices && breakdown.invoices.length > 0 && (
+                              <details className="mt-1">
+                                <summary className="cursor-pointer text-xs text-green-600 hover:text-green-800">
+                                  Voir factures
+                                </summary>
+                                <div className="pl-2 mt-1 text-xs text-slate-500">
+                                  {breakdown.invoices.join(', ')}
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
@@ -312,17 +354,15 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
                     </span>
                   </div>
 
-                  <div className={`flex justify-between items-center p-4 rounded-lg border-2 ${
-                    tvaSummary.tvaNet >= 0
-                      ? 'bg-red-50 border-red-200'
-                      : 'bg-green-50 border-green-200'
-                  }`}>
+                  <div className={`flex justify-between items-center p-4 rounded-lg border-2 ${tvaSummary.tvaNet >= 0
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-green-50 border-green-200'
+                    }`}>
                     <span className="font-bold text-slate-900">
                       Montant {tvaSummary.tvaNet >= 0 ? 'à payer' : 'à récupérer'} (chiffre 500)
                     </span>
-                    <span className={`text-2xl font-bold ${
-                      tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'
-                    }`}>
+                    <span className={`text-2xl font-bold ${tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'
+                      }`}>
                       {formatAmount(Math.abs(tvaSummary.tvaNet))} {currency}
                     </span>
                   </div>
@@ -371,16 +411,19 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
               </button>
             </motion.div>
           </>
-        )}
+        )
+        }
 
         {/* Loading */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-            <p className="text-slate-600">Chargement du rapport TVA...</p>
-          </div>
-        )}
-      </div>
-    </div>
+        {
+          loading && (
+            <div className="flex flex-col items-center justify-center py-20">
+              <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+              <p className="text-slate-600">Chargement du rapport TVA...</p>
+            </div>
+          )
+        }
+      </div >
+    </div >
   );
 }

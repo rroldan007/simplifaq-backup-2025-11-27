@@ -96,5 +96,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 };
 export default ThemeProvider;
 // Re-exports for convenience so consumers can import from 'contexts/ThemeContext'
+// eslint-disable-next-line react-refresh/only-export-components
 export { useTheme } from '../hooks/useTheme';
+// eslint-disable-next-line react-refresh/only-export-components
 export { themeConfig } from './themeConfig';

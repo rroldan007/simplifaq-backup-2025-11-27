@@ -41,6 +41,9 @@ import { BackupsPage } from './pages/admin/BackupsPage';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
 import { PlansPage } from './pages/admin/PlansPage';
+import { PublicPlansPage } from './pages/PublicPlansPage';
+import { PublicPlansPageTest } from './pages/PublicPlansPageTest';
+import { SubscriptionPage } from './pages/settings/SubscriptionPage';
 
 // Compact global theme toggle (only for authenticated pages)
 const GlobalThemeToggle: React.FC = () => {
@@ -87,6 +90,7 @@ function App() {
           <Route path="/test" element={<TestPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/welcome" element={<WelcomePage />} />
+          <Route path="/pricing" element={<PublicPlansPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmailPage />} />
@@ -131,6 +135,7 @@ function App() {
                       <Route path="dashboard" element={<AdminDashboard />} />
                       <Route path="users" element={<UserManagementPage />} />
                       <Route path="subscriptions" element={<UserSubscriptionsPage />} />
+                      <Route path="plans" element={<PlansPage />} />
                       <Route path="invoices" element={<AdminInvoicesPage />} />
                       <Route path="analytics" element={<AnalyticsPage />} />
                       <Route path="billing" element={<AdminBillingPage />} />
@@ -210,21 +215,6 @@ function App() {
             <Route index element={<ClientsPage />} />
           </Route>
 
-          <Route path="/plans" element={
-            <AuthProvider>
-              <AdminAuthProvider>
-                <div className="App min-h-screen" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                  <GlobalThemeToggle />
-                </div>
-              </AdminAuthProvider>
-            </AuthProvider>
-          } >
-            <Route index element={<PlansPage />} />
-          </Route>
-
           <Route path="/products" element={
             <AuthProvider>
               <AdminAuthProvider>
@@ -301,6 +291,7 @@ function App() {
           } >
             <Route index element={<SettingsPage />} />
             <Route path="smtp" element={<SmtpSettingsPage />} />
+            <Route path="subscription" element={<SubscriptionPage />} />
           </Route>
 
           {/* Redirect root to welcome */}

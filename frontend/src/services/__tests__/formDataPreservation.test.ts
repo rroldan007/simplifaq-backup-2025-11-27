@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { FormDataPreservation } from '../formDataPreservation';
 import { secureStorage, securityLogger } from '../../utils/security';
 

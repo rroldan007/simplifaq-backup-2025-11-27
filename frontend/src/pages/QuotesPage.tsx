@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QuoteList } from '../components/quotes/QuoteList';
-import { InvoiceList } from '../components/invoices/InvoiceList';
 import { ModernDevisList } from '../components/devis/ModernDevisList';
 import { SendEmailModal } from '../components/invoices/SendEmailModal';
 import { EmailHistoryModal } from '../components/invoices/EmailHistoryModal';

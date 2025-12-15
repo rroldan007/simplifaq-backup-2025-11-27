@@ -208,7 +208,7 @@ export function useInvoices(params: UseInvoicesParams = {}) {
       try {
         const updatedUser = await api.getMyProfile();
         if (updatedUser) {
-          updateUser(updatedUser as any);
+          updateUser(updatedUser);
         }
       } catch (e) {
         console.error('Failed to refresh user after creating invoice:', e);
@@ -334,7 +334,7 @@ export function useInvoices(params: UseInvoicesParams = {}) {
     setOperationLoading(prev => ({ ...prev, [operationId]: true }));
 
     try {
-      const response = await api.sendInvoice(id, options);
+      await api.sendInvoice(id, options);
       
       // Refresh invoices from server to get updated status
       await fetchInvoices(false);
@@ -388,10 +388,12 @@ export function useInvoices(params: UseInvoicesParams = {}) {
     try {
       const invoice = state.invoices.find(inv => inv.id === id);
       // Pass user's template and color preferences to PDF generator
-      const opts: any = {};
+      type UserPdfSettings = { pdfTemplate?: string; pdfPrimaryColor?: string };
+      const userPdf = user as UserPdfSettings | null;
+      const opts: { language?: string; template?: string; accentColor?: string } = {};
       if (invoice?.language) opts.language = invoice.language;
-      if ((user as any)?.pdfTemplate) opts.template = (user as any).pdfTemplate;
-      if ((user as any)?.pdfPrimaryColor) opts.accentColor = (user as any).pdfPrimaryColor;
+      if (userPdf?.pdfTemplate) opts.template = userPdf.pdfTemplate;
+      if (userPdf?.pdfPrimaryColor) opts.accentColor = userPdf.pdfPrimaryColor;
       const pdfBlob = await api.downloadInvoicePdf(id, opts);
       
       // Create download link

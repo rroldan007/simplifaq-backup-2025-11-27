@@ -1,8 +1,31 @@
 import React from 'react';
 import type { InvoicePreviewData } from './ElegantClassic';
+import { LineDiscountDisplay } from './LineDiscountDisplay';
 
-// BoldStatement: black accent, high contrast headers, bold totals
-export const BoldStatement: React.FC<{ data: InvoicePreviewData; accentColor?: string; showHeader?: boolean }> = ({ data, accentColor = '#111827', showHeader = true }) => {
+// BoldStatement: Creative Bold theme
+export const BoldStatement: React.FC<{ 
+  data: InvoicePreviewData; 
+  accentColor?: string; 
+  showHeader?: boolean;
+  logoPosition?: 'left' | 'center' | 'right';
+  logoSize?: 'small' | 'medium' | 'large';
+  fontColorHeader?: string;
+  fontColorBody?: string;
+  tableHeadColor?: string;
+  headerBgColor?: string;
+  altRowColor?: string;
+}> = ({ 
+  data, 
+  accentColor = '#7C3AED', 
+  showHeader = true,
+  logoPosition = 'left',
+  logoSize = 'medium',
+  fontColorHeader = '#FFFFFF',
+  fontColorBody = '#1F2937',
+  tableHeadColor = '#7C3AED',
+  headerBgColor = '#7C3AED',
+  altRowColor = '#F9FAFB'
+}) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;
     const normalized = unit.toLowerCase();
@@ -69,7 +92,15 @@ export const BoldStatement: React.FC<{ data: InvoicePreviewData; accentColor?: s
             <tbody>
               {data.items.map((it, i) => (
                 <tr key={i} className="border-t border-slate-300">
-                  <td className="px-4 py-2 text-slate-900">{it.description}</td>
+                  <td className="px-4 py-2 text-slate-900">
+                    <div>{it.description}</div>
+                    <LineDiscountDisplay
+                      lineDiscountValue={it.lineDiscountValue}
+                      lineDiscountType={it.lineDiscountType}
+                      discountAmount={it.discountAmount}
+                      currency={data.currency}
+                    />
+                  </td>
                   <td className="px-4 py-2 text-right text-slate-900">{it.quantity.toFixed(resolveDecimals(it.unit))}</td>
                   <td className="px-4 py-2 text-right text-slate-900">{it.unitPrice.toFixed(2)} {data.currency}</td>
                   <td className="px-4 py-2 text-right font-bold text-slate-900">{it.total.toFixed(2)} {data.currency}</td>

@@ -22,7 +22,7 @@ export const DevisPage: React.FC = () => {
   } = useInvoices({ autoRefresh: true, refreshInterval: 30000, sortBy: 'createdAt', sortOrder: 'desc', isQuote: true });
 
   // Filter only quotes
-  const devis = (invoices as any[]).filter((inv: any) => inv?.isQuote === true);
+  const devis = invoices.filter((inv) => (inv as unknown as { isQuote?: boolean })?.isQuote === true);
   
   // Choose component based on feature flag
   const DevisListComponent = modernUIEnabled ? ModernDevisList : InvoiceList;
@@ -38,7 +38,7 @@ export const DevisPage: React.FC = () => {
       )}
 
       <DevisListComponent
-        invoices={(invoices as any[]).filter((inv: any) => inv?.isQuote === true)}
+        invoices={devis}
         loading={loading}
         error={error}
         onView={(id) => navigate(`/invoices/${id}`)}

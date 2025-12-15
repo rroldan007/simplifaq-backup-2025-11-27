@@ -8,14 +8,22 @@ interface ColorPickerProps {
 }
 
 const DEFAULT_PRESETS = [
-  '#4F46E5', // Indigo
-  '#D52B1E', // Swiss Red
-  '#003D7A', // Swiss Blue
-  '#1A1A1A', // Dark Gray
-  '#059669', // Green
-  '#E11D48', // Rose
-  '#7C3AED', // Purple
-  '#000000', // Black
+  // Swiss & Standard
+  '#FFFFFF', '#D52B1E', '#003D7A', '#000000', '#1F2937',
+  // Blues & Indigos
+  '#1E3A8A', '#1E40AF', '#2563EB', '#3B82F6',
+  '#312E81', '#4338CA', '#4F46E5', '#6366F1',
+  // Teals & Greens
+  '#134E4A', '#0F766E', '#0D9488', '#14B8A6',
+  '#064E3B', '#065F46', '#059669', '#10B981',
+  // Warm & Earth
+  '#7F1D1D', '#991B1B', '#B91C1C', '#EF4444',
+  '#7C2D12', '#9A3412', '#C2410C', '#F97316',
+  // Purple & Pink
+  '#581C87', '#6D28D9', '#7C3AED', '#8B5CF6',
+  '#831843', '#9D174D', '#DB2777', '#EC4899',
+  // Grays
+  '#374151', '#4B5563', '#6B7280', '#9CA3AF',
 ];
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({

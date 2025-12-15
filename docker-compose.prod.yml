@@ -91,7 +91,7 @@ services:
       ASISTENTE_TIMEOUT_MS: ${ASISTENTE_TIMEOUT_MS:-30000}
     volumes:
       - ./logs:/var/log/simplifaq
-      - ./uploads:/app/uploads
+      - /var/www/simplifaq/my/backend/uploads:/app/uploads
       - ./fonts:/app/fonts:ro
       - ./backend/.env.production.docker:/app/.env.production
     ports:
@@ -147,7 +147,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - ./logs:/var/log/simplifaq
-      - ./uploads:/app/uploads
+      - /var/www/simplifaq/my/backend/uploads:/app/uploads
       - ./fonts:/app/fonts:ro
     ports:
       - "3011:3000"

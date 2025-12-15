@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
-  Filter, 
-  Download, 
   LayoutGrid, 
   List, 
   TrendingUp,
@@ -32,7 +30,7 @@ interface ModernExpensesListProps {
   onDelete?: (expenseId: string) => void;
   onCreateNew?: () => void;
   onRefresh?: () => void;
-  onFilterChange?: (filters: any) => void;
+  onFilterChange?: (filters: Record<string, unknown>) => void;
   currentFilters?: {
     dateFrom?: string;
     dateTo?: string;
@@ -68,10 +66,9 @@ export function ModernExpensesList({
   onFilterChange,
   currentFilters,
   pnlData,
-  pnlLoading = false,
-  tvaSummary,
-  tvaLoading = false
+  tvaSummary
 }: ModernExpensesListProps) {
+  // Note: pnlLoading and tvaLoading are available in props but not currently used
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
@@ -88,7 +85,7 @@ export function ModernExpensesList({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('expenses_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('expenses_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Initialize from currentFilters
@@ -351,6 +348,99 @@ export function ModernExpensesList({
                 <p className={`text-xs mt-1 ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`}>{currency}</p>
               </motion.div>
             </div>
+          )}
+
+          {/* TVA Breakdown by Rate */}
+          {tvaSummary && tvaSummary.tvaBreakdown && tvaSummary.tvaBreakdown.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200 mb-6"
+            >
+              <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                Détail TVA Récupérable par Taux
+                <span className="text-sm font-normal text-slate-500">(pour déclaration fiscale)</span>
+              </h3>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-indigo-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-indigo-900">Taux TVA</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-indigo-900">Nombre</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-indigo-900">Montant HT</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-indigo-900">TVA Récupérable</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-indigo-900">Montant TTC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tvaSummary.tvaBreakdown.map((item, idx) => {
+                      const totalTTC = item.baseAmount + item.tvaAmount;
+                      return (
+                        <tr 
+                          key={item.rate} 
+                          className={`border-b border-indigo-100 ${idx % 2 === 0 ? 'bg-white/50' : 'bg-blue-50/30'}`}
+                        >
+                          <td className="py-3 px-4 font-semibold text-slate-900">
+                            {item.rate === 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-200 text-slate-700 rounded-full text-sm">
+                                0% <span className="text-xs">(Exonéré)</span>
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm ${
+                                item.rate === 8.1 ? 'bg-red-100 text-red-700' :
+                                item.rate === 3.8 ? 'bg-orange-100 text-orange-700' :
+                                item.rate === 2.6 ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {item.rate}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right text-slate-700">
+                            {item.count} dépense{item.count > 1 ? 's' : ''}
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-slate-900">
+                            {formatAmount(item.baseAmount)} {currency}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-green-700 bg-green-50/50">
+                            {formatAmount(item.tvaAmount)} {currency}
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-slate-900">
+                            {formatAmount(totalTTC)} {currency}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-indigo-100 border-t-2 border-indigo-300 font-bold">
+                      <td className="py-3 px-4 text-slate-900">TOTAL</td>
+                      <td className="py-3 px-4 text-right text-slate-900">
+                        {tvaSummary.tvaBreakdown.reduce((sum, item) => sum + item.count, 0)}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-900">
+                        {formatAmount(tvaSummary.tvaBreakdown.reduce((sum, item) => sum + item.baseAmount, 0))} {currency}
+                      </td>
+                      <td className="py-3 px-4 text-right text-green-900 bg-green-100/70">
+                        {formatAmount(tvaSummary.tvaDeductible)} {currency}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-900">
+                        {formatAmount(tvaSummary.tvaBreakdown.reduce((sum, item) => sum + item.baseAmount + item.tvaAmount, 0))} {currency}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="mt-4 p-3 bg-blue-100/50 rounded-lg border border-blue-200">
+                <p className="text-xs text-blue-800">
+                  <strong>ℹ️ Important:</strong> Ces montants représentent la TVA récupérable sur vos dépenses pour la période du{' '}
+                  <strong>{new Date(tvaSummary.period.from).toLocaleDateString('fr-CH')}</strong> au{' '}
+                  <strong>{new Date(tvaSummary.period.to).toLocaleDateString('fr-CH')}</strong>.
+                  À utiliser pour votre déclaration fiscale TVA.
+                </p>
+              </div>
+            </motion.div>
           )}
 
           {/* Expenses Stats */}

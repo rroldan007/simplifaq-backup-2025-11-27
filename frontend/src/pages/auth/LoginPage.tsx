@@ -38,8 +38,15 @@ export function LoginPage() {
     >
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <img
+              src="/brand/app-icon.png"
+              alt="SimpliFaq Logo"
+              className="h-16 w-16 rounded-xl shadow-lg"
+            />
+          </div>
           <h1 className="text-3xl font-bold text-blue-600 mb-2">
-            Simplifaq
+            SimpliFaq
           </h1>
           <p style={{ color: 'var(--color-text-secondary)' }}>
             Simplifiez votre facturation suisse
@@ -58,7 +65,7 @@ export function LoginPage() {
 
       <div className="mt-8 text-center">
         <p className="text-xs text-gray-500">
-          © 2024 Simplifaq. Tous droits réservés.
+          © 2024 SimpliFaq. Tous droits réservés.
         </p>
       </div>
     </div>

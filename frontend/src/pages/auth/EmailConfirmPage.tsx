@@ -23,21 +23,18 @@ export function EmailConfirmPage() {
         const response = await fetch(`${process.env.VITE_API_URL || 'https://my.simplifaq.ch'}/api/auth/confirm-email?token=${token}`);
         const data = await response.json();
 
-        if (data.success && data.data.accessToken) {
-          // Auto-login user with the returned tokens
-          await login({
-            email: data.data.user.email,
-            password: '', // Not needed since we have tokens
-          });
-
-          // Store tokens manually since we're using the confirmation response
+        if (data.success && data.data?.accessToken) {
+          // Store tokens
           localStorage.setItem('simplifaq_token', data.data.accessToken);
           localStorage.setItem('simplifaq_refresh_token', data.data.refreshToken);
           
-          setStatus('success');
-          setMessage('Email confirmé avec succès! Redirection vers votre tableau de bord...');
+          // Store user data
+          localStorage.setItem('simplifaq_user', JSON.stringify(data.data.user));
           
-          // Redirect to dashboard after 2 seconds
+          setStatus('success');
+          setMessage('Email confirmé avec succès! Bienvenue sur SimpliFaq 🎉');
+          
+          // Redirect to dashboard (onboarding will show automatically)
           setTimeout(() => {
             navigate('/dashboard');
           }, 2000);

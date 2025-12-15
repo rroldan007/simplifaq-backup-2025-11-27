@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, ApiError } from '../services/api';
 import { CURRENT_SWISS_TVA_RATES } from '../config/swissTaxRates';
+import { normalizeString } from '../utils/textUtils';
 
 // Shared tolerant-search state across all hook instances
 let SHARED_SEARCH_CACHE: { items: Product[]; ts: number } | null = null;
@@ -100,14 +101,14 @@ export function useProducts(params: UseProductsParams = {}) {
   const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = `notification-${Date.now()}`;
     const notification: NotificationState = { message, type, id };
-    
+
     setNotifications(prev => [...prev, notification]);
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
-    
+
     return id;
   }, []);
 
@@ -144,8 +145,8 @@ export function useProducts(params: UseProductsParams = {}) {
         lastUpdated: new Date(),
       }));
     } catch (error) {
-      const errorMessage = error instanceof ApiError 
-        ? error.message 
+      const errorMessage = error instanceof ApiError
+        ? error.message
         : 'Erreur lors du chargement des produits';
 
       setState(prev => ({
@@ -217,23 +218,23 @@ export function useProducts(params: UseProductsParams = {}) {
 
       const newProductRaw = await api.createProduct(data);
       const newProduct = newProductRaw ? normalizeProduct(newProductRaw as Product) : null;
-      
+
       // Optimistic update
       if (newProduct) {
         setState(prev => ({
-        ...prev,
-        products: [newProduct, ...prev.products],
-        total: prev.total + 1,
-      }));
+          ...prev,
+          products: [newProduct, ...prev.products],
+          total: prev.total + 1,
+        }));
       }
 
       showNotification('Produit créé avec succès', 'success');
       return newProduct;
     } catch (error) {
-      const errorMessage = error instanceof ApiError 
-        ? error.message 
+      const errorMessage = error instanceof ApiError
+        ? error.message
         : 'Erreur lors de la création du produit';
-      
+
       showNotification(errorMessage, 'error');
       return null;
     } finally {
@@ -249,7 +250,7 @@ export function useProducts(params: UseProductsParams = {}) {
     // Store original product for rollback
     const originalProduct = state.products.find(product => product.id === id);
     console.log('[useProducts] originalProduct:', originalProduct);
-    
+
     try {
       // Frontend validation
       console.log('[useProducts] Running validation...');
@@ -272,8 +273,8 @@ export function useProducts(params: UseProductsParams = {}) {
       console.log('[useProducts] Applying optimistic update...');
       setState(prev => ({
         ...prev,
-        products: prev.products.map(product => 
-          product.id === id 
+        products: prev.products.map(product =>
+          product.id === id
             ? { ...product, ...data, updatedAt: new Date().toISOString() }
             : product
         ),
@@ -284,15 +285,15 @@ export function useProducts(params: UseProductsParams = {}) {
       console.log('[useProducts] api.updateProduct returned:', updatedProductRaw);
       const updatedProduct = updatedProductRaw ? normalizeProduct(updatedProductRaw as Product) : null;
       console.log('[useProducts] Normalized product:', updatedProduct);
-      
+
       // Update with server response
       if (updatedProduct) {
         setState(prev => ({
-        ...prev,
-        products: prev.products.map(product => 
-          product.id === id ? updatedProduct : product
-        ),
-      }));
+          ...prev,
+          products: prev.products.map(product =>
+            product.id === id ? updatedProduct : product
+          ),
+        }));
       }
 
       showNotification('Produit mis à jour avec succès', 'success');
@@ -302,16 +303,16 @@ export function useProducts(params: UseProductsParams = {}) {
       if (originalProduct) {
         setState(prev => ({
           ...prev,
-          products: prev.products.map(product => 
+          products: prev.products.map(product =>
             product.id === id ? originalProduct : product
           ),
         }));
       }
 
-      const errorMessage = error instanceof ApiError 
-        ? error.message 
+      const errorMessage = error instanceof ApiError
+        ? error.message
         : 'Erreur lors de la mise à jour du produit';
-      
+
       showNotification(errorMessage, 'error');
       return null;
     } finally {
@@ -325,7 +326,7 @@ export function useProducts(params: UseProductsParams = {}) {
 
     // Store original product for rollback
     const originalProduct = state.products.find(product => product.id === id);
-    
+
     try {
       // Optimistic update
       setState(prev => ({
@@ -342,17 +343,17 @@ export function useProducts(params: UseProductsParams = {}) {
       if (originalProduct) {
         setState(prev => ({
           ...prev,
-          products: [...prev.products, originalProduct].sort((a, b) => 
+          products: [...prev.products, originalProduct].sort((a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           ),
           total: prev.total + 1,
         }));
       }
 
-      const errorMessage = error instanceof ApiError 
-        ? error.message 
+      const errorMessage = error instanceof ApiError
+        ? error.message
         : 'Erreur lors de la suppression du produit';
-      
+
       showNotification(errorMessage, 'error');
       return false;
     } finally {
@@ -367,23 +368,23 @@ export function useProducts(params: UseProductsParams = {}) {
     try {
       const duplicatedProductRaw = await api.duplicateProduct(id);
       const duplicatedProduct = duplicatedProductRaw ? normalizeProduct(duplicatedProductRaw as Product) : null;
-      
+
       // Add to list
       if (duplicatedProduct) {
         setState(prev => ({
-        ...prev,
-        products: [duplicatedProduct, ...prev.products],
-        total: prev.total + 1,
-      }));
+          ...prev,
+          products: [duplicatedProduct, ...prev.products],
+          total: prev.total + 1,
+        }));
       }
 
       showNotification('Produit dupliqué avec succès', 'success');
       return duplicatedProduct;
     } catch (error) {
-      const errorMessage = error instanceof ApiError 
-        ? error.message 
+      const errorMessage = error instanceof ApiError
+        ? error.message
         : 'Erreur lors de la duplication du produit';
-      
+
       showNotification(errorMessage, 'error');
       return null;
     } finally {
@@ -397,42 +398,19 @@ export function useProducts(params: UseProductsParams = {}) {
 
     const newStatus = !product.isActive;
     const result = await updateProduct(id, { isActive: newStatus });
-    
+
     if (result) {
       const statusText = newStatus ? 'activé' : 'désactivé';
       showNotification(`Produit ${statusText} avec succès`, 'success');
       return true;
     }
-    
+
     return false;
   }, [state.products, updateProduct, showNotification]);
 
   const searchProducts = useCallback(async (query: string, limit = 10): Promise<Product[]> => {
     // Helper: normalize strings (remove accents/diacritics, lowercase, collapse spaces)
-    const normalize = (s: string): string => {
-      try {
-        return s
-          // Normalize compatibility to expand ligatures
-          .normalize('NFKD')
-          // Convert common ligatures explicitly
-          .replace(/[œŒ]/g, 'oe')
-          .replace(/[æÆ]/g, 'ae')
-          .replace(/ß/g, 'ss')
-          // Standardize diverse apostrophes/quotes/dashes to spaces
-          .replace(/[’‘`´']/g, ' ')
-          .replace(/[–—]/g, '-')
-          // Remove combining diacritics after expansions
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          // Keep alnum, percent, spaces and hyphen
-          .replace(/[^a-z0-9%\s-]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      } catch {
-        // Fallback when String.prototype.normalize is not supported
-        return s.toLowerCase();
-      }
-    };
+    const normalize = normalizeString;
 
     // Helper: compute relevance score and number of token matches
     // - matches: soft matches (prefix/whole/substring) for ranking
@@ -659,10 +637,10 @@ export function useProducts(params: UseProductsParams = {}) {
 
       return scored;
     } catch (error) {
-      const errorMessage = error instanceof ApiError 
-        ? error.message 
+      const errorMessage = error instanceof ApiError
+        ? error.message
         : 'Erreur lors de la recherche de produits';
-      
+
       showNotification(errorMessage, 'error');
       return [];
     }

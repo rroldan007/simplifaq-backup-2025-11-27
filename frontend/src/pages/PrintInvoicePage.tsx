@@ -55,8 +55,10 @@ export default function PrintInvoicePage() {
   const [invoice, setInvoice] = useState<InvoiceLite | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const selectedTemplate = (user as any)?.pdfTemplate || 'elegant_classic';
-  const accentColor = (user as any)?.pdfPrimaryColor || '#4F46E5';
+  type UserPdfSettings = { pdfTemplate?: string; pdfPrimaryColor?: string };
+  const userPdf = user as UserPdfSettings | null;
+  const selectedTemplate = userPdf?.pdfTemplate || 'elegant_classic';
+  const accentColor = userPdf?.pdfPrimaryColor || '#4F46E5';
   const [showHeader, setShowHeader] = useState<boolean>(true);
 
   useEffect(() => {

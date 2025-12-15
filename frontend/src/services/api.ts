@@ -469,6 +469,152 @@ interface CreateProductRequest {
 
 type UpdateProductRequest = Partial<CreateProductRequest>;
 
+type UserSmtpProvider = 'smtp' | 'sendgrid' | 'ses' | 'mailgun';
+
+interface UserSmtpConfig {
+  id: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  fromEmail: string;
+  fromName: string;
+  replyTo?: string | null;
+  provider: UserSmtpProvider;
+  isActive: boolean;
+  isVerified: boolean;
+  lastTestedAt?: string | null;
+  enableAutoSend: boolean;
+  includeFooter: boolean;
+  sendCopyToSender?: boolean;
+  dailyLimit: number;
+  emailsSentToday: number;
+  lastResetAt?: string | null;
+  requires2FA?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface UserSmtpPreset {
+  host: string;
+  port: number;
+  secure: boolean;
+  provider: UserSmtpProvider;
+}
+
+type UserSmtpPresets = Record<string, UserSmtpPreset>;
+
+interface UserSmtpConfigResponse {
+  config: UserSmtpConfig | null;
+  presets?: UserSmtpPresets;
+  message?: string;
+  notice?: string;
+}
+
+interface UpdateUserSmtpConfigPayload {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password?: string;
+  fromEmail: string;
+  fromName: string;
+  replyTo?: string | null;
+  provider: UserSmtpProvider;
+  apiKey?: string | null;
+  enableAutoSend?: boolean;
+  includeFooter?: boolean;
+  sendCopyToSender?: boolean;
+}
+
+interface UpdateUserSmtpConfigResponse {
+  message?: string;
+  config: UserSmtpConfig;
+  notice?: string;
+}
+
+interface UserSmtpTestDetails {
+  messageId?: string;
+  jobId?: string;
+  from?: string;
+  provider?: UserSmtpProvider;
+  verified?: boolean;
+}
+
+interface UserSmtpTestResponse {
+  message: string;
+  details?: UserSmtpTestDetails;
+}
+
+interface UserEmailStats {
+  totalSent: number;
+  totalFailed: number;
+  totalQueued?: number;
+  successRate: number;
+  byTemplate: Record<string, number>;
+  period?: string;
+}
+
+interface UserSmtpUsageSummary {
+  dailyLimit?: number;
+  emailsSentToday?: number;
+  lastResetAt?: string | null;
+  isVerified?: boolean;
+}
+
+type UserSmtpQueueStats = Record<string, unknown> | null;
+
+interface UserSmtpStatsResponse {
+  queue: UserSmtpQueueStats;
+  email: UserEmailStats;
+  config: UserSmtpUsageSummary | null;
+  recentLogs: UserSmtpLog[];
+  period: string;
+}
+
+interface UserSmtpLog {
+  id: string;
+  emailTo: string;
+  emailFrom?: string | null;
+  subject?: string | null;
+  templateType?: string | null;
+  documentNumber?: string | null;
+  status: string;
+  provider?: string | null;
+  messageId?: string | null;
+  errorMessage?: string | null;
+  queuedAt: string;
+  sentAt?: string | null;
+  deliveredAt?: string | null;
+  usedFallback?: boolean | null;
+  includesQRBill?: boolean | null;
+}
+
+interface UserSmtpLogsResponse {
+  logs: UserSmtpLog[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+interface UserSmtpPresetsResponse {
+  presets: UserSmtpPresets;
+}
+
+interface InvoiceListResponse {
+  invoices: Invoice[];
+  total: number;
+  hasMore: boolean;
+}
+
+interface InvoiceCreateResponse {
+  invoice?: Invoice;
+  data?: { invoice?: Invoice };
+}
+
 export const api = {
   // Helper: normalize client shape (accept flat or nested address)
   _normalizeClient: (c: unknown): Client => {
@@ -706,7 +852,7 @@ export const api = {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     isQuote?: boolean;
-  }) => {
+  }): Promise<InvoiceListResponse> => {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.append('status', params.status);
     if (params?.limit) searchParams.append('limit', params.limit.toString());
@@ -741,7 +887,7 @@ export const api = {
             invoices: normalized,
             total: Number(dataObj.total ?? normalized.length),
             hasMore: Boolean(dataObj.hasMore ?? false),
-          } as { invoices: Invoice[]; total: number; hasMore: boolean };
+          } as InvoiceListResponse;
         }
         // Fallback if shape is already { invoices, total, hasMore }
         const fallback = resp as { invoices?: unknown; total?: unknown; hasMore?: unknown };
@@ -750,38 +896,52 @@ export const api = {
           invoices: invoicesArr.map((it) => api._normalizeInvoice(it)),
           total: Number(fallback?.total ?? invoicesArr.length),
           hasMore: Boolean(fallback?.hasMore ?? false),
-        } as { invoices: Invoice[]; total: number; hasMore: boolean };
+        } as InvoiceListResponse;
       });
   },
 
-  getInvoice: (id: string) =>
+  getInvoice: (id: string): Promise<Invoice> =>
     apiRequest<Invoice>(`/invoices/${id}`).then((inv) => {
-      const rawItems = (inv as any)?.items?.slice(0, 2);
+      const rawItems = inv?.items?.slice(0, 2);
       console.log('[api.getInvoice] Raw response items:', JSON.stringify(rawItems, null, 2));
+      // @ts-expect-error - globalDiscount fields exist at runtime but not in type definition
+      const invAny = inv as any;
+      console.log('[api.getInvoice] Global discount fields:', {
+        globalDiscountValue: invAny?.globalDiscountValue,
+        globalDiscountType: invAny?.globalDiscountType,
+        globalDiscountNote: invAny?.globalDiscountNote,
+      });
       const normalized = api._normalizeInvoice(inv);
+      // @ts-expect-error - globalDiscount fields exist at runtime but not in type definition
+      const normAny = normalized as any;
       console.log('[api.getInvoice] Normalized items:', JSON.stringify(normalized?.items?.slice(0, 2), null, 2));
+      console.log('[api.getInvoice] Normalized global discount:', {
+        globalDiscountValue: normAny?.globalDiscountValue,
+        globalDiscountType: normAny?.globalDiscountType,
+        globalDiscountNote: normAny?.globalDiscountNote,
+      });
       return normalized;
     }),
 
-  createInvoice: (data: CreateInvoiceRequest) =>
-    apiRequest<unknown>('/invoices', {
+  createInvoice: (data: CreateInvoiceRequest): Promise<InvoiceCreateResponse> =>
+    apiRequest<InvoiceCreateResponse>('/invoices', {
       method: 'POST',
       body: JSON.stringify(data),
     }).then((resp) => {
       // Normalize: backend may return { invoice } or the invoice directly
       if (resp && typeof resp === 'object' && 'invoice' in resp) {
-        const inv = (resp as { invoice?: unknown }).invoice;
-        return api._normalizeInvoice(inv);
+        const inv = (resp as { invoice?: Invoice }).invoice;
+        return { invoice: api._normalizeInvoice(inv) } as InvoiceCreateResponse;
       }
       if (
         resp && typeof resp === 'object' && 'data' in resp &&
         (resp as { data?: unknown }).data && typeof (resp as { data?: unknown }).data === 'object' &&
-        'invoice' in (resp as { data: { invoice?: unknown } }).data
+        'invoice' in (resp as { data: { invoice?: Invoice } }).data
       ) {
-        const inv = (resp as { data: { invoice?: unknown } }).data.invoice;
-        return api._normalizeInvoice(inv);
+        const inv = (resp as { data: { invoice?: Invoice } }).data.invoice;
+        return { invoice: api._normalizeInvoice(inv) } as InvoiceCreateResponse;
       }
-      return api._normalizeInvoice(resp);
+      return { invoice: api._normalizeInvoice(resp as Invoice) } as InvoiceCreateResponse;
     }),
 
   updateInvoice: (id: string, data: UpdateInvoiceRequest) =>
@@ -791,8 +951,8 @@ export const api = {
     }).then((inv) => api._normalizeInvoice(inv)),
 
   // Send invoice (status -> sent)
-  sendInvoice: (id: string, options?: { email?: string; message?: string }) =>
-    apiRequest(`/invoices/${id}/send-email`, {
+  sendInvoice: (id: string, options?: { email?: string; message?: string }): Promise<{ message: string }> =>
+    apiRequest<{ message: string }>(`/invoices/${id}/send-email`, {
       method: 'POST',
       body: JSON.stringify(options || {}),
     }),
@@ -804,24 +964,24 @@ export const api = {
     }).then((inv) => api._normalizeInvoice(inv)),
 
   // Cancel recurrence on an invoice series
-  cancelInvoiceRecurrence: (id: string) =>
-    apiRequest<unknown>(`/invoices/${id}/recurrence/cancel`, {
+  cancelInvoiceRecurrence: (id: string): Promise<Invoice> =>
+    apiRequest<Invoice>(`/invoices/${id}/recurrence/cancel`, {
       method: 'POST',
     }).then((resp) => {
       // Backend may return { success, message, data }
-      if (resp && typeof resp === 'object' && 'data' in (resp as Record<string, unknown>)) {
-        const data = (resp as { data?: unknown }).data;
+      if (resp && typeof resp === 'object' && 'data' in resp) {
+        const data = (resp as { data?: Invoice }).data;
         return api._normalizeInvoice(data);
       }
-      return api._normalizeInvoice(resp);
+      return api._normalizeInvoice(resp as Invoice);
     }),
 
   // Change current user's password
-  changePassword: (oldPassword: string, newPassword: string) =>
+  changePassword: (oldPassword: string, newPassword: string): Promise<{ message: string }> =>
     apiRequest<{ message: string }>(`/auth/change-password`, {
       method: 'POST',
       body: JSON.stringify({ oldPassword, newPassword }),
-    }).then((resp: any) => {
+    }).then((resp) => {
       // Backend returns { success, data: { message } }
       if (resp && typeof resp === 'object' && 'data' in resp) {
         return (resp as { data: { message?: string } }).data as { message: string };
@@ -829,16 +989,16 @@ export const api = {
       return resp as { message: string };
     }),
 
-  deleteInvoice: async (id:string) => {
-    return apiRequest(`/invoices/${id}`, { method: 'DELETE' });
+  deleteInvoice: async (id: string): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/invoices/${id}`, { method: 'DELETE' });
   },
 
   // Add payment to invoice
   addPayment: async (
     id: string,
     payload: { amount: number; paymentDate?: string; notes?: string; method?: string; reference?: string }
-  ) => {
-    return apiRequest(`/invoices/${id}/payments`, {
+  ): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/invoices/${id}/payments`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -863,7 +1023,7 @@ export const api = {
       const s = t.trim();
       if (!s) return '';
       const alias = s === 'minimal_moderm' ? 'minimal_modern' : s;
-      return allowedTemplates.has(alias as any) ? alias : '';
+      return allowedTemplates.has(alias as typeof allowedTemplates extends Set<infer T> ? T : never) ? alias : '';
     };
 
     const normalizeHexColor = (val: unknown): string | undefined => {
@@ -957,7 +1117,7 @@ export const api = {
       template?: PdfTemplateKey | string;
       accentColor?: string;
     }
-  ) => {
+  ): Promise<Blob> => {
     const token = secureStorage.getItem('simplifaq_token', 30 * 24 * 60 * 60 * 1000);
 
     // Include selected template and accent color if available
@@ -1097,12 +1257,20 @@ export const api = {
   },
 
   // Recent invoices (for dashboard)
-  getRecentInvoices: (limit = 10) =>
+  getRecentInvoices: (limit = 10): Promise<Invoice[]> =>
     apiRequest<Invoice[]>(`/invoices?limit=${limit}&sort=createdAt:desc`)
       .then((list) => list.map(api._normalizeInvoice)),
 
   // Overdue invoices
-  getOverdueInvoices: () =>
+  getOverdueInvoices: (): Promise<Array<{
+    id: string;
+    invoiceNumber: string;
+    clientName: string;
+    amount: number;
+    dueDate: string;
+    daysPastDue: number;
+    currency?: string;
+  }>> =>
     apiRequest<Array<{
       id: string;
       invoiceNumber: string;
@@ -1132,20 +1300,25 @@ export const api = {
       }),
 
   // Send reminder
-  sendInvoiceReminder: (invoiceId: string) =>
+  sendInvoiceReminder: (invoiceId: string): Promise<{ success: boolean; message: string }> =>
     apiRequest<{ success: boolean; message: string }>(`/invoices/${invoiceId}/send-reminder`, {
       method: 'POST',
     }),
 
   // Send invoice by email with PDF attachment
-  sendInvoiceEmail: (invoiceId: string, data: { recipientEmail: string; customSubject?: string; customBody?: string }) =>
+  sendInvoiceEmail: (
+    invoiceId: string, 
+    data: { recipientEmail: string; customSubject?: string; customBody?: string }
+  ): Promise<{ success: boolean; message: string; messageId?: string; logId?: string }> =>
     apiRequest<{ success: boolean; message: string; messageId?: string; logId?: string }>(`/invoices/${invoiceId}/send-email`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   // Preview invoice email content
-  previewInvoiceEmail: (invoiceId: string) =>
+  previewInvoiceEmail: (
+    invoiceId: string
+  ): Promise<{ subject: string; body: string; recipientEmail: string; attachmentName: string }> =>
     apiRequest<{ subject: string; body: string; recipientEmail: string; attachmentName: string }>(`/invoices/${invoiceId}/preview-email-content`, {
       method: 'POST',
     }),
@@ -1159,7 +1332,7 @@ export const api = {
     offset?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  }) => {
+  }): Promise<{ clients: Client[]; total: number; hasMore: boolean }> => {
     const searchParams = new URLSearchParams();
     if (params?.search) searchParams.append('search', params.search);
     if (params?.status) searchParams.append('status', params.status);
@@ -1181,28 +1354,28 @@ export const api = {
       });
   },
 
-  getClient: (id: string) =>
+  getClient: (id: string): Promise<Client> =>
     apiRequest<Client>(`/clients/${id}`).then((c) => api._normalizeClient(c)),
 
-  createClient: (data: CreateClientRequest) =>
+  createClient: (data: CreateClientRequest): Promise<Client> =>
     apiRequest<Client>('/clients', {
       method: 'POST',
       body: JSON.stringify(data),
     }).then((c) => api._normalizeClient(c)),
 
-  updateClient: (id: string, data: UpdateClientRequest) =>
+  updateClient: (id: string, data: UpdateClientRequest): Promise<Client> =>
     apiRequest<Client>(`/clients/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }).then((c) => api._normalizeClient(c)),
 
-  deleteClient: (id: string) =>
+  deleteClient: (id: string): Promise<{ success: boolean }> =>
     apiRequest<{ success: boolean }>(`/clients/${id}`, {
       method: 'DELETE',
     }),
 
   // Client search for invoice creation
-  searchClients: (query: string, limit = 10) =>
+  searchClients: (query: string, limit = 10): Promise<Client[]> =>
     apiRequest<Client[]>(`/clients/search?q=${encodeURIComponent(query)}&limit=${limit}`)
       .then((arr) => Array.isArray(arr) ? arr.map(api._normalizeClient) : []),
 
@@ -1215,7 +1388,7 @@ export const api = {
     offset?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  }) => {
+  }): Promise<{ products: Product[]; total: number; hasMore: boolean }> => {
     const searchParams = new URLSearchParams();
     if (params?.search) searchParams.append('search', params.search);
     if (params?.status) searchParams.append('status', params.status);
@@ -1239,38 +1412,42 @@ export const api = {
       }));
   },
 
-  getProduct: (id: string) =>
+  getProduct: (id: string): Promise<Product> =>
     apiRequest<Product>(`/products/${id}`).then((p) => api._normalizeProduct(p)),
 
-  createProduct: (data: CreateProductRequest) =>
+  createProduct: (data: CreateProductRequest): Promise<Product> =>
     apiRequest<Product>('/products', {
       method: 'POST',
       body: JSON.stringify(data),
     }).then((p) => api._normalizeProduct(p)),
 
-  updateProduct: (id: string, data: UpdateProductRequest) =>
+  updateProduct: (id: string, data: UpdateProductRequest): Promise<Product> =>
     apiRequest<Product>(`/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }).then((p) => api._normalizeProduct(p)),
 
-  deleteProduct: (id: string) =>
+  deleteProduct: (id: string): Promise<{ success: boolean }> =>
     apiRequest<{ success: boolean }>(`/products/${id}`, {
       method: 'DELETE',
     }),
 
-  duplicateProduct: (id: string) =>
+  duplicateProduct: (id: string): Promise<Product> =>
     apiRequest<Product>(`/products/${id}/duplicate`, {
       method: 'POST',
     }).then((p) => api._normalizeProduct(p)),
 
   // Product search for invoice creation
-  searchProducts: (query: string, limit = 10) =>
+  searchProducts: (query: string, limit = 10): Promise<Product[]> =>
     apiRequest<{ products: Product[] }>(`/products?search=${encodeURIComponent(query)}&limit=${limit}`)
       .then(response => response.products),
 
   // File upload operations
-  upload: async (endpoint: string, formData: FormData, options: RequestInit = {}) => {
+  upload: async (endpoint: string, formData: FormData, options: RequestInit = {}): Promise<{
+    success: boolean;
+    data: unknown;
+    message: string;
+  }> => {
     // Prepare request configuration for interceptor
     const requestConfig = {
       url: `${API_BASE_URL}${endpoint}`,
@@ -1319,7 +1496,7 @@ export const api = {
         success: typeof raw?.success === 'boolean' ? raw.success : true,
         data: raw?.data ?? raw,
         message: raw?.message ?? 'Upload successful',
-      } as { success: boolean; data: unknown; message?: string };
+      } as { success: boolean; data: unknown; message: string };
       return normalized;
     } catch (error) {
       // Handle AuthError from interceptor
@@ -1351,7 +1528,7 @@ export const api = {
     const qs = usp.toString();
     return qs ? `?${qs}` : '';
   },
-  get: async <T = unknown>(endpoint: string, config?: { params?: Record<string, unknown>; headers?: Record<string, string> }) => {
+  get: async <T = unknown>(endpoint: string, config?: { params?: Record<string, unknown>; headers?: Record<string, string> }): Promise<{ data: ApiResponse<T> }> => {
     const qs = api._buildQuery(config?.params);
     const data = await apiRequest<T>(`${endpoint}${qs}`, {
       method: 'GET',
@@ -1359,7 +1536,7 @@ export const api = {
     });
     return { data: { success: true, data } as ApiResponse<T> };
   },
-  post: async <T = unknown>(endpoint: string, body?: unknown, config?: { headers?: Record<string, string> }) => {
+  post: async <T = unknown>(endpoint: string, body?: unknown, config?: { headers?: Record<string, string> }): Promise<{ data: ApiResponse<T> }> => {
     const data = await apiRequest<T>(endpoint, {
       method: 'POST',
       headers: config?.headers,
@@ -1367,7 +1544,7 @@ export const api = {
     });
     return { data: { success: true, data } as ApiResponse<T> };
   },
-  put: async <T = unknown>(endpoint: string, body?: unknown, config?: { headers?: Record<string, string> }) => {
+  put: async <T = unknown>(endpoint: string, body?: unknown, config?: { headers?: Record<string, string> }): Promise<{ data: ApiResponse<T> }> => {
     const data = await apiRequest<T>(endpoint, {
       method: 'PUT',
       headers: config?.headers,
@@ -1375,7 +1552,7 @@ export const api = {
     });
     return { data: { success: true, data } as ApiResponse<T> };
   },
-  delete: async <T = unknown>(endpoint: string, config?: { headers?: Record<string, string> }) => {
+  delete: async <T = unknown>(endpoint: string, config?: { headers?: Record<string, string> }): Promise<{ data: ApiResponse<T> }> => {
     const data = await apiRequest<T>(endpoint, {
       method: 'DELETE',
       headers: config?.headers,
@@ -1385,7 +1562,7 @@ export const api = {
 
   // Auth/profile operations
   // Update current user's profile and return the updated user from backend
-  updateMyProfile: async (payload: Record<string, unknown>) => {
+  updateMyProfile: async (payload: Record<string, unknown>): Promise<unknown> => {
     const resp = await apiRequest<unknown>('/auth/me', {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -1402,7 +1579,7 @@ export const api = {
     return updatedUser;
   },
 
-  getMyProfile: async () => {
+  getMyProfile: async (): Promise<unknown> => {
     const resp = await apiRequest<unknown>('/auth/me', { method: 'GET' });
     if (resp && typeof resp === 'object') {
       if ('user' in resp && (resp as { user?: unknown }).user !== undefined) {
@@ -1420,7 +1597,7 @@ export const api = {
   
   // Settings: invoicing numbering configuration
   // Update invoice numbering settings (prefix, next number, padding)
-  updateInvoicingNumbering: async (payload: { prefix?: string; nextNumber?: number; padding?: number }) => {
+  updateInvoicingNumbering: async (payload: { prefix?: string; nextNumber?: number; padding?: number }): Promise<{ invoicePrefix: string; nextInvoiceNumber: number; invoicePadding: number }> => {
     const data = await apiRequest<{ invoicePrefix: string; nextInvoiceNumber: number; invoicePadding: number }>(
       '/settings/invoicing-numbering',
       {
@@ -1458,35 +1635,40 @@ export const api = {
   },
 
   // User SMTP Configuration
-  getUserSmtpConfig: async (): Promise<any> => {
-    return apiRequest<any>('/user/smtp/config', { method: 'GET' });
+  getUserSmtpConfig: async (): Promise<UserSmtpConfigResponse> => {
+    return apiRequest<UserSmtpConfigResponse>('/user/smtp/config', { method: 'GET' });
   },
 
-  updateUserSmtpConfig: async (config: any): Promise<any> => {
-    return apiRequest<any>('/user/smtp/config', {
+  updateUserSmtpConfig: async (config: UpdateUserSmtpConfigPayload): Promise<UpdateUserSmtpConfigResponse> => {
+    return apiRequest<UpdateUserSmtpConfigResponse>('/user/smtp/config', {
       method: 'PATCH',
       body: JSON.stringify(config),
     });
   },
 
-  testUserSmtpConfig: async (testEmail: string): Promise<any> => {
-    return apiRequest<any>('/user/smtp/test', {
+  testUserSmtpConfig: async (testEmail: string): Promise<UserSmtpTestResponse> => {
+    return apiRequest<UserSmtpTestResponse>('/user/smtp/test', {
       method: 'POST',
       body: JSON.stringify({ testEmail }),
     });
   },
 
-  getUserSmtpStats: async (days: number = 30): Promise<any> => {
-    return apiRequest<any>(`/user/smtp/stats?days=${days}`, { method: 'GET' });
+  getUserSmtpStats: async (days: number = 30): Promise<UserSmtpStatsResponse> => {
+    return apiRequest<UserSmtpStatsResponse>(`/user/smtp/stats?days=${days}`, { method: 'GET' });
   },
 
-  getUserSmtpLogs: async (params?: { page?: number; limit?: number; status?: string; templateType?: string }): Promise<any> => {
-    const query = new URLSearchParams(params as any).toString();
-    return apiRequest<any>(`/user/smtp/logs${query ? '?' + query : ''}`, { method: 'GET' });
+  getUserSmtpLogs: async (params?: { page?: number; limit?: number; status?: string; templateType?: string }): Promise<UserSmtpLogsResponse> => {
+    const searchParams = new URLSearchParams();
+    if (params?.page !== undefined) searchParams.append('page', params.page.toString());
+    if (params?.limit !== undefined) searchParams.append('limit', params.limit.toString());
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.templateType) searchParams.append('templateType', params.templateType);
+    const query = searchParams.toString();
+    return apiRequest<UserSmtpLogsResponse>(`/user/smtp/logs${query ? `?${query}` : ''}`, { method: 'GET' });
   },
 
-  getUserSmtpPresets: async (): Promise<any> => {
-    return apiRequest<any>('/user/smtp/presets', { method: 'GET' });
+  getUserSmtpPresets: async (): Promise<UserSmtpPresetsResponse> => {
+    return apiRequest<UserSmtpPresetsResponse>('/user/smtp/presets', { method: 'GET' });
   },
 };
 

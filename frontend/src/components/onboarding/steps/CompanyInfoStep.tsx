@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { api } from '../../../services/api';
 
@@ -20,16 +20,25 @@ export default function CompanyInfoStep({ onComplete }: CompanyInfoStepProps) {
     vatNumber: ''
   });
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dataLoadedRef = useRef(false);
 
   useEffect(() => {
-    loadUserData();
+    if (!dataLoadedRef.current) {
+      loadUserData();
+      dataLoadedRef.current = true;
+    }
   }, []);
 
   const loadUserData = async () => {
+    setLoadingData(true);
     try {
       const response = await api.get('/auth/me');
-      const user = response.data.data;
+      type UserData = { companyName?: string; firstName?: string; lastName?: string; street?: string; city?: string; postalCode?: string; canton?: string; phone?: string; website?: string; vatNumber?: string };
+      // Backend returns { data: { user: {...} } }, api.get wraps it, so we access .user
+      const userData = response.data.data as { user?: UserData };
+      const user = userData.user || {} as UserData;
       setFormData({
         companyName: user.companyName || '',
         firstName: user.firstName || '',
@@ -44,6 +53,9 @@ export default function CompanyInfoStep({ onComplete }: CompanyInfoStepProps) {
       });
     } catch (err) {
       console.error('Error loading user data:', err);
+      setError('Erreur lors du chargement des données');
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -54,10 +66,11 @@ export default function CompanyInfoStep({ onComplete }: CompanyInfoStepProps) {
 
     try {
       // Update user profile
-      await api.put('/auth/profile', formData);
+      await api.put('/auth/me', formData);
       onComplete();
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Erreur lors de la sauvegarde');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(axiosErr.response?.data?.error?.message || 'Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);
     }
@@ -68,10 +81,21 @@ export default function CompanyInfoStep({ onComplete }: CompanyInfoStepProps) {
     'NE', 'NW', 'OW', 'SG', 'SH', 'SO', 'SZ', 'TG', 'TI', 'UR', 'VD', 'VS', 'ZG', 'ZH'
   ];
 
+  if (loadingData) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement de vos informations...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <p className="text-gray-600">
-        Commençons par les informations de base de votre entreprise. Ces informations apparaîtront sur vos factures.
+        Vérifiez et complétez les informations de votre entreprise. Ces informations apparaîtront sur vos factures.
       </p>
 
       {error && (

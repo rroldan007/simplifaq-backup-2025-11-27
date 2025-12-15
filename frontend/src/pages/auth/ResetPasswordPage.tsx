@@ -6,7 +6,7 @@ export function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
-  
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -39,8 +39,9 @@ export function ResetPasswordPage() {
     try {
       await api.post('/auth/reset-password', { token, newPassword });
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Une erreur est survenue');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(axiosErr.response?.data?.error?.message || 'Une erreur est survenue');
     } finally {
       setIsLoading(false);
     }
@@ -108,7 +109,7 @@ export function ResetPasswordPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-600 mb-2">
-            Simplifaq
+            SimpliFaq
           </h1>
           <p className="text-slate-600">
             Créer un nouveau mot de passe
@@ -232,7 +233,7 @@ export function ResetPasswordPage() {
 
       <div className="mt-8 text-center">
         <p className="text-xs text-slate-500">
-          © 2024 Simplifaq. Tous droits réservés.
+          © 2024 SimpliFaq. Tous droits réservés.
         </p>
       </div>
     </div>

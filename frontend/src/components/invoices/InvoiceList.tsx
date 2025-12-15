@@ -78,7 +78,7 @@ export function InvoiceList({
     (localStorage.getItem('invoices_view_mode') as 'grid' | 'list') || 'grid'
   );
   useEffect(() => {
-    try { localStorage.setItem('invoices_view_mode', viewMode); } catch {}
+    try { localStorage.setItem('invoices_view_mode', viewMode); } catch { /* ignore storage errors */ }
   }, [viewMode]);
 
   // Export modal state
@@ -397,7 +397,7 @@ export function InvoiceList({
                 {filteredInvoices.map((invoice) => {
                   const issued = new Date(invoice.issueDate).toLocaleDateString('fr-CH');
                   const due = new Date(invoice.dueDate).toLocaleDateString('fr-CH');
-                  const total = (invoice as any).total ?? invoice.amount;
+                  const total = (invoice as unknown as { total?: number }).total ?? invoice.amount;
                   const currency = invoice.currency;
                   const fmt = new Intl.NumberFormat('fr-CH', { style: 'currency', currency }).format(total);
                   return (
