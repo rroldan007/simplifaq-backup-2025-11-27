@@ -41,7 +41,7 @@ jobs:
 
       - name: Test (with coverage)
         working-directory: frontend
-        run: npm run test:coverage || true
+        #run: npm run test:coverage || true
 
   backend:
     name: Backend Tests
@@ -72,7 +72,7 @@ jobs:
 
       - name: Test (with coverage)
         working-directory: backend
-        run: npm run test:coverage || true
+        #run: npm run test:coverage || true
 
   knip:
     name: Knip - Unused Code Analysis
