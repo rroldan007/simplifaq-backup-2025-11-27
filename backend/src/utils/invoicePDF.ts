@@ -1,5 +1,7 @@
 import * as puppeteer from 'puppeteer';
 import { SwissQRBillData } from './swissQRBill';
+import { SwissQRBill } from 'swissqrbill/svg';
+import { getAccessibleAccentColor } from './pdfColorUtils';
 
 /**
  * InvoicePDF component with Swiss QR Bill integration
@@ -11,11 +13,13 @@ export interface InvoiceData {
   logoUrl?: string; // Optional company logo URL or file path
   issueDate: Date;
   dueDate: Date;
+  language?: 'fr' | 'de' | 'it' | 'en';
   
   // Company information
   company: {
     name: string;
     address: string;
+    street?: string;
     city: string;
     postalCode: string;
     country: string;
@@ -24,12 +28,14 @@ export interface InvoiceData {
     email?: string;
     website?: string;
     logoUrl?: string;
+    iban?: string;
   };
   
   // Client information
   client: {
     name: string;
     address: string;
+    street?: string;
     city: string;
     postalCode: string;
     country: string;
@@ -42,18 +48,66 @@ export interface InvoiceData {
     quantity: number;
     unitPrice: number;
     tvaRate: number;
+    taxRate?: number; // Alias for tvaRate
     total: number;
+    unit?: string;
+    lineDiscountValue?: number;
+    lineDiscountType?: 'PERCENT' | 'AMOUNT';
+    discountAmount?: number;
+    subtotalBeforeDiscount?: number;
+    subtotalAfterDiscount?: number;
   }>;
   
   // Totals
   subtotal: number;
-  tvaAmount: number;
+  tvaAmount?: number;
+  taxAmount?: number; // Alias for tvaAmount
   total: number;
   currency: 'CHF' | 'EUR';
+  
+  // Discounts
+  globalDiscount?: {
+    value: number;
+    type: 'PERCENT' | 'AMOUNT';
+    note?: string;
+  };
   
   // Additional information
   notes?: string;
   terms?: string;
+}
+
+export interface PDFAdvancedConfig {
+  elements?: Array<{
+    id: string;
+    type: string;
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    locked: boolean;
+    visible: boolean;
+    fontSize?: number;
+    align?: string;
+    resizable?: boolean;
+  }>;
+  backgroundImages?: Array<{
+    id: string;
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    opacity: number;
+    visible: boolean;
+    src: string;
+  }>;
+  colors?: {
+    primary: string;
+    tableHeader: string;
+    headerBg: string;
+    textHeader: string;
+    textBody: string;
+  };
+  theme?: {
+    key: string;
+    name?: string;
+  };
 }
 
 export interface PDFGenerationOptions {
@@ -69,22 +123,48 @@ export interface PDFGenerationOptions {
   // Visual template/styling options (used by both HTML and PDFKit renderers)
   template?: 'elegant_classic' | 'minimal_modern' | 'formal_pro' | 'creative_premium' | 'clean_creative' | 'bold_statement';
   accentColor?: string; // Hex color for accents (e.g., headers/totals)
+  advancedConfig?: PDFAdvancedConfig; // Advanced editor configuration
 }
 
+// Type for resolved options with defaults
+type ResolvedPDFOptions = {
+  format: 'A4' | 'Letter';
+  language: 'de' | 'fr' | 'it' | 'en';
+  margins: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
+  qrBillOnSeparatePage: boolean;
+  template: 'elegant_classic' | 'minimal_modern' | 'formal_pro' | 'creative_premium' | 'clean_creative' | 'bold_statement';
+  accentColor: string;
+  advancedConfig?: PDFAdvancedConfig;
+};
+
 // Default PDF options
-const DEFAULT_PDF_OPTIONS: Required<PDFGenerationOptions> = {
+const DEFAULT_PDF_OPTIONS: ResolvedPDFOptions = {
   format: 'A4',
   language: 'fr',
   margins: {
     top: 20,
     right: 15,
-    bottom: 20,
+    bottom: 0, // No bottom margin to prevent extra page
     left: 15,
   },
   qrBillOnSeparatePage: false,
   template: 'elegant_classic',
   accentColor: '#0B1F3A',
 };
+
+// Helper to resolve options with defaults
+function resolveOptions(options: PDFGenerationOptions): ResolvedPDFOptions {
+  return {
+    ...DEFAULT_PDF_OPTIONS,
+    ...options,
+    margins: { ...DEFAULT_PDF_OPTIONS.margins, ...options.margins },
+  };
+}
 
 /**
  * Main function to generate invoice PDF with integrated Swiss QR Bill
@@ -94,7 +174,7 @@ export async function generateInvoicePDFWithQRBill(
   qrBillData: SwissQRBillData,
   options: PDFGenerationOptions = {}
 ): Promise<Buffer> {
-  const opts = { ...DEFAULT_PDF_OPTIONS, ...options };
+  const opts = resolveOptions(options);
 
   let browser: puppeteer.Browser | null = null;
 
@@ -121,11 +201,24 @@ export async function generateInvoicePDFWithQRBill(
     // Generate the complete HTML content with integrated QR Bill
     const htmlContent = generateInvoiceHTML(invoiceData, qrBillData, opts);
 
+    // Forward console logs from page to backend console
+    page.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('[QR Bill Placement]') || text.includes('[PDF Generation]')) {
+        console.log(`[Puppeteer Console] ${text}`);
+      }
+    });
+
     // Set HTML content and wait for it to load
     await page.setContent(htmlContent, { 
       waitUntil: 'networkidle0',
       timeout: 30000 
     });
+
+    // Wait for layout to stabilize
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    console.log('[PDF Generation] Page loaded and ready');
 
     // Calculate content height and determine if QR Bill fits on last page
     const contentMetrics = await calculateContentMetrics(page);
@@ -140,8 +233,9 @@ export async function generateInvoicePDFWithQRBill(
         left: `${opts.margins.left}mm`,
       },
       printBackground: true,
-      preferCSSPageSize: true,
+      preferCSSPageSize: false,
       displayHeaderFooter: false,
+      omitBackground: false,
     });
 
     return Buffer.from(pdfBuffer);
@@ -156,7 +250,8 @@ export async function generateInvoicePDFWithQRBill(
 }
 
 /**
- * Calculates content metrics to determine optimal page layout
+ * Calculates content metrics and positions QR Bill appropriately
+ * This runs in Puppeteer context BEFORE PDF generation
  */
 async function calculateContentMetrics(page: puppeteer.Page): Promise<{
   contentHeight: number;
@@ -164,31 +259,273 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
   needsNewPageForQRBill: boolean;
 }> {
   const metrics = await page.evaluate(() => {
-    const content = (globalThis as any).document?.querySelector('.invoice-content');
-    const qrBill = (globalThis as any).document?.querySelector('.qr-bill-container');
+    const doc = (globalThis as any).document;
+    const MM_TO_PX = 96 / 25.4;
+    const PAGE_HEIGHT_MM = 297;
+    const QR_BILL_HEIGHT_MM = 105;
+    const QR_BILL_TOP_MM = PAGE_HEIGHT_MM - QR_BILL_HEIGHT_MM; // 192mm
+    const SAFETY_MARGIN_MM = 10;
     
-    if (!content || !qrBill) {
-      return { contentHeight: 0, availableHeight: 0, needsNewPageForQRBill: false };
+    const container = doc.querySelector('.invoice-container');
+    const qrBill = doc.querySelector('.qr-bill-container');
+    
+    if (!container || !qrBill) {
+      console.log('[Metrics] Missing container or qrBill');
+      return { contentHeight: 0, availableHeight: PAGE_HEIGHT_MM - 40, needsNewPageForQRBill: false };
     }
 
-    const contentHeight = content.getBoundingClientRect().height;
-    const qrBillHeight = 105; // QR Bill height in mm converted to pixels
-    const pageHeight = 297; // A4 height in mm
-    const margins = 40; // Top and bottom margins in mm
-    const availableHeight = pageHeight - margins;
+    const containerRect = container.getBoundingClientRect();
     
-    // Check if content + QR Bill fits on one page
-    const totalHeight = contentHeight + qrBillHeight;
-    const needsNewPageForQRBill = totalHeight > availableHeight;
+    // Find the maximum bottom position of ALL content elements
+    let maxContentBottomPx = 0;
+    let maxElementInfo = 'none';
+    
+    // Check positioned-content elements
+    const positionedContent = doc.querySelector('.positioned-content');
+    if (positionedContent) {
+      const allElements = positionedContent.querySelectorAll('*');
+      allElements.forEach((el: any) => {
+        if (el.classList.contains('qr-bill-container')) return;
+        if (el.tagName === 'SCRIPT') return;
+        
+        const rect = el.getBoundingClientRect();
+        if (rect.height > 0 && rect.width > 0) {
+          const bottomPx = rect.bottom - containerRect.top;
+          if (bottomPx > maxContentBottomPx) {
+            maxContentBottomPx = bottomPx;
+            maxElementInfo = el.className || el.tagName;
+          }
+        }
+      });
+    }
+    
+    // Check table rows
+    const tableRows = doc.querySelectorAll('.positioned-table tr, .items-table tr');
+    tableRows.forEach((row: any) => {
+      const rect = row.getBoundingClientRect();
+      const bottomPx = rect.bottom - containerRect.top;
+      if (bottomPx > maxContentBottomPx) {
+        maxContentBottomPx = bottomPx;
+        maxElementInfo = 'table-row';
+      }
+    });
+    
+    // Check totals
+    const totals = doc.querySelector('.positioned-totals');
+    if (totals) {
+      const rect = totals.getBoundingClientRect();
+      const bottomPx = rect.bottom - containerRect.top;
+      if (bottomPx > maxContentBottomPx) {
+        maxContentBottomPx = bottomPx;
+        maxElementInfo = 'totals';
+      }
+    }
+    
+    // Convert to mm
+    const maxContentBottomMM = maxContentBottomPx / MM_TO_PX;
+    const contentWithMarginMM = maxContentBottomMM + SAFETY_MARGIN_MM;
+    
+    // Determine if QR Bill would overlap
+    const needsNewPageForQRBill = contentWithMarginMM > QR_BILL_TOP_MM;
+    
+    console.log('=== PDF Content Metrics ===');
+    console.log('[Metrics] Max content bottom:', maxContentBottomMM.toFixed(2), 'mm');
+    console.log('[Metrics] Max element:', maxElementInfo);
+    console.log('[Metrics] Content + margin:', contentWithMarginMM.toFixed(2), 'mm');
+    console.log('[Metrics] QR Bill zone:', QR_BILL_TOP_MM, 'mm');
+    console.log('[Metrics] Needs page 2?', needsNewPageForQRBill);
+    
+    // APPLY QR BILL POSITIONING - ALWAYS AT BOTTOM OF PAGE (192mm)
+    if (needsNewPageForQRBill) {
+      console.log('[Metrics] ⏭️  MOVING QR BILL TO PAGE 2 (at bottom)');
+      // QR Bill needs to go to page 2
+      // Create a wrapper page that positions QR at bottom
+      
+      // Wrap QR Bill in a full-page container
+      const wrapper = doc.createElement('div');
+      wrapper.className = 'qr-bill-page-wrapper';
+      wrapper.style.cssText = `
+        page-break-before: always !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        position: relative !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      `;
+      
+      // Insert wrapper before QR Bill
+      qrBill.parentNode?.insertBefore(wrapper, qrBill);
+      // Move QR Bill inside wrapper
+      wrapper.appendChild(qrBill);
+      
+      // Position QR Bill at bottom of the wrapper (page 2)
+      qrBill.style.cssText = `
+        position: absolute !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        width: 210mm !important;
+        height: 105mm !important;
+        margin: 0 !important;
+        page-break-inside: avoid !important;
+        z-index: 2000 !important;
+        background: white !important;
+      `;
+    } else {
+      console.log('[Metrics] ✅ QR BILL FITS ON PAGE 1 at bottom (' + QR_BILL_TOP_MM + 'mm)');
+      // QR Bill fits on page 1 at bottom (absolute positioning)
+      qrBill.style.cssText = `
+        position: absolute !important;
+        top: ${QR_BILL_TOP_MM}mm !important;
+        left: 0 !important;
+        width: 210mm !important;
+        height: 105mm !important;
+        margin: 0 !important;
+        page-break-before: avoid !important;
+        page-break-inside: avoid !important;
+        z-index: 2000 !important;
+        background: white !important;
+      `;
+    }
+    console.log('===========================');
 
     return {
-      contentHeight,
-      availableHeight,
+      contentHeight: maxContentBottomMM,
+      availableHeight: QR_BILL_TOP_MM,
       needsNewPageForQRBill,
     };
   });
 
+  console.log('[PDF Generation] Content metrics:', metrics);
   return metrics;
+}
+
+/**
+ * Helper to check if an element is visible in advanced config
+ */
+export function isElementVisible(elementId: string, advancedConfig?: any): boolean {
+  if (!advancedConfig?.elements) return true;
+  const element = advancedConfig.elements.find((el: any) => el.id === elementId);
+  return element ? element.visible !== false : true;
+}
+
+/**
+ * Helper to get element position from advanced config
+ */
+export function getElementPosition(elementId: string, advancedConfig?: any): { x: number; y: number; width: number; height: number } | null {
+  if (!advancedConfig?.elements) return null;
+  const element = advancedConfig.elements.find((el: any) => el.id === elementId);
+  if (!element) return null;
+  return {
+    x: element.position.x,
+    y: element.position.y,
+    width: element.size.width,
+    height: element.size.height
+  };
+}
+
+/**
+ * Helper to get colors from advanced config
+ */
+export function getColors(advancedConfig?: any, defaultColor: string = '#000000'): any {
+  if (!advancedConfig?.colors) {
+    return {
+      primary: defaultColor,
+      tableHeader: defaultColor,
+      headerBg: '#f3f4f6',
+      textHeader: '#ffffff',
+      textBody: '#374151'
+    };
+  }
+  return advancedConfig.colors;
+}
+
+/**
+ * Helper: Convert px (from 595x842 editor) to mm (210x297 PDF)
+ */
+export function pxToMM(px: number, isWidth: boolean): number {
+  const EDITOR_WIDTH = 595;
+  const EDITOR_HEIGHT = 842;
+  const PDF_WIDTH_MM = 210;
+  const PDF_HEIGHT_MM = 297;
+  
+  if (isWidth) {
+    return (px / EDITOR_WIDTH) * PDF_WIDTH_MM;
+  } else {
+    return (px / EDITOR_HEIGHT) * PDF_HEIGHT_MM;
+  }
+}
+
+/**
+ * Render element based on advanced config position
+ */
+export function renderPositionedElement(
+  element: any,
+  invoiceData: InvoiceData,
+  colors: any,
+  documentType: 'FACTURE' | 'DEVIS' = 'FACTURE'
+): string {
+  const leftMM = pxToMM(element.position.x, true);
+  const topMM = pxToMM(element.position.y, false);
+  const widthMM = pxToMM(element.size.width, true);
+  const heightMM = pxToMM(element.size.height, false);
+  
+  const baseStyle = `position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; height: ${heightMM}mm; z-index: 10;`;
+  
+  let content = '';
+  
+  switch (element.id) {
+    case 'logo':
+      if (invoiceData.company.logoUrl || invoiceData.logoUrl) {
+        const logoUrl = invoiceData.company.logoUrl?.startsWith('http') 
+          ? invoiceData.company.logoUrl 
+          : 'http://localhost:3001/' + (invoiceData.company.logoUrl || invoiceData.logoUrl);
+        content = `<img src="${logoUrl}" style="width: 100%; height: 100%; object-fit: contain;" alt="Logo" />`;
+      }
+      break;
+    
+    case 'company_name':
+      content = `<div style="font-size: ${element.fontSize || 18}px; font-weight: ${element.fontWeight || 'bold'}; color: ${colors.primary};">${invoiceData.company.name}</div>`;
+      break;
+    
+    case 'company_info':
+      content = `
+        <div style="font-size: 10px; line-height: 1.4;">
+          ${invoiceData.company.address}<br/>
+          ${invoiceData.company.postalCode} ${invoiceData.company.city}<br/>
+          ${invoiceData.company.country}<br/>
+          ${invoiceData.company.vatNumber ? `TVA: ${invoiceData.company.vatNumber}<br/>` : ''}
+          ${invoiceData.company.phone ? `Tél: ${invoiceData.company.phone}<br/>` : ''}
+          ${invoiceData.company.email ? `Email: ${invoiceData.company.email}` : ''}
+        </div>
+      `;
+      break;
+    
+    case 'doc_title':
+      content = `<div style="font-size: ${element.fontSize || 24}px; font-weight: ${element.fontWeight || 'bold'}; color: ${colors.primary}; text-align: ${element.align || 'left'};">${documentType}</div>`;
+      break;
+    
+    case 'doc_number':
+      content = `<div style="font-size: ${element.fontSize || 12}px; text-align: ${element.align || 'left'};">N° ${invoiceData.invoiceNumber}</div>`;
+      break;
+    
+    case 'client_info':
+      content = `
+        <div style="font-size: 10px; line-height: 1.4;">
+          <strong>Facturé à:</strong><br/>
+          <strong>${invoiceData.client.name}</strong><br/>
+          ${invoiceData.client.address}<br/>
+          ${invoiceData.client.postalCode} ${invoiceData.client.city}<br/>
+          ${invoiceData.client.country}
+          ${invoiceData.client.vatNumber ? `<br/>TVA: ${invoiceData.client.vatNumber}` : ''}
+        </div>
+      `;
+      break;
+    
+    default:
+      content = `<div style="font-size: 10px;">${element.label || element.id}</div>`;
+  }
+  
+  return `<div style="${baseStyle} overflow: hidden;">${content}</div>`;
 }
 
 /**
@@ -197,9 +534,14 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
 function generateInvoiceHTML(
   invoiceData: InvoiceData,
   qrBillData: SwissQRBillData,
-  options: Required<PDFGenerationOptions>
+  options: ResolvedPDFOptions
 ): string {
-  const { language } = options;
+  const { language, advancedConfig } = options;
+  const colors = getColors(advancedConfig, options.accentColor);
+  const discountPreferredColor = '#059669';
+  const discountLineColor = getAccessibleAccentColor('#ffffff', discountPreferredColor);
+  // For totals section, background is white, so use green directly
+  const discountTotalsColor = '#059669'; // Green on white background
 
   // Generate QR Bill HTML
   const qrBillHTML = generateQRBillHTML(qrBillData, options);
@@ -221,16 +563,75 @@ function generateInvoiceHTML(
     }).format(amount);
   };
 
+  // Check if any item has discounts
+  const hasLineDiscounts = invoiceData.items.some(item => item.lineDiscountValue && item.lineDiscountValue > 0);
+
+  // Debug: Log discount data
+  console.log('[PDF] invoiceData.globalDiscount:', invoiceData.globalDiscount);
+  console.log('[PDF] Items with discounts:', invoiceData.items.map(item => ({
+    desc: item.description,
+    lineDiscountValue: item.lineDiscountValue,
+    lineDiscountType: item.lineDiscountType
+  })));
+
   // Generate invoice items HTML with page break awareness
-  const itemsHTML = invoiceData.items.map((item, index) => `
+  const itemsHTML = invoiceData.items.map((item, index) => {
+    let itemHTML = `
     <tr class="invoice-item ${index > 0 && index % 15 === 0 ? 'page-break-before' : ''}">
       <td class="item-description">${item.description}</td>
       <td class="item-quantity">${item.quantity}</td>
       <td class="item-price">${formatCurrency(item.unitPrice, invoiceData.currency)}</td>
       <td class="item-tva">${item.tvaRate.toFixed(2)}%</td>
       <td class="item-total">${formatCurrency(item.total, invoiceData.currency)}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+    
+    // Add discount row if item has discount
+    const hasLineDiscount = (item.lineDiscountValue ?? 0) > 0 || (item.discountAmount ?? 0) > 0;
+    if (hasLineDiscount) {
+      const baseSubtotal = item.subtotalBeforeDiscount ?? (item.quantity * item.unitPrice);
+
+      let discountAmountValue = item.discountAmount ?? null;
+      if (discountAmountValue === null) {
+        if (item.lineDiscountType === 'PERCENT') {
+          const percent = item.lineDiscountValue || 0;
+          discountAmountValue = Math.max(baseSubtotal - item.total, 0);
+        } else if (item.lineDiscountType === 'AMOUNT') {
+          discountAmountValue = item.lineDiscountValue ?? 0;
+        } else {
+          discountAmountValue = Math.max(baseSubtotal - item.total, 0);
+        }
+      }
+
+      const positiveDiscountAmount = discountAmountValue && discountAmountValue > 0
+        ? Math.abs(discountAmountValue)
+        : 0;
+
+      let discountLabel: string;
+      let discountAmountSuffix = '';
+
+      if (item.lineDiscountValue && item.lineDiscountValue > 0) {
+        discountLabel = item.lineDiscountType === 'PERCENT'
+          ? `${item.lineDiscountValue}%`
+          : formatCurrency(item.lineDiscountValue, invoiceData.currency);
+        if (positiveDiscountAmount > 0) {
+          discountAmountSuffix = ` (-${formatCurrency(positiveDiscountAmount, invoiceData.currency)})`;
+        }
+      } else if (positiveDiscountAmount > 0) {
+        discountLabel = `-${formatCurrency(positiveDiscountAmount, invoiceData.currency)}`;
+      } else {
+        discountLabel = 'Remise appliquée';
+      }
+
+      itemHTML += `
+    <tr class="discount-row">
+      <td colspan="5" style="text-align: left; padding: 6px 18px; font-size: 9px; color: ${discountLineColor}; background: rgba(5, 150, 105, 0.08); border-bottom: 1px solid rgba(5, 150, 105, 0.12);">
+        <em>Remise: ${discountLabel}${discountAmountSuffix}</em>
+      </td>
+    </tr>`;
+    }
+    
+    return itemHTML;
+  }).join('');
 
   // Calculate TVA breakdown
   const tvaBreakdown = invoiceData.items.reduce((acc, item) => {
@@ -253,42 +654,340 @@ function generateInvoiceHTML(
     </tr>
   `).join('');
 
-  return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Facture ${invoiceData.invoiceNumber}</title>
-      <style>
-        ${getInvoiceCSS()}
-      </style>
-    </head>
-    <body>
-      <div class="invoice-container">
-        <!-- Main Invoice Content -->
-        <div class="invoice-content">
-          <!-- Invoice Header -->
-          <div class="header">
-            <div class="company-info">
-              <h1>${invoiceData.company.name}</h1>
-              <p>${invoiceData.company.address}</p>
-              <p>${invoiceData.company.postalCode} ${invoiceData.company.city}</p>
-              <p>${invoiceData.company.country}</p>
-              ${invoiceData.company.vatNumber ? `<p>TVA: ${invoiceData.company.vatNumber}</p>` : ''}
-              ${invoiceData.company.phone ? `<p>Tél: ${invoiceData.company.phone}</p>` : ''}
-              ${invoiceData.company.email ? `<p>Email: ${invoiceData.company.email}</p>` : ''}
-            </div>
-            <div class="invoice-info">
-              <h2>FACTURE</h2>
-              <div class="invoice-number">N° ${invoiceData.invoiceNumber}</div>
-            </div>
+  const hasGlobalDiscount = !!(invoiceData.globalDiscount && invoiceData.globalDiscount.value > 0);
+  console.log('[PDF] Global Discount Check:', {
+    hasGlobalDiscount,
+    globalDiscount: invoiceData.globalDiscount,
+    value: invoiceData.globalDiscount?.value,
+    type: invoiceData.globalDiscount?.type
+  });
+  const globalDiscountValue = hasGlobalDiscount ? Number(invoiceData.globalDiscount!.value) : 0;
+  const globalDiscountDisplayValue = hasGlobalDiscount
+    ? (invoiceData.globalDiscount!.type === 'PERCENT'
+        ? `${globalDiscountValue}%`
+        : formatCurrency(globalDiscountValue, invoiceData.currency))
+    : '';
+  const globalDiscountAmount = hasGlobalDiscount
+    ? (invoiceData.globalDiscount!.type === 'PERCENT'
+        ? invoiceData.subtotal * globalDiscountValue / 100
+        : globalDiscountValue)
+    : 0;
+
+  // Generate global discount HTML
+  const globalDiscountHTML = hasGlobalDiscount 
+    ? `
+    <tr class="discount-row" style="color: ${discountTotalsColor};">
+      <td style="color: ${discountTotalsColor};">
+        Remise globale${invoiceData.globalDiscount?.note ? `: ${invoiceData.globalDiscount.note}` : ''} 
+        (${globalDiscountDisplayValue})
+      </td>
+      <td style="text-align: right; color: ${discountTotalsColor};">
+        -${formatCurrency(globalDiscountAmount, invoiceData.currency)}
+      </td>
+    </tr>`
+    : '';
+
+  const globalDiscountCustomHTML = hasGlobalDiscount
+    ? `
+              <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 10px; color: ${discountTotalsColor};">
+                <span>Remise globale${invoiceData.globalDiscount?.note ? `: ${invoiceData.globalDiscount.note}` : ''} (${globalDiscountDisplayValue})</span>
+                <span>- ${formatCurrency(globalDiscountAmount, invoiceData.currency)}</span>
+              </div>
+            `
+    : '';
+
+  // Generate background images HTML if advanced config has them
+  // Frontend editor uses 595x842px (A4 at 72 DPI)
+  // PDF uses 210x297mm
+  // Conversion: px to mm -> (px / 595) * 210 for width, (px / 842) * 297 for height
+  const EDITOR_WIDTH = 595;
+  const EDITOR_HEIGHT = 842;
+  const PDF_WIDTH_MM = 210;
+  const PDF_HEIGHT_MM = 297;
+  
+  const backgroundImagesHTML = advancedConfig?.backgroundImages
+    ? advancedConfig.backgroundImages
+        .filter(img => img.visible !== false)
+        .map(img => {
+          let leftMM = (img.position.x / EDITOR_WIDTH) * PDF_WIDTH_MM;
+          let topMM = (img.position.y / EDITOR_HEIGHT) * PDF_HEIGHT_MM;
+          let widthMM = (img.size.width / EDITOR_WIDTH) * PDF_WIDTH_MM;
+          let heightMM = (img.size.height / EDITOR_HEIGHT) * PDF_HEIGHT_MM;
+          
+          // Clip to page boundaries to prevent PDF scaling
+          if (leftMM < 0) {
+            widthMM += leftMM;
+            leftMM = 0;
+          }
+          if (topMM < 0) {
+            heightMM += topMM;
+            topMM = 0;
+          }
+          if (leftMM + widthMM > PDF_WIDTH_MM) {
+            widthMM = PDF_WIDTH_MM - leftMM;
+          }
+          if (topMM + heightMM > PDF_HEIGHT_MM) {
+            heightMM = PDF_HEIGHT_MM - topMM;
+          }
+          
+          // Skip if completely outside page
+          if (widthMM <= 0 || heightMM <= 0) return '';
+          
+          return `
+          <div class="background-image" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; height: ${heightMM}mm; opacity: ${img.opacity || 1}; z-index: 1; pointer-events: none; overflow: hidden;">
+            <img src="${img.src.startsWith('http') ? img.src : 'http://localhost:3001/' + img.src}" style="width: 100%; height: 100%; object-fit: cover;" alt="Background" />
           </div>
+          `;
+        })
+        .join('')
+    : '';
+
+  // Check if we have custom positioning from advancedConfig
+  const useCustomPositioning = advancedConfig?.elements && advancedConfig.elements.length > 0;
+  
+  // Check if there's a positioned QR Bill zone
+  const hasPositionedQRBillZone = useCustomPositioning && 
+    advancedConfig?.elements?.some((el: any) => el.id === 'qr_bill_zone' && el.visible !== false);
+
+  // Debug log to see what we're receiving
+  if (useCustomPositioning && advancedConfig?.elements) {
+    console.log('[PDF Generation] Using custom positioning with', advancedConfig.elements.length, 'elements');
+    console.log('[PDF Generation] Has positioned QR Bill zone:', hasPositionedQRBillZone);
+  } else {
+    console.log('[PDF Generation] Using default template (no advancedConfig.elements)');
+  }
+
+  // Generate positioned elements if custom config exists
+  let contentHTML = '';
+  
+  if (useCustomPositioning && advancedConfig.elements) {
+    // Render elements based on their configured positions
+    // Filter out footer and QR bill zone elements
+    const positionedElements = advancedConfig.elements
+      .filter((el: any) => el.visible !== false && el.id !== 'footer' && el.id !== 'qr_bill_zone')
+      .map((el: any) => {
+        if (el.id === 'table') {
+          const leftMM = pxToMM(el.position.x, true);
+          const topMM = pxToMM(el.position.y, false);
+          const widthMM = pxToMM(el.size.width, true);
+          
+          // Get table style from advanced config (default: classic)
+          const tableStyle = (advancedConfig as any)?.tableStyle || 'classic';
+          
+          // Define styles based on tableStyle
+          let tableContainerStyle = '';
+          let headerRowStyle = '';
+          let headerCellStyle = '';
+          let bodyRowStyle = (index: number) => '';
+          
+          if (tableStyle === 'classic') {
+            // Classic: Zebra striping with alternating row colors
+            tableContainerStyle = 'border: 1px solid #ddd; border-radius: 4px;';
+            headerRowStyle = `background-color: ${colors.tableHeader}; color: ${colors.textHeader};`;
+            headerCellStyle = 'padding: 6px; border: 1px solid #ddd;';
+            bodyRowStyle = (index: number) => index % 2 === 0 ? 'background-color: white;' : `background-color: ${colors.altRow || '#f9fafb'};`;
+          } else if (tableStyle === 'modern') {
+            // Modern: Clean design with subtle borders
+            tableContainerStyle = '';
+            headerRowStyle = `border-bottom: 2px solid ${colors.primary}; color: ${colors.textHeader};`;
+            headerCellStyle = 'padding: 6px; border: none;';
+            bodyRowStyle = () => 'border-bottom: 1px solid #e5e7eb;';
+          } else if (tableStyle === 'bordered') {
+            // Bordered: Full grid with borders on all cells
+            tableContainerStyle = `border: 2px solid ${colors.primary};`;
+            headerRowStyle = `background-color: ${colors.tableHeader}; color: ${colors.textHeader}; border-bottom: 2px solid ${colors.primary};`;
+            headerCellStyle = `padding: 6px; border-right: 1px solid ${colors.primary};`;
+            bodyRowStyle = () => `border-bottom: 1px solid ${colors.primary};`;
+          } else if (tableStyle === 'minimal') {
+            // Minimal: No borders, only subtle separators
+            tableContainerStyle = '';
+            headerRowStyle = `color: ${colors.primary};`;
+            headerCellStyle = 'padding: 6px; border: none;';
+            bodyRowStyle = () => 'border-bottom: 1px solid #f3f4f6;';
+          } else {
+            // Bold: Strong header with heavy borders
+            tableContainerStyle = 'border: 2px solid #d1d5db; border-radius: 4px;';
+            headerRowStyle = `background-color: ${colors.primary}; color: white; border-bottom: 4px solid ${colors.primary};`;
+            headerCellStyle = 'padding: 8px; border: none; font-weight: bold;';
+            bodyRowStyle = () => 'border-bottom: 2px solid #d1d5db;';
+          }
+          
+          // Generate styled item rows with discount support
+          const styledItemsHTML = invoiceData.items.map((item, index) => {
+            const rowStyle = bodyRowStyle(index);
+            const cellBorder = tableStyle === 'bordered' ? `border-right: 1px solid ${colors.primary};` : '';
+            const cellPadding = tableStyle === 'bold' ? 'padding: 8px;' : 'padding: 6px;';
+            
+            let itemHTML = `
+              <tr style="${rowStyle}">
+                <td style="${cellPadding} text-align: left; ${cellBorder}">${item.description}</td>
+                <td style="${cellPadding} text-align: center; ${cellBorder} width: 60px;">${item.quantity}</td>
+                <td style="${cellPadding} text-align: right; ${cellBorder} width: 70px;">${formatCurrency(item.unitPrice, invoiceData.currency)}</td>
+                <td style="${cellPadding} text-align: right; ${cellBorder} width: 50px;">${item.tvaRate.toFixed(2)}%</td>
+                <td style="${cellPadding} text-align: right; width: 70px; ${tableStyle === 'bold' ? 'font-weight: bold;' : ''}">${formatCurrency(item.total, invoiceData.currency)}</td>
+              </tr>
+            `;
+            
+            // Add discount row if item has discount
+            const hasLineDiscount = (item.lineDiscountValue ?? 0) > 0 || (item.discountAmount ?? 0) > 0;
+            if (hasLineDiscount) {
+              const baseSubtotal = item.subtotalBeforeDiscount ?? (item.quantity * item.unitPrice);
+
+              let discountAmountValue = item.discountAmount ?? null;
+              if (discountAmountValue === null) {
+                if (item.lineDiscountType === 'PERCENT') {
+                  const percent = item.lineDiscountValue || 0;
+                  discountAmountValue = Math.max(baseSubtotal - item.total, 0);
+                } else if (item.lineDiscountType === 'AMOUNT') {
+                  discountAmountValue = item.lineDiscountValue ?? 0;
+                } else {
+                  discountAmountValue = Math.max(baseSubtotal - item.total, 0);
+                }
+              }
+
+              const positiveDiscountAmount = discountAmountValue && discountAmountValue > 0
+                ? Math.abs(discountAmountValue)
+                : 0;
+
+              let discountLabel: string;
+              let discountAmountSuffix = '';
+
+              if (item.lineDiscountValue && item.lineDiscountValue > 0) {
+                discountLabel = item.lineDiscountType === 'PERCENT'
+                  ? `${item.lineDiscountValue}%`
+                  : formatCurrency(item.lineDiscountValue, invoiceData.currency);
+                if (positiveDiscountAmount > 0) {
+                  discountAmountSuffix = ` (-${formatCurrency(positiveDiscountAmount, invoiceData.currency)})`;
+                }
+              } else if (positiveDiscountAmount > 0) {
+                discountLabel = `-${formatCurrency(positiveDiscountAmount, invoiceData.currency)}`;
+              } else {
+                discountLabel = 'Remise appliquée';
+              }
+
+              itemHTML += `
+              <tr class="discount-row">
+                <td colspan="5" style="text-align: left; padding: 6px 18px; font-size: 9px; color: ${discountLineColor}; background: rgba(5, 150, 105, 0.08); border-bottom: 1px solid rgba(5, 150, 105, 0.12);">
+                  <em>Remise: ${discountLabel}${discountAmountSuffix}</em>
+                </td>
+              </tr>`;
+            }
+            
+            return itemHTML;
+          }).join('');
+
+          return `
+            <div class="positioned-table" data-element-id="table" data-left-mm="${leftMM}" data-top-mm="${topMM}" data-width-mm="${widthMM}" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; z-index: 10;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 9px; ${tableContainerStyle}">
+                <thead>
+                  <tr style="${headerRowStyle}">
+                    <th style="${headerCellStyle} text-align: left;">Description</th>
+                    <th style="${headerCellStyle} text-align: center; width: 60px;">Qté</th>
+                    <th style="${headerCellStyle} text-align: right; width: 70px;">Prix Unit.</th>
+                    <th style="${headerCellStyle} text-align: right; width: 50px;">TVA</th>
+                    <th style="${headerCellStyle.replace('border-right', 'border-right: none')} text-align: right; width: 70px;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${styledItemsHTML}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else if (el.id === 'totals') {
+          const leftMM = pxToMM(el.position.x, true);
+          const topMM = pxToMM(el.position.y, false);
+          const widthMM = pxToMM(el.size.width, true);
+          
+          // Get totals style from advanced config (default: filled)
+          const totalsStyle = (advancedConfig as any)?.totalsStyle || 'filled';
+          
+          // Define styles based on totalsStyle
+          let containerStyle = '';
+          let totalBorderStyle = '';
+          
+          if (totalsStyle === 'filled') {
+            // Filled: background color with white text
+            containerStyle = `background: ${colors.primary}; color: white;`;
+            totalBorderStyle = 'border-top: 1px solid rgba(255,255,255,0.3);';
+          } else if (totalsStyle === 'outlined') {
+            // Outlined: border with colored text
+            containerStyle = `background: transparent; color: ${colors.textBody}; border: 2px solid ${colors.primary};`;
+            totalBorderStyle = `border-top: 1px solid ${colors.primary}; color: ${colors.primary};`;
+          } else {
+            // Minimal: no background, colored text only
+            containerStyle = `background: transparent; color: ${colors.textBody};`;
+            totalBorderStyle = `border-top: 1px solid ${colors.primary}; color: ${colors.primary};`;
+          }
+
+          return `
+            <div class="positioned-totals" data-element-id="totals" data-left-mm="${leftMM}" data-top-mm="${topMM}" data-width-mm="${widthMM}" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; ${containerStyle} padding: 10px; border-radius: 8px; z-index: 10;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 10px;">
+                <span>Sous-total:</span>
+                <span>${formatCurrency(invoiceData.subtotal, invoiceData.currency)}</span>
+              </div>
+              ${Object.entries(tvaBreakdown).map(([rate, amounts]) => `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 10px;">
+                  <span>TVA ${parseFloat(rate).toFixed(2)}%:</span>
+                  <span>${formatCurrency(amounts.tva, invoiceData.currency)}</span>
+                </div>
+              `).join('')}
+              ${globalDiscountCustomHTML}
+              <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; ${totalBorderStyle} padding-top: 8px;">
+                <span>TOTAL:</span>
+                <span>${formatCurrency(invoiceData.total, invoiceData.currency)}</span>
+              </div>
+            </div>
+          `;
+        } else if (el.id === 'qr_bill_zone') {
+          // Skip rendering here - QR Bill will be rendered inline after content
+          return '';
+        } else {
+          return renderPositionedElement(el, invoiceData, colors);
+        }
+      })
+      .join('');
+    
+    contentHTML = `<div class="positioned-content">${positionedElements}</div>`;
+  } else {
+    // Use default template with normal flow
+    contentHTML = `
+      <div class="invoice-content">
+          <!-- Invoice Header -->
+          ${isElementVisible('logo', advancedConfig) || isElementVisible('company_name', advancedConfig) || isElementVisible('company_info', advancedConfig) ? `
+          <div class="header">
+            <div style="display: flex; align-items: flex-start; gap: 20px;">
+              ${isElementVisible('logo', advancedConfig) && (invoiceData.company.logoUrl || invoiceData.logoUrl) ? `
+              <div class="company-logo" style="flex-shrink: 0;">
+                <img src="${invoiceData.company.logoUrl?.startsWith('http') ? invoiceData.company.logoUrl : 'http://localhost:3001/' + (invoiceData.company.logoUrl || invoiceData.logoUrl)}" alt="Logo" style="max-height: 80px; max-width: 180px; object-fit: contain;" />
+              </div>
+              ` : ''}
+              ${isElementVisible('company_info', advancedConfig) ? `
+              <div class="company-info">
+                ${isElementVisible('company_name', advancedConfig) ? `<h1 style="color: ${colors.primary}">${invoiceData.company.name}</h1>` : ''}
+                <p>${invoiceData.company.address}</p>
+                <p>${invoiceData.company.postalCode} ${invoiceData.company.city}</p>
+                <p>${invoiceData.company.country}</p>
+                ${invoiceData.company.vatNumber ? `<p>TVA: ${invoiceData.company.vatNumber}</p>` : ''}
+                ${invoiceData.company.phone ? `<p>Tél: ${invoiceData.company.phone}</p>` : ''}
+                ${invoiceData.company.email ? `<p>Email: ${invoiceData.company.email}</p>` : ''}
+              </div>
+              ` : ''}
+            </div>
+            ${isElementVisible('doc_title', advancedConfig) || isElementVisible('doc_number', advancedConfig) ? `
+            <div class="invoice-info">
+              ${isElementVisible('doc_title', advancedConfig) ? `<h2 style="color: ${colors.primary}">FACTURE</h2>` : ''}
+              ${isElementVisible('doc_number', advancedConfig) ? `<div class="invoice-number">N° ${invoiceData.invoiceNumber}</div>` : ''}
+            </div>
+            ` : ''}
+          </div>
+          ` : ''}
           
           <!-- Invoice Details -->
+          ${isElementVisible('client_info', advancedConfig) ? `
           <div class="invoice-details">
             <div class="client-info">
-              <h3>Facturé à:</h3>
+              <h3 style="color: ${colors.primary}">Facturé à:</h3>
               <p><strong>${invoiceData.client.name}</strong></p>
               <p>${invoiceData.client.address}</p>
               <p>${invoiceData.client.postalCode} ${invoiceData.client.city}</p>
@@ -296,18 +995,20 @@ function generateInvoiceHTML(
               ${invoiceData.client.vatNumber ? `<p>TVA: ${invoiceData.client.vatNumber}</p>` : ''}
             </div>
             <div class="invoice-meta">
-              <h3>Détails de la facture:</h3>
+              <h3 style="color: ${colors.primary}">Détails de la facture:</h3>
               <p><strong>Date de facture:</strong> ${formatDate(invoiceData.issueDate)}</p>
               <p><strong>Date d'échéance:</strong> ${formatDate(invoiceData.dueDate)}</p>
               <p><strong>Devise:</strong> ${invoiceData.currency}</p>
             </div>
           </div>
+          ` : ''}
           
           <!-- Invoice Items -->
+          ${isElementVisible('table', advancedConfig) ? `
           <div class="items-section">
             <table class="items-table">
               <thead>
-                <tr>
+                <tr style="background-color: ${colors.tableHeader}; color: ${colors.textHeader};">
                   <th>Description</th>
                   <th>Quantité</th>
                   <th>Prix unitaire</th>
@@ -320,8 +1021,10 @@ function generateInvoiceHTML(
               </tbody>
             </table>
           </div>
+          ` : ''}
           
           <!-- Totals -->
+          ${isElementVisible('totals', advancedConfig) ? `
           <div class="totals-section">
             <table class="totals-table">
               <tr class="subtotal-row">
@@ -329,19 +1032,13 @@ function generateInvoiceHTML(
                 <td style="text-align: right;">${formatCurrency(invoiceData.subtotal, invoiceData.currency)}</td>
               </tr>
               ${tvaBreakdownHTML}
-              <tr class="total-row">
+              ${globalDiscountHTML}
+              <tr class="total-row" style="color: ${colors.primary}">
                 <td>TOTAL:</td>
                 <td style="text-align: right;">${formatCurrency(invoiceData.total, invoiceData.currency)}</td>
               </tr>
             </table>
           </div>
-          
-          <!-- Notes -->
-          ${invoiceData.notes ? `
-            <div class="notes">
-              <h4>Notes:</h4>
-              <p>${invoiceData.notes}</p>
-            </div>
           ` : ''}
           
           <!-- Terms -->
@@ -350,14 +1047,318 @@ function generateInvoiceHTML(
               <p><strong>Conditions de paiement:</strong> ${invoiceData.terms}</p>
             </div>
           ` : ''}
+      </div>
+    `;
+  }
+
+  // Generate final HTML with background images and content
+  return `
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Facture ${invoiceData.invoiceNumber}</title>
+      <style>
+        ${getInvoiceCSS(colors)}
+      </style>
+    </head>
+    <body>
+      <div class="invoice-container">
+        <!-- Background Images - Fixed to Page 1 only -->
+        <div class="background-layer">
+          ${backgroundImagesHTML}
         </div>
         
-        <!-- Swiss QR Bill - Always on last page -->
-        <div class="qr-bill-container">
-          <div class="perforation-line"></div>
-          ${qrBillHTML}
-        </div>
+        ${contentHTML}
+        
+        <!-- Swiss QR Bill -->
+        ${qrBillHTML}
       </div>
+
+      <script>
+        (function() {
+          const MM_TO_PX = 96 / 25.4; // 1 mm in pixels at 96 DPI
+
+          function mmToPx(mm) {
+            return mm * MM_TO_PX;
+          }
+
+          function setElementTop(element, topMM) {
+            if (!element) return;
+            element.style.top = mmToPx(topMM) + 'px';
+          }
+
+          function getElementTopMM(element) {
+            if (!element) return 0;
+            const match = element.getAttribute('data-top-mm');
+            return match ? parseFloat(match) || 0 : 0;
+          }
+
+          function positionTotals() {
+            const totals = document.querySelector('.positioned-totals');
+            const tableWrapper = document.querySelector('.positioned-table');
+            if (!totals || !tableWrapper) return;
+
+            const containerRect = document.querySelector('.invoice-container').getBoundingClientRect();
+            
+            // Find the actual table bottom by checking all rows
+            const table = tableWrapper.querySelector('table');
+            let tableBottomPx = 0;
+            
+            if (table) {
+              const allRows = Array.from(table.querySelectorAll('tr'));
+              allRows.forEach(row => {
+                const rowRect = row.getBoundingClientRect();
+                const rowBottomPx = rowRect.bottom - containerRect.top;
+                tableBottomPx = Math.max(tableBottomPx, rowBottomPx);
+              });
+            } else {
+              // Fallback to wrapper
+              const tableRect = tableWrapper.getBoundingClientRect();
+              tableBottomPx = tableRect.bottom - containerRect.top;
+            }
+            
+            console.log('[Totals] Table ends at:', tableBottomPx, 'px (', tableBottomPx / MM_TO_PX, 'mm)');
+            
+            // ALWAYS position totals below table - ignore theme editor position
+            const marginPx = mmToPx(8); // 8mm margin below table
+            const newTopPx = tableBottomPx + marginPx;
+            const newTopMM = newTopPx / MM_TO_PX;
+            
+            // Force the new position
+            totals.style.top = newTopMM + 'mm';
+            totals.setAttribute('data-top-mm', newTopMM.toString());
+            
+            console.log('[Totals] FORCED position at:', newTopMM.toFixed(2), 'mm');
+          }
+
+          function enforceTableBreaks() {
+            const table = document.querySelector('.positioned-table table, .items-table');
+            if (!table) return;
+
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            const pageHeightPx = mmToPx(297 - 20 - 20);
+            const headerHeight = table.querySelector('thead')?.getBoundingClientRect().height || 0;
+            const containerRect = document.querySelector('.invoice-container').getBoundingClientRect();
+
+            let currentPageBottomPx = pageHeightPx;
+            rows.forEach((row) => {
+              const rowRect = row.getBoundingClientRect();
+              const rowTopPx = rowRect.top - containerRect.top;
+              const rowBottomPx = rowRect.bottom - containerRect.top;
+
+              if (rowBottomPx > currentPageBottomPx) {
+                const diff = rowBottomPx - currentPageBottomPx;
+                const offset = diff + 4;
+                row.style.marginTop = (row.style.marginTop ? parseFloat(row.style.marginTop) : 0) + offset + 'px';
+                currentPageBottomPx += pageHeightPx;
+                if (!row.classList.contains('discount-row')) {
+                  row.style.pageBreakBefore = 'always';
+                }
+              }
+            });
+
+            const discountRows = table.querySelectorAll('tr.discount-row');
+            discountRows.forEach((row) => {
+              row.style.pageBreakInside = 'avoid';
+            });
+          }
+
+          function adjustQRBillPlacement() {
+            const qrBill = document.querySelector('.qr-bill-container');
+            if (!qrBill) {
+              console.log('[QR Bill Placement] QR Bill container not found');
+              return;
+            }
+            
+            const container = document.querySelector('.invoice-container');
+            if (!container) {
+              console.log('[QR Bill Placement] Invoice container not found');
+              return;
+            }
+            
+            // Find all positioned elements (logo, company info, table, totals, etc.)
+            const positionedContent = document.querySelector('.positioned-content');
+            let maxBottomPx = 0;
+            
+            if (positionedContent) {
+              // Get all direct children that are positioned
+              const allElements = Array.from(positionedContent.querySelectorAll('*'));
+              const containerRect = container.getBoundingClientRect();
+              
+              allElements.forEach(el => {
+                const rect = el.getBoundingClientRect();
+                if (rect.height > 0 && rect.width > 0) {
+                  const bottomPx = rect.bottom - containerRect.top;
+                  maxBottomPx = Math.max(maxBottomPx, bottomPx);
+                }
+              });
+              
+              console.log('[QR Bill Placement] Found', allElements.length, 'positioned elements');
+            } else {
+              // Fallback: use invoice-content if no positioned-content
+              const invoiceContent = document.querySelector('.invoice-content');
+              if (invoiceContent) {
+                const containerRect = container.getBoundingClientRect();
+                const contentRect = invoiceContent.getBoundingClientRect();
+                maxBottomPx = contentRect.bottom - containerRect.top;
+                console.log('[QR Bill Placement] Using invoice-content fallback');
+              }
+            }
+            
+            // Calculate if QR Bill fits on page 1
+            const qrBillHeightMM = 105; // QR Bill standard height
+            const qrBillHeightPx = mmToPx(qrBillHeightMM);
+            const pageHeightPx = mmToPx(297); // A4 height
+            const marginsPx = mmToPx(10); // Only top margin, bottom can be minimal
+            const availableHeightPx = pageHeightPx - marginsPx;
+            
+            console.log('[QR Bill Placement] Max content bottom:', maxBottomPx, 'px');
+            console.log('[QR Bill Placement] QR Bill height:', qrBillHeightPx, 'px');
+            console.log('[QR Bill Placement] Available height:', availableHeightPx, 'px');
+            console.log('[QR Bill Placement] Total if added:', (maxBottomPx + qrBillHeightPx), 'px');
+            console.log('[QR Bill Placement] Would fit?', (maxBottomPx + qrBillHeightPx) < availableHeightPx);
+            
+            // If QR Bill fits on page 1, remove page break
+            if ((maxBottomPx + qrBillHeightPx + mmToPx(10)) < availableHeightPx) {
+              qrBill.style.pageBreakBefore = 'avoid';
+              qrBill.style.marginTop = '10mm';
+              console.log('[QR Bill Placement] ✅ Keeping QR Bill on page 1');
+            } else {
+              qrBill.style.pageBreakBefore = 'always';
+              console.log('[QR Bill Placement] ⏭️  Moving QR Bill to page 2');
+            }
+          }
+
+          function positionQRBillBelowContent() {
+            const qrBill = document.querySelector('.qr-bill-container');
+            const container = document.querySelector('.invoice-container');
+            
+            if (!qrBill || !container) {
+              console.log('[QR Bill] ERROR: Missing qrBill or container');
+              return;
+            }
+            
+            // Force reflow
+            void container.offsetHeight;
+            
+            const containerRect = container.getBoundingClientRect();
+            
+            // SIMPLE APPROACH: Find the maximum bottom position of ALL content elements
+            // This is the most reliable way to detect where the content ends
+            let maxContentBottomPx = 0;
+            let maxElement = null;
+            
+            // Scan ALL elements inside positioned-content (except QR Bill)
+            const positionedContent = document.querySelector('.positioned-content');
+            if (positionedContent) {
+              const allElements = positionedContent.querySelectorAll('*');
+              allElements.forEach(el => {
+                if (el.classList.contains('qr-bill-container')) return;
+                if (el.tagName === 'SCRIPT') return;
+                
+                const rect = el.getBoundingClientRect();
+                if (rect.height > 0 && rect.width > 0) {
+                  const bottomPx = rect.bottom - containerRect.top;
+                  if (bottomPx > maxContentBottomPx) {
+                    maxContentBottomPx = bottomPx;
+                    maxElement = el;
+                  }
+                }
+              });
+            }
+            
+            // Also check the table rows specifically (they might extend beyond)
+            const tableRows = document.querySelectorAll('.positioned-table tr, .items-table tr');
+            tableRows.forEach(row => {
+              const rect = row.getBoundingClientRect();
+              const bottomPx = rect.bottom - containerRect.top;
+              if (bottomPx > maxContentBottomPx) {
+                maxContentBottomPx = bottomPx;
+                maxElement = row;
+              }
+            });
+            
+            // Also check totals specifically
+            const totals = document.querySelector('.positioned-totals');
+            if (totals) {
+              const rect = totals.getBoundingClientRect();
+              const bottomPx = rect.bottom - containerRect.top;
+              if (bottomPx > maxContentBottomPx) {
+                maxContentBottomPx = bottomPx;
+                maxElement = totals;
+              }
+            }
+            
+            // Convert to mm
+            const maxContentBottomMM = maxContentBottomPx / MM_TO_PX;
+            
+            // QR Bill constants
+            const qrBillHeightMM = 105;
+            const pageHeightMM = 297;
+            const safetyMarginMM = 10;
+            
+            // QR Bill position at bottom of page
+            const qrBillTopMM = pageHeightMM - qrBillHeightMM; // 192mm
+            
+            // Check if content would overlap with QR Bill zone
+            const contentWithMarginMM = maxContentBottomMM + safetyMarginMM;
+            const wouldOverlap = contentWithMarginMM > qrBillTopMM;
+            
+            console.log('=== QR Bill Positioning Analysis ===');
+            console.log('[QR Bill] Container top:', containerRect.top.toFixed(2), 'px');
+            console.log('[QR Bill] Max content bottom:', maxContentBottomPx.toFixed(2), 'px =', maxContentBottomMM.toFixed(2), 'mm');
+            console.log('[QR Bill] Max element:', maxElement?.className || maxElement?.tagName || 'unknown');
+            console.log('[QR Bill] Content + margin:', contentWithMarginMM.toFixed(2), 'mm');
+            console.log('[QR Bill] QR Bill zone starts at:', qrBillTopMM, 'mm');
+            console.log('[QR Bill] Would overlap?', wouldOverlap, '(', contentWithMarginMM.toFixed(2), 'mm >', qrBillTopMM, 'mm)');
+            
+            if (wouldOverlap) {
+              // CRITICAL: Content is too long, QR Bill MUST go to page 2
+              console.log('[QR Bill] ⏭️  MOVING TO PAGE 2');
+              
+              // Remove absolute positioning and use page break
+              qrBill.style.setProperty('position', 'relative', 'important');
+              qrBill.style.setProperty('top', 'auto', 'important');
+              qrBill.style.setProperty('left', 'auto', 'important');
+              qrBill.style.setProperty('margin-top', '20mm', 'important');
+              qrBill.style.setProperty('page-break-before', 'always', 'important');
+              qrBill.style.setProperty('z-index', '2000', 'important');
+            } else {
+              // Content fits, position QR Bill at bottom of page 1
+              console.log('[QR Bill] ✅ Fits on page 1 at', qrBillTopMM, 'mm');
+              
+              qrBill.style.setProperty('position', 'absolute', 'important');
+              qrBill.style.setProperty('top', qrBillTopMM + 'mm', 'important');
+              qrBill.style.setProperty('left', '0', 'important');
+              qrBill.style.setProperty('margin-top', '0', 'important');
+              qrBill.style.setProperty('page-break-before', 'avoid', 'important');
+              qrBill.style.setProperty('z-index', '2000', 'important');
+            }
+            console.log('=====================================');
+          }
+
+          function init() {
+            try {
+              // Step 1: Position totals below table
+              positionTotals();
+              
+              // Step 2: Enforce table breaks
+              enforceTableBreaks();
+              
+              // NOTE: QR Bill positioning is handled by Puppeteer's calculateContentMetrics
+              // before PDF generation, so we don't need to do it here
+              console.log('[Init] Totals positioned, table breaks enforced');
+            } catch (e) {
+              console.error('[Init Error]', e);
+            }
+          }
+
+          // Run immediately
+          init();
+        })();
+      </script>
     </body>
     </html>
   `;
@@ -366,7 +1367,10 @@ function generateInvoiceHTML(
 /**
  * Generates CSS styles for the invoice PDF
  */
-function getInvoiceCSS(): string {
+export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; headerBg: string; textHeader: string; textBody: string }): string {
+  const primaryColor = colors?.primary || '#000000';
+  const tableHeaderColor = colors?.tableHeader || '#000000';
+  const textBodyColor = colors?.textBody || '#374151';
   return `
     @page {
       size: A4;
@@ -379,23 +1383,60 @@ function getInvoiceCSS(): string {
       box-sizing: border-box;
     }
     
+    html {
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
       font-size: 10pt;
       line-height: 1.5;
       color: #2c3e50;
       background: white;
+      margin: 0;
+      padding: 0;
     }
     
     .invoice-container {
       width: 210mm;
-      min-height: 297mm;
       position: relative;
+      margin: 0;
+      padding: 0;
+      page-break-after: avoid;
+    }
+    
+    .background-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 210mm;
+      max-height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+    
+    .background-image {
+      position: absolute !important;
+      z-index: 1 !important;
+      pointer-events: none;
+    }
+    
+    .positioned-content {
+      position: relative;
+      width: 210mm;
+      min-height: calc(297mm - 105mm);
+      z-index: 10;
+      padding: 0;
+      margin: 0;
     }
     
     .invoice-content {
-      padding: 25mm 20mm 0 20mm;
-      min-height: calc(297mm - 105mm - 25mm);
+      position: relative;
+      z-index: 10;
+      padding: 20mm;
+      min-height: calc(297mm - 105mm);
+      background: transparent;
     }
     
     /* Clean European Header */
@@ -505,6 +1546,14 @@ function getInvoiceCSS(): string {
       border: none;
     }
     
+    .items-table thead {
+      display: table-header-group;
+    }
+
+    .items-table tfoot {
+      display: table-footer-group;
+    }
+
     .items-table td {
       padding: 12px 15px;
       font-size: 9pt;
@@ -520,6 +1569,16 @@ function getInvoiceCSS(): string {
       background: #e8f4fd;
     }
     
+    .items-table tr,
+    .items-table td,
+    .items-table th {
+      page-break-inside: avoid !important;
+    }
+
+    .items-table tr {
+      break-inside: avoid;
+    }
+
     .item-quantity, .item-price, .item-tva, .item-total {
       text-align: right;
       font-weight: 500;
@@ -626,15 +1685,18 @@ function getInvoiceCSS(): string {
       letter-spacing: 0.5px;
     }
     
-    /* QR Bill container - Always at bottom of last page */
+    /* QR Bill container - Always positioned at the bottom of the page */
     .qr-bill-container {
-      position: absolute;
-      bottom: 0;
-      left: 0;
+      position: relative;
       width: 210mm;
       height: 105mm;
+      margin: 0;
+      page-break-before: avoid;
+      page-break-after: avoid;
       page-break-inside: avoid;
-      page-break-before: auto;
+      padding: 0;
+      z-index: 2000 !important; /* Above all positioned elements */
+      background: white; /* Ensure opaque background */
     }
     
     /* Perforation line */
@@ -653,13 +1715,23 @@ function getInvoiceCSS(): string {
       );
     }
     
-    /* Ensure QR Bill starts on new page if content is too long */
+    /* Ensure proper page breaks for print */
     @media print {
       .qr-bill-container {
-        page-break-before: auto;
+        page-break-before: avoid;
+        page-break-after: avoid;
       }
       
       .invoice-content {
+        page-break-after: avoid;
+      }
+      
+      .background-layer {
+        page-break-after: avoid;
+        page-break-inside: avoid;
+      }
+      
+      .invoice-container {
         page-break-after: avoid;
       }
     }
@@ -680,322 +1752,90 @@ function getInvoiceCSS(): string {
 }
 
 /**
- * Generates HTML content for Swiss QR Bill
+ * Generates HTML content for Swiss QR Bill using official swissqrbill library
+ * This replaces the obsolete manual implementation with the correct, compliant version
  */
-function generateQRBillHTML(qrBillData: SwissQRBillData, options: Required<PDFGenerationOptions>): string {
+function generateQRBillHTML(qrBillData: SwissQRBillData, options: ResolvedPDFOptions): string {
   const { language } = options;
 
-  // Format currency
-  const formatCurrency = (amount: number, currency: string): string => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
+  try {
+    // Map SwissQRBillData to the format expected by swissqrbill library
+    const qrBillInput: any = {
+      currency: qrBillData.currency,
+      amount: qrBillData.amount,
+      reference: qrBillData.reference || undefined,
+      creditor: {
+        name: qrBillData.creditor.name,
+        address: qrBillData.creditor.addressLine1,
+        zip: qrBillData.creditor.postalCode,
+        city: qrBillData.creditor.city,
+        country: qrBillData.creditor.country,
+        account: qrBillData.creditorAccount
+      },
+      debtor: qrBillData.debtor ? {
+        name: qrBillData.debtor.name,
+        address: qrBillData.debtor.addressLine1,
+        zip: qrBillData.debtor.postalCode,
+        city: qrBillData.debtor.city,
+        country: qrBillData.debtor.country
+      } : undefined,
+      message: qrBillData.unstructuredMessage || undefined,
+      additionalInformation: qrBillData.billInformation || undefined
+    };
 
-  // Generate QR code data string according to Swiss QR Bill specification
-  const qrCodeData = generateQRCodeData(qrBillData);
+    // Generate SVG using official library
+    const qrBill = new SwissQRBill(qrBillInput);
+    
+    // Convert to SVG string with appropriate options
+    const svg = qrBill.toString();
+    
+    console.log('[generateQRBillHTML] Official Swiss QR Bill SVG generated successfully');
 
-  // Get localized labels
-  const labels = getLocalizedLabels(language);
-
-  return `
-    <div class="qr-bill">
-      <style>
-        .qr-bill {
-          width: 210mm;
-          height: 105mm;
-          font-family: Arial, sans-serif;
-          font-size: 8pt;
-          line-height: 1.2;
-          display: flex;
-          background: white;
-          border-top: 1px solid #000;
-        }
-        
-        .receipt {
-          width: 62mm;
-          height: 105mm;
-          padding: 5mm;
-          border-right: 1px solid #000;
-          box-sizing: border-box;
-        }
-        
-        .payment-part {
-          width: 148mm;
-          height: 105mm;
-          padding: 5mm;
-          box-sizing: border-box;
-          display: flex;
-        }
-        
-        .payment-info {
-          width: 95mm;
-          margin-right: 5mm;
-        }
-        
-        .qr-section {
-          width: 46mm;
-          text-align: center;
-        }
-        
-        .qr-code {
-          width: 46mm;
-          height: 46mm;
-          border: 1px solid #000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 6pt;
-          margin-bottom: 5mm;
-          background: white;
-        }
-        
-        .section-title {
-          font-weight: bold;
-          font-size: 11pt;
-          margin-bottom: 3mm;
-        }
-        
-        .field-label {
-          font-weight: bold;
-          margin-top: 2mm;
-          margin-bottom: 1mm;
-        }
-        
-        .field-value {
-          margin-bottom: 2mm;
-          word-wrap: break-word;
-        }
-        
-        .amount-box {
-          border: 1px solid #000;
-          padding: 2mm;
-          margin-top: 2mm;
-          text-align: right;
-          font-weight: bold;
-          min-height: 8mm;
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-        }
-        
-        .acceptance-point {
-          margin-top: 5mm;
-          text-align: right;
-          font-size: 6pt;
-        }
-      </style>
-      
-      <!-- Receipt Section -->
-      <div class="receipt">
-        <div class="section-title">${labels.receipt}</div>
-        
-        <div class="field-label">${labels.account}</div>
-        <div class="field-value">${qrBillData.creditorAccount}</div>
-        
-        <div class="field-label">${labels.payableTo}</div>
-        <div class="field-value">
-          ${qrBillData.creditor.name}<br>
-          ${qrBillData.creditor.addressLine1}<br>
-          ${qrBillData.creditor.postalCode} ${qrBillData.creditor.city}
-        </div>
-        
-        ${qrBillData.reference ? `
-          <div class="field-label">${labels.reference}</div>
-          <div class="field-value">${formatReference(qrBillData.reference)}</div>
-        ` : ''}
-        
-        ${qrBillData.debtor ? `
-          <div class="field-label">${labels.payableBy}</div>
-          <div class="field-value">
-            ${qrBillData.debtor.name}<br>
-            ${qrBillData.debtor.addressLine1}<br>
-            ${qrBillData.debtor.postalCode} ${qrBillData.debtor.city}
-          </div>
-        ` : ''}
-        
-        <div class="field-label">${labels.currency}</div>
-        <div class="field-value">${qrBillData.currency}</div>
-        
-        <div class="field-label">${labels.amount}</div>
-        <div class="amount-box">${formatCurrency(qrBillData.amount, qrBillData.currency)}</div>
-        
-        <div class="acceptance-point">${labels.acceptancePoint}</div>
+    // Return the official Swiss QR Bill SVG wrapped in a container
+    // Use auto instead of always to allow QR Bill on same page if space available
+    return `
+      <div class="qr-bill-container" style="
+        width: 210mm;
+        height: 105mm;
+        page-break-inside: avoid;
+        page-break-before: avoid;
+        margin: 0;
+        padding: 0;
+        background: white;
+        z-index: 2000;
+        position: relative;
+      ">
+        <div class="perforation-line"></div>
+        ${svg}
       </div>
-      
-      <!-- Payment Part Section -->
-      <div class="payment-part">
-        <div class="payment-info">
-          <div class="section-title">${labels.paymentPart}</div>
-          
-          <div class="field-label">${labels.currency}</div>
-          <div class="field-value">${qrBillData.currency}</div>
-          
-          <div class="field-label">${labels.amount}</div>
-          <div class="amount-box">${formatCurrency(qrBillData.amount, qrBillData.currency)}</div>
-          
-          <div class="field-label">${labels.account}</div>
-          <div class="field-value">${qrBillData.creditorAccount}</div>
-          
-          <div class="field-label">${labels.payableTo}</div>
-          <div class="field-value">
-            ${qrBillData.creditor.name}<br>
-            ${qrBillData.creditor.addressLine1}<br>
-            ${qrBillData.creditor.postalCode} ${qrBillData.creditor.city}
-          </div>
-          
-          ${qrBillData.reference ? `
-            <div class="field-label">${labels.reference}</div>
-            <div class="field-value">${formatReference(qrBillData.reference)}</div>
-          ` : ''}
-          
-          ${qrBillData.unstructuredMessage ? `
-            <div class="field-label">${labels.additionalInfo}</div>
-            <div class="field-value">${qrBillData.unstructuredMessage}</div>
-          ` : ''}
-          
-          ${qrBillData.debtor ? `
-            <div class="field-label">${labels.payableBy}</div>
-            <div class="field-value">
-              ${qrBillData.debtor.name}<br>
-              ${qrBillData.debtor.addressLine1}<br>
-              ${qrBillData.debtor.postalCode} ${qrBillData.debtor.city}
-            </div>
-          ` : ''}
-        </div>
-        
-        <div class="qr-section">
-          <div class="qr-code">
-            <div style="text-align: center;">
-              <div style="font-size: 8pt; font-weight: bold;">Swiss QR Code</div>
-              <div style="font-size: 6pt; margin-top: 2mm;">${qrBillData.amount} ${qrBillData.currency}</div>
-              <div style="font-size: 5pt; margin-top: 2mm; color: #666;">QR Code généré</div>
-            </div>
-          </div>
-          <div style="font-size: 6pt; text-align: center;">
-            ${labels.qrBillNote}
-          </div>
+    `;
+  } catch (error) {
+    console.error('[generateQRBillHTML] Error generating Swiss QR Bill:', error);
+    // Fallback HTML in case of error
+    return `
+      <div class="qr-bill-container" style="
+        width: 210mm;
+        height: 105mm;
+        page-break-inside: avoid;
+        page-break-before: avoid;
+        margin: 0;
+        padding: 0;
+        background: white;
+        position: relative;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ff0000;
+      ">
+        <div class="perforation-line"></div>
+        <div style="text-align: center; color: #ff0000;">
+          <p style="font-size: 14pt; font-weight: bold;">Erreur QR Bill</p>
+          <p style="font-size: 10pt;">Impossible de générer le Swiss QR Bill</p>
         </div>
       </div>
-    </div>
-  `;
-}
-
-/**
- * Generates QR code data string according to Swiss QR Bill specification
- */
-function generateQRCodeData(qrBillData: SwissQRBillData): string {
-  const lines = [
-    'SPC', // QR Type
-    '0200', // Version
-    '1', // Coding Type
-    qrBillData.creditorAccount, // Account
-    'S', // Creditor Address Type (Structured)
-    qrBillData.creditor.name,
-    qrBillData.creditor.addressLine1,
-    '', // Address Line 2 (empty for structured)
-    qrBillData.creditor.postalCode,
-    qrBillData.creditor.city,
-    qrBillData.creditor.country,
-    '', // Ultimate Creditor (empty)
-    '', // Ultimate Creditor Address Type
-    '', // Ultimate Creditor Name
-    '', // Ultimate Creditor Address Line 1
-    '', // Ultimate Creditor Address Line 2
-    '', // Ultimate Creditor Postal Code
-    '', // Ultimate Creditor City
-    '', // Ultimate Creditor Country
-    qrBillData.amount.toFixed(2), // Amount
-    qrBillData.currency, // Currency
-    qrBillData.debtor ? 'S' : '', // Debtor Address Type
-    qrBillData.debtor?.name || '',
-    qrBillData.debtor?.addressLine1 || '',
-    '', // Debtor Address Line 2
-    qrBillData.debtor?.postalCode || '',
-    qrBillData.debtor?.city || '',
-    qrBillData.debtor?.country || '',
-    qrBillData.referenceType, // Reference Type
-    qrBillData.reference || '', // Reference
-    qrBillData.unstructuredMessage || '', // Unstructured Message
-    'EPD', // Trailer
-    qrBillData.billInformation || '', // Bill Information
-  ];
-  
-  return lines.join('\n');
-}
-
-/**
- * Gets localized labels for QR Bill
- */
-function getLocalizedLabels(language: string) {
-  const labels = {
-    fr: {
-      receipt: 'Récépissé',
-      paymentPart: 'Section paiement',
-      account: 'Compte / Payable à',
-      payableTo: 'Payable à',
-      payableBy: 'Payable par',
-      reference: 'Référence',
-      additionalInfo: 'Informations supplémentaires',
-      currency: 'Monnaie',
-      amount: 'Montant',
-      acceptancePoint: 'Point de dépôt',
-      qrBillNote: 'Ne pas utiliser pour le paiement',
-    },
-    de: {
-      receipt: 'Empfangsschein',
-      paymentPart: 'Zahlteil',
-      account: 'Konto / Zahlbar an',
-      payableTo: 'Zahlbar an',
-      payableBy: 'Zahlbar durch',
-      reference: 'Referenz',
-      additionalInfo: 'Zusätzliche Informationen',
-      currency: 'Währung',
-      amount: 'Betrag',
-      acceptancePoint: 'Annahmestelle',
-      qrBillNote: 'Nicht zur Zahlung verwenden',
-    },
-    it: {
-      receipt: 'Ricevuta',
-      paymentPart: 'Sezione pagamento',
-      account: 'Conto / Pagabile a',
-      payableTo: 'Pagabile a',
-      payableBy: 'Pagabile da',
-      reference: 'Riferimento',
-      additionalInfo: 'Informazioni aggiuntive',
-      currency: 'Valuta',
-      amount: 'Importo',
-      acceptancePoint: 'Punto di accettazione',
-      qrBillNote: 'Non utilizzare per il pagamento',
-    },
-    en: {
-      receipt: 'Receipt',
-      paymentPart: 'Payment part',
-      account: 'Account / Payable to',
-      payableTo: 'Payable to',
-      payableBy: 'Payable by',
-      reference: 'Reference',
-      additionalInfo: 'Additional information',
-      currency: 'Currency',
-      amount: 'Amount',
-      acceptancePoint: 'Acceptance point',
-      qrBillNote: 'Do not use for payment',
-    },
-  };
-  
-  return labels[language as keyof typeof labels] || labels.fr;
-}
-
-/**
- * Formats reference number for display
- */
-function formatReference(reference: string): string {
-  if (reference.length === 27) {
-    // QR Reference format: XX XXXXX XXXXX XXXXX XXXXX XXXXX X
-    return reference.replace(/(\d{2})(\d{5})(\d{5})(\d{5})(\d{5})(\d{5})(\d{1})/, '$1 $2 $3 $4 $5 $6 $7');
+    `;
   }
-  return reference;
 }
 
 /**

@@ -13,6 +13,11 @@ interface Product {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // SKU / Barcode fields
+  sku?: string;
+  barcodeType?: string;
+  isVariableWeight?: boolean;
+  weightUnit?: string;
 }
 
 interface ProductCardProps {
@@ -134,14 +139,24 @@ export function ProductCard({
             <Package className="w-6 h-6 text-[var(--color-text-secondary)]" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-1">
               <h3 className="font-semibold text-[var(--color-text-primary)]">
                 {product.name}
               </h3>
               <Badge variant={product.isActive ? 'success' : 'secondary'}>
                 {product.isActive ? 'Actif' : 'Inactif'}
               </Badge>
+              {product.isVariableWeight && (
+                <Badge variant="warning" className="text-xs">
+                  ⚖️ Poids variable
+                </Badge>
+              )}
             </div>
+            {product.sku && (
+              <p className="text-xs text-[var(--color-text-tertiary)] mt-0.5 font-mono">
+                SKU: {product.sku}
+              </p>
+            )}
             {product.description && (
               <p className="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">
                 {product.description}

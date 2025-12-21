@@ -1,0 +1,187 @@
+{
+  "meta": {
+    "project": "Simplifaq Swiss Invoicing SaaS",
+    "date": "2025-12-10",
+    "prepared_by": "Software Development Manager"
+  },
+  "product_overview": "Simplifaq is a Swiss invoicing SaaS tailored exclusively for independent professionals and small businesses in Switzerland. It enables users to create, manage, send, and track invoices in complete compliance with Swiss fiscal regulations while providing ease of use, scalability, and SaaS-level operational insights.",
+  "core_goals": [
+    "Ensure full legal compliance with Swiss invoicing and fiscal requirements, including Swiss QR bills and TVA reporting.",
+    "Deliver an easy-to-use invoicing platform accessible to non-accountants, focusing on simplicity and minimal steps.",
+    "Provide real-time financial dashboards and reporting for business insights and TVA aggregation.",
+    "Support scalable SaaS business model with Stripe subscription integration and a robust admin panel for user and subscription management.",
+    "Build a production-grade admin panel with full visibility on users, subscriptions, invoices, and SaaS KPIs."
+  ],
+  "key_features": [
+    "JWT-based user authentication with secure password management and session tracking.",
+    "Client management supporting Swiss-specific fiscal data and client reuse across invoices.",
+    "Invoice creation with Swiss-compliant structure, sequential numbering, multiple TVA rates, and automatic calculations.",
+    "Fully integrated Swiss QR Bill generation embedded in professional PDF invoices using the swissqrbill library.",
+    "Invoice emailing with custom messages and detailed invoice status tracking (Draft, Sent, Paid).",
+    "Financial dashboard showing invoiced totals, TVA collected, unpaid invoices, and monthly trends.",
+    "TVA reporting with automatic aggregation and export options (PDF, CSV).",
+    "Admin panel for user management, real-time SaaS metrics, invoice visibility with filtering, and manual subscription invoicing.",
+    "Stripe integration for subscription management, payment handling, and payment failure fallback invoicing.",
+    "Expense tracking, product catalog management, quote management with conversion to invoices, and settings configuration including SMTP and themes."
+  ],
+  "user_flow_summary": [
+    "User registers and authenticates via JWT-secured login flows.",
+    "User subscribes through Stripe, activating account features based on subscription status.",
+    "User manages clients with ability to add, edit, archive, and reuse client data.",
+    "User creates invoices compliant with Swiss regulations with line items and QR Bill included automatically.",
+    "Invoices are generated as PDFs and sent via email with status updates tracked in the system.",
+    "Users can view dashboards displaying KPIs, revenue, invoice statuses, and perform financial reporting.",
+    "Admin accesses a secure panel for managing users, subscriptions, invoices, and system-wide SaaS metrics in real time.",
+    "Admin can manually issue invoices for subscriptions including fallback options outside Stripe.",
+    "Subscription state changes triggered by Stripe webhooks update user access and billing control automatically."
+  ],
+  "validation_criteria": [
+    "Invoices generated must strictly conform to Swiss fiscal regulations including correct TVA rates and QR Bill formatting.",
+    "Admin panel must operate on live data without any mock or hardcoded values and meet production-grade standards.",
+    "Authentication mechanisms must securely protect user data using JWT tokens and bcrypt password hashing with session tracking.",
+    "Stripe integration must handle subscription lifecycle events seamlessly and support fallback invoicing by admin.",
+    "PDF invoice generation must produce professional, clean layouts with all required financial details visible and integrates Swiss QR Bill correctly.",
+    "Financial dashboards and reports must reflect accurate, real-time data aggregated from invoices, payments, and TVA.",
+    "Client and invoice management features must handle all CRUD operations and support searching and filtering as specified.",
+    "The system must ensure no full accounting, payroll, or international invoicing features are mistakenly implemented as out-of-scope requirements."
+  ],
+  "code_summary": {
+    "tech_stack": [
+      "TypeScript",
+      "React 18",
+      "Vite",
+      "TailwindCSS",
+      "Node.js",
+      "Express",
+      "Prisma ORM",
+      "PostgreSQL",
+      "JWT Authentication"
+    ],
+    "features": [
+      {
+        "name": "Authentication",
+        "description": "User authentication with JWT tokens, login, register, password reset, and session management",
+        "files": [
+          "frontend/src/pages/auth/LoginPage.tsx",
+          "frontend/src/pages/auth/RegisterPage.tsx",
+          "frontend/src/hooks/useAuth.ts",
+          "frontend/src/services/authInterceptor.ts",
+          "frontend/src/services/tokenManager.ts",
+          "frontend/src/components/auth/LoginForm.tsx",
+          "frontend/src/components/ProtectedRoute.tsx"
+        ]
+      },
+      {
+        "name": "Dashboard",
+        "description": "Main dashboard with KPIs, revenue charts, and invoice status overview",
+        "files": [
+          "frontend/src/pages/DashboardPage.tsx",
+          "frontend/src/components/dashboard/",
+          "frontend/src/hooks/useDashboardData.ts"
+        ]
+      },
+      {
+        "name": "Invoices",
+        "description": "Invoice management - create, edit, view, print, and send invoices",
+        "files": [
+          "frontend/src/pages/InvoicesPage.tsx",
+          "frontend/src/pages/NewInvoicePage.tsx",
+          "frontend/src/pages/EditInvoicePage.tsx",
+          "frontend/src/pages/InvoiceDetailPage.tsx",
+          "frontend/src/pages/PrintInvoicePage.tsx",
+          "frontend/src/components/invoices/",
+          "frontend/src/hooks/useInvoices.ts"
+        ]
+      },
+      {
+        "name": "Quotes",
+        "description": "Quote/estimate management with conversion to invoices",
+        "files": [
+          "frontend/src/pages/QuotesPage.tsx",
+          "frontend/src/pages/NewQuotePage.tsx",
+          "frontend/src/pages/QuoteDetailPage.tsx",
+          "frontend/src/components/quotes/",
+          "frontend/src/hooks/useQuotes.ts",
+          "frontend/src/services/quotesApi.ts"
+        ]
+      },
+      {
+        "name": "Clients",
+        "description": "Client management with CRUD operations and search",
+        "files": [
+          "frontend/src/pages/ClientsPage.tsx",
+          "frontend/src/components/clients/",
+          "frontend/src/hooks/useClients.ts"
+        ]
+      },
+      {
+        "name": "Products",
+        "description": "Product catalog management with pricing",
+        "files": [
+          "frontend/src/pages/ProductsPage.tsx",
+          "frontend/src/components/products/",
+          "frontend/src/hooks/useProducts.ts"
+        ]
+      },
+      {
+        "name": "Reports",
+        "description": "Financial reports including revenue, TVA/VAT reports",
+        "files": [
+          "frontend/src/pages/ReportsPage.tsx",
+          "frontend/src/pages/TvaReportPage.tsx",
+          "frontend/src/components/reports/",
+          "frontend/src/hooks/useReports.ts",
+          "frontend/src/services/reportsApi.ts"
+        ]
+      },
+      {
+        "name": "Expenses",
+        "description": "Expense tracking and management",
+        "files": [
+          "frontend/src/pages/expenses/",
+          "frontend/src/components/expenses/",
+          "frontend/src/services/expensesApi.ts"
+        ]
+      },
+      {
+        "name": "Settings",
+        "description": "User and company settings, SMTP configuration, themes",
+        "files": [
+          "frontend/src/pages/SettingsPage.tsx",
+          "frontend/src/pages/settings/",
+          "frontend/src/components/settings/",
+          "frontend/src/components/onboarding/"
+        ]
+      },
+      {
+        "name": "Admin Panel",
+        "description": "Admin dashboard for user management, subscriptions, and system configuration",
+        "files": [
+          "frontend/src/pages/admin/",
+          "frontend/src/components/admin/",
+          "frontend/src/services/adminApi.ts",
+          "frontend/src/hooks/useAdminAuth.ts"
+        ]
+      },
+      {
+        "name": "API Services",
+        "description": "API client services for backend communication",
+        "files": [
+          "frontend/src/services/api.ts",
+          "frontend/src/services/adminApi.ts",
+          "frontend/src/services/quotesApi.ts",
+          "frontend/src/services/reportsApi.ts",
+          "frontend/src/services/expensesApi.ts"
+        ]
+      },
+      {
+        "name": "UI Components",
+        "description": "Reusable UI components - buttons, modals, forms, tables",
+        "files": [
+          "frontend/src/components/ui/",
+          "frontend/src/components/common/"
+        ]
+      }
+    ]
+  }
+}

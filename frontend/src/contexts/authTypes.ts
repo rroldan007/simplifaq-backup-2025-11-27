@@ -21,6 +21,19 @@ export interface User {
     canton?: string;
     country?: string;
   };
+  // Address fields (also available at root level for backward compatibility)
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  canton?: string;
+  country?: string;
+  // Invoice/Quote numbering
+  invoicePrefix?: string;
+  nextInvoiceNumber?: number;
+  invoicePadding?: number;
+  quotePrefix?: string;
+  nextQuoteNumber?: number;
+  quotePadding?: number;
   // PDF Appearance Settings
   pdfShowCompanyNameWithLogo?: boolean;
   pdfPrimaryColor?: string;
@@ -30,6 +43,7 @@ export interface User {
   pdfShowEmail?: boolean;
   pdfShowWebsite?: boolean;
   pdfShowIBAN?: boolean;
+  pdfAdvancedConfig?: string;
 }
 
 export interface AuthState {

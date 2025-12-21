@@ -93,6 +93,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.5.2",
+    "@types/node-fetch": "^2.6.13",
     "@types/pdfkit": "^0.17.2",
     "@types/speakeasy": "^2.0.10",
     "@types/supertest": "^6.0.3",

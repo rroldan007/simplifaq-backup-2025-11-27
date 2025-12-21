@@ -58,7 +58,7 @@ export default function NewQuotePage() {
         return;
       }
 
-      type QuotePayload = { clientId: string; validUntil?: string; items: { description: string; quantity: number; unitPrice: number; tvaRate: number; total: number; order: number; productId?: string; unit?: string }[]; notes: string; terms: string; language: string; currency: string };
+      type QuotePayload = { clientId: string; validUntil?: string; items: { description: string; quantity: number; unitPrice: number; tvaRate: number; total: number; order: number; productId?: string; unit?: string; lineDiscountValue?: number; lineDiscountType?: 'PERCENT' | 'AMOUNT'; lineDiscountSource?: 'FROM_PRODUCT' | 'MANUAL' | 'NONE'; discountAmount?: number; subtotalBeforeDiscount?: number; subtotalAfterDiscount?: number; }[]; notes: string; terms: string; language: string; currency: string };
       const payload: QuotePayload = {
         clientId: data.client.id,
         validUntil: data.dueDate || undefined, // Use dueDate as validUntil for quotes
@@ -73,7 +73,31 @@ export default function NewQuotePage() {
             const productId = (it as unknown as { productId?: string }).productId || undefined;
             const unitRaw = (it as unknown as { unit?: string }).unit;
             const unit = typeof unitRaw === 'string' ? unitRaw.trim() : undefined;
-            return { description, quantity, unitPrice, tvaRate, total, order, productId, unit };
+            
+            // Include line discount fields if present
+            const lineDiscountValue = (it as unknown as { lineDiscountValue?: number }).lineDiscountValue;
+            const lineDiscountType = (it as unknown as { lineDiscountType?: 'PERCENT' | 'AMOUNT' }).lineDiscountType;
+            const lineDiscountSource = (it as unknown as { lineDiscountSource?: 'FROM_PRODUCT' | 'MANUAL' | 'NONE' }).lineDiscountSource;
+            const discountAmount = (it as unknown as { discountAmount?: number }).discountAmount;
+            const subtotalBeforeDiscount = (it as unknown as { subtotalBeforeDiscount?: number }).subtotalBeforeDiscount;
+            const subtotalAfterDiscount = (it as unknown as { subtotalAfterDiscount?: number }).subtotalAfterDiscount;
+            
+            return { 
+              description, 
+              quantity, 
+              unitPrice, 
+              tvaRate, 
+              total, 
+              order, 
+              productId, 
+              unit,
+              lineDiscountValue,
+              lineDiscountType,
+              lineDiscountSource,
+              discountAmount,
+              subtotalBeforeDiscount,
+              subtotalAfterDiscount
+            };
           })
           .filter((it) => it.description.length > 0 && it.quantity > 0),
         notes: data.notes || '',
@@ -152,6 +176,13 @@ export default function NewQuotePage() {
       order: item.order || 0,
       productId: (item as unknown as { productId?: string }).productId,
       unit: (item as unknown as { unit?: string }).unit,
+      // Include line discount fields
+      lineDiscountValue: (item as unknown as { lineDiscountValue?: number }).lineDiscountValue,
+      lineDiscountType: (item as unknown as { lineDiscountType?: 'PERCENT' | 'AMOUNT' }).lineDiscountType,
+      lineDiscountSource: (item as unknown as { lineDiscountSource?: 'FROM_PRODUCT' | 'MANUAL' | 'NONE' }).lineDiscountSource,
+      discountAmount: (item as unknown as { discountAmount?: number }).discountAmount,
+      subtotalBeforeDiscount: (item as unknown as { subtotalBeforeDiscount?: number }).subtotalBeforeDiscount,
+      subtotalAfterDiscount: (item as unknown as { subtotalAfterDiscount?: number }).subtotalAfterDiscount,
     })),
     notes: existingQuote.notes || '',
     terms: existingQuote.terms || '',

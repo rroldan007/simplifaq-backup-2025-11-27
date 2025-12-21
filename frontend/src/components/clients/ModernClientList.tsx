@@ -235,46 +235,46 @@ export function ModernClientList({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+    <div className="min-h-screen">
       {/* Header with Stats */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white border-b border-emerald-200 shadow-sm"
+        className="card-theme border-b shadow-sm"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-[var(--color-text-primary)] flex items-center gap-3">
                 <Users className="w-8 h-8 text-emerald-600" />
                 Clients
-                <span className="text-lg font-normal text-slate-500">({stats.total})</span>
+                <span className="text-lg font-normal text-[var(--color-text-secondary)]">({stats.total})</span>
               </h1>
-              <p className="text-slate-600 mt-1">Gérez vos clients et leurs informations</p>
+              <p className="text-[var(--color-text-secondary)] mt-1">Gérez vos clients et leurs informations</p>
             </div>
             <div className="flex items-center gap-3">
               {onRefresh && (
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="p-3 rounded-xl bg-emerald-100 hover:bg-emerald-200 transition-colors duration-200"
+                  className="p-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 transition-colors duration-200"
                   title="Actualiser"
                 >
-                  <RefreshCw className={`w-5 h-5 text-emerald-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-5 h-5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </button>
               )}
               {onExport && (
                 <button
                   onClick={onExport}
-                  className="p-3 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors duration-200"
+                  className="p-3 rounded-xl bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors duration-200"
                   title="Exporter"
                 >
-                  <Download className="w-5 h-5 text-slate-700" />
+                  <Download className="w-5 h-5 text-[var(--color-text-secondary)]" />
                 </button>
               )}
               {onImportCsv && (
-                <label className="p-3 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors duration-200 cursor-pointer" title="Importer CSV">
-                  <Upload className="w-5 h-5 text-slate-700" />
+                <label className="p-3 rounded-xl bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors duration-200 cursor-pointer" title="Importer CSV">
+                  <Upload className="w-5 h-5 text-[var(--color-text-secondary)]" />
                   <input
                     type="file"
                     accept=".csv,text/csv"
@@ -305,47 +305,47 @@ export function ModernClientList({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-emerald-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <Users className="w-5 h-5 text-emerald-600" />
-                <TrendingUp className="w-4 h-4 text-emerald-500" />
+                <Users className="w-5 h-5 text-emerald-500" />
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
               </div>
-              <p className="text-sm text-emerald-700 font-medium">Total</p>
-              <p className="text-2xl font-bold text-emerald-900">{stats.total}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Total</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.total}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-green-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <User className="w-5 h-5 text-green-600" />
+                <User className="w-5 h-5 text-green-500" />
               </div>
-              <p className="text-sm text-green-700 font-medium">Actifs</p>
-              <p className="text-2xl font-bold text-green-900">{stats.active}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Actifs</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.active}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-blue-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <Building2 className="w-5 h-5 text-blue-600" />
+                <Building2 className="w-5 h-5 text-blue-500" />
               </div>
-              <p className="text-sm text-blue-700 font-medium">Entreprises</p>
-              <p className="text-2xl font-bold text-blue-900">{stats.companies}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Entreprises</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.companies}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-purple-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <User className="w-5 h-5 text-purple-600" />
+                <User className="w-5 h-5 text-purple-500" />
               </div>
-              <p className="text-sm text-purple-700 font-medium">Particuliers</p>
-              <p className="text-2xl font-bold text-purple-900">{stats.individuals}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Particuliers</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.individuals}</p>
             </motion.div>
           </div>
         </div>
@@ -357,7 +357,7 @@ export function ModernClientList({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6"
+          className="card-theme rounded-2xl shadow-sm p-6 mb-6"
         >
           {/* Search Bar */}
           <div className="relative mb-4">
@@ -367,7 +367,7 @@ export function ModernClientList({
               placeholder="Rechercher par nom, email, ville, TVA..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              className="w-full pl-12 pr-4 py-3 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-[var(--color-text-tertiary)]"
             />
           </div>
 
@@ -387,16 +387,16 @@ export function ModernClientList({
                   onClick={() => setSelectedStatus(filter.value)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
                     selectedStatus === filter.value
-                      ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-300 shadow-sm'
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-2 border-transparent'
+                      ? 'bg-emerald-500/20 text-emerald-500 border-2 border-emerald-500/30 shadow-sm'
+                      : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] border-2 border-transparent'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{filter.label}</span>
                   <span className={`px-2 py-0.5 text-xs rounded-full ${
                     selectedStatus === filter.value
-                      ? 'bg-emerald-200 text-emerald-800'
-                      : 'bg-slate-200 text-slate-600'
+                      ? 'bg-emerald-500/30 text-emerald-400'
+                      : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]'
                   }`}>
                     {filter.count}
                   </span>
@@ -408,11 +408,11 @@ export function ModernClientList({
           {/* View Mode and Sort */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">Trier par:</span>
+              <span className="text-sm text-[var(--color-text-secondary)]">Trier par:</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'name' | 'email' | 'city' | 'created')}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="px-3 py-1.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               >
                 <option value="name">Nom</option>
                 <option value="email">Email</option>
@@ -421,20 +421,20 @@ export function ModernClientList({
               </select>
               <button
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm hover:bg-slate-50"
+                className="px-3 py-1.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg text-sm hover:bg-[var(--color-bg-tertiary)]"
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex bg-slate-100 rounded-lg p-1">
+              <div className="flex bg-[var(--color-bg-secondary)] rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`p-2 rounded-lg transition-all ${
                     viewMode === 'grid'
-                      ? 'bg-white text-emerald-600 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-[var(--color-bg-tertiary)] text-emerald-500 shadow-sm'
+                      : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                   }`}
                   title="Vue grille"
                 >
@@ -444,15 +444,15 @@ export function ModernClientList({
                   onClick={() => setViewMode('list')}
                   className={`p-2 rounded-lg transition-all ${
                     viewMode === 'list'
-                      ? 'bg-white text-emerald-600 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-[var(--color-bg-tertiary)] text-emerald-500 shadow-sm'
+                      : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                   }`}
                   title="Vue liste"
                 >
                   <List className="w-5 h-5" />
                 </button>
               </div>
-              <span className="text-sm text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg">
+              <span className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-3 py-1.5 rounded-lg">
                 {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -463,20 +463,20 @@ export function ModernClientList({
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <LoadingSpinner size="lg" />
-            <p className="text-slate-600 mt-4">Chargement des clients...</p>
+            <p className="text-[var(--color-text-secondary)] mt-4">Chargement des clients...</p>
           </div>
         ) : filteredClients.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center"
+            className="card-theme rounded-2xl shadow-sm p-12 text-center"
           >
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Users className="w-10 h-10 text-slate-400" />
+            <div className="w-20 h-20 bg-[var(--color-bg-secondary)] rounded-full flex items-center justify-center mx-auto mb-6">
+              <Users className="w-10 h-10 text-[var(--color-text-tertiary)]" />
             </div>
             {searchQuery || selectedStatus !== 'all' ? (
               <>
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                <h3 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">
                   Aucun client trouvé
                 </h3>
                 <p className="text-slate-600 mb-6">

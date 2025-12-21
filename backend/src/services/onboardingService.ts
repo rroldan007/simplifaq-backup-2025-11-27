@@ -33,6 +33,35 @@ export interface OnboardingStatus {
 }
 
 /**
+ * Helper function to normalize skippedSteps from DB
+ * Handles both string (SQLite) and string[] (PostgreSQL)
+ */
+function normalizeSkippedSteps(skippedSteps: any): string[] {
+  if (Array.isArray(skippedSteps)) {
+    return skippedSteps;
+  }
+  if (typeof skippedSteps === 'string') {
+    try {
+      const parsed = JSON.parse(skippedSteps);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Helper function to serialize skippedSteps for DB
+ * Returns string[] for PostgreSQL, string for SQLite
+ */
+function serializeSkippedSteps(skippedSteps: string[]): string {
+  // For SQLite, we need to convert array to comma-separated string
+  // Prisma expects a String type for SQLite, not String[]
+  return skippedSteps.join(',');
+}
+
+/**
  * Get or create onboarding status for a user
  */
 export async function getOnboardingStatus(userId: string): Promise<OnboardingStatus> {
@@ -54,7 +83,7 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
 
   return {
     ...onboarding,
-    skippedSteps: onboarding.skippedSteps,
+    skippedSteps: normalizeSkippedSteps(onboarding.skippedSteps),
     progress,
     nextStep
   };
@@ -114,7 +143,7 @@ export async function completeOnboardingStep(
 
   return {
     ...updated,
-    skippedSteps: updated.skippedSteps,
+    skippedSteps: normalizeSkippedSteps(updated.skippedSteps),
     progress,
     nextStep
   };
@@ -135,7 +164,7 @@ export async function skipOnboardingStep(
   const updated = await prisma.userOnboarding.update({
     where: { userId },
     data: {
-      skippedSteps: skippedSteps,
+      skippedSteps: serializeSkippedSteps(skippedSteps),
       currentStep: nextStep
     }
   });
@@ -145,7 +174,7 @@ export async function skipOnboardingStep(
 
   return {
     ...updated,
-    skippedSteps: updated.skippedSteps,
+    skippedSteps: normalizeSkippedSteps(updated.skippedSteps),
     progress,
     nextStep: next
   };
@@ -158,7 +187,7 @@ export async function resetOnboarding(userId: string): Promise<OnboardingStatus>
   const updated = await prisma.userOnboarding.update({
     where: { userId },
     data: {
-      skippedSteps: [],
+      skippedSteps: [] as any,
       isCompleted: false,
       completedAt: null,
       currentStep: 'company_info',
@@ -177,7 +206,7 @@ export async function resetOnboarding(userId: string): Promise<OnboardingStatus>
 
   return {
     ...updated,
-    skippedSteps: updated.skippedSteps,
+    skippedSteps: normalizeSkippedSteps(updated.skippedSteps),
     progress,
     nextStep
   };
@@ -258,7 +287,7 @@ export async function autoUpdateOnboarding(userId: string): Promise<OnboardingSt
 
     return {
       ...updated,
-      skippedSteps: updated.skippedSteps,
+      skippedSteps: normalizeSkippedSteps(updated.skippedSteps),
       progress,
       nextStep
     };
@@ -325,7 +354,7 @@ export async function markWelcomeMessageShown(userId: string): Promise<Onboardin
 
   return {
     ...updated,
-    skippedSteps: updated.skippedSteps,
+    skippedSteps: normalizeSkippedSteps(updated.skippedSteps),
     progress,
     nextStep
   };

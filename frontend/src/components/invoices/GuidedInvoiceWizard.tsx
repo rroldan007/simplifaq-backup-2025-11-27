@@ -310,8 +310,32 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     window.setTimeout(() => setToastVisible(false), 2500);
   };
 
+  // Check if a draft has meaningful content worth restoring
+  const hasMeaningfulContent = (cand: Partial<InvoiceFormData> | null): boolean => {
+    if (!cand) return false;
+    
+    // Has a client selected?
+    const hasClient = !!(cand.client as Client | undefined)?.id;
+    
+    // Has items with actual descriptions?
+    const candItems = Array.isArray(cand.items) ? (cand.items as InvoiceItem[]) : [];
+    const hasItems = candItems.some(item => 
+      item.description && item.description.trim().length > 0
+    );
+    
+    // Has meaningful notes?
+    const hasNotes = !!(cand.notes && String(cand.notes).trim().length > 0);
+    
+    return hasClient || hasItems || hasNotes;
+  };
+
   const hasMeaningfulDiff = (cur: InvoiceFormData, cand: Partial<InvoiceFormData> | null): boolean => {
     if (!cand) return false;
+    
+    // First check: does the candidate have any meaningful content?
+    // If not, don't bother showing restore prompt for an empty draft
+    if (!hasMeaningfulContent(cand)) return false;
+    
     const keys: (keyof InvoiceFormData)[] = ['invoiceNumber', 'issueDate', 'dueDate', 'language', 'currency', 'notes', 'terms'];
     if (keys.some(k => String(cur[k] ?? '').trim() !== String((cand as Record<string, unknown>)[k] ?? '').trim())) return true;
     const curClient = cur.client?.id ?? '';

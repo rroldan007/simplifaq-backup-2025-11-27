@@ -195,27 +195,27 @@ export function ModernExpensesList({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div className="min-h-screen">
       {/* Header with Stats */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white border-b border-indigo-200 shadow-sm"
+        className="card-theme border-b shadow-sm"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-[var(--color-text-primary)] flex items-center gap-3">
                 <Receipt className="w-8 h-8 text-indigo-600" />
                 Charges
-                <span className="text-lg font-normal text-slate-500">({stats.total})</span>
+                <span className="text-lg font-normal text-[var(--color-text-secondary)]">({stats.total})</span>
               </h1>
-              <p className="text-slate-600 mt-1">Gérez vos dépenses et suivez votre utilité</p>
+              <p className="text-[var(--color-text-secondary)] mt-1">Gérez vos dépenses et suivez votre utilité</p>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/tva-report')}
-                className="px-4 py-3 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl transition-colors duration-200 flex items-center gap-2 font-medium"
+                className="px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-500 rounded-xl transition-colors duration-200 flex items-center gap-2 font-medium"
                 title="Rapport TVA"
               >
                 <FileText className="w-5 h-5" />
@@ -225,10 +225,10 @@ export function ModernExpensesList({
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="p-3 rounded-xl bg-indigo-100 hover:bg-indigo-200 transition-colors duration-200"
+                  className="p-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 transition-colors duration-200"
                   title="Actualiser"
                 >
-                  <RefreshCw className={`w-5 h-5 text-indigo-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-5 h-5 text-indigo-500 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </button>
               )}
               {onCreateNew && (
@@ -248,50 +248,48 @@ export function ModernExpensesList({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-4 border border-green-200"
+                className="card-theme rounded-xl p-4 border-l-4 border-l-green-500"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
+                  <TrendingUp className="w-5 h-5 text-green-500" />
                 </div>
-                <p className="text-xs text-green-700 font-medium uppercase tracking-wide">CA HT</p>
-                <p className="text-2xl font-bold text-green-900">{formatAmount(pnlData.revenue)}</p>
-                <p className="text-xs text-green-600 mt-1">{currency}</p>
+                <p className="text-xs text-green-500 font-medium uppercase tracking-wide">CA HT</p>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{formatAmount(pnlData.revenue)}</p>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">{currency}</p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className="bg-gradient-to-br from-red-50 to-rose-100 rounded-xl p-4 border border-red-200"
+                className="card-theme rounded-xl p-4 border-l-4 border-l-orange-500"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <TrendingDown className="w-5 h-5 text-red-600" />
+                  <TrendingDown className="w-5 h-5 text-orange-500" />
                 </div>
-                <p className="text-xs text-red-700 font-medium uppercase tracking-wide">Charges</p>
-                <p className="text-2xl font-bold text-red-900">{formatAmount(pnlData.charges)}</p>
-                <p className="text-xs text-red-600 mt-1">{currency}</p>
+                <p className="text-xs text-orange-500 font-medium uppercase tracking-wide">Charges</p>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{formatAmount(pnlData.charges)}</p>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">{currency}</p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className={`rounded-xl p-4 border-2 ${
-                  isProfitable 
-                    ? 'bg-gradient-to-br from-emerald-50 to-green-100 border-emerald-300' 
-                    : 'bg-gradient-to-br from-orange-50 to-red-100 border-orange-300'
+                className={`card-theme rounded-xl p-4 border-l-4 ${
+                  isProfitable ? 'border-l-emerald-500' : 'border-l-red-500'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <DollarSign className={`w-5 h-5 ${isProfitable ? 'text-emerald-600' : 'text-orange-600'}`} />
-                  <Sparkles className={`w-4 h-4 ${isProfitable ? 'text-emerald-500' : 'text-orange-500'}`} />
+                  <DollarSign className={`w-5 h-5 ${isProfitable ? 'text-emerald-500' : 'text-red-500'}`} />
+                  <Sparkles className={`w-4 h-4 ${isProfitable ? 'text-emerald-400' : 'text-red-400'}`} />
                 </div>
-                <p className={`text-xs font-medium uppercase tracking-wide ${isProfitable ? 'text-emerald-700' : 'text-orange-700'}`}>
+                <p className={`text-xs font-medium uppercase tracking-wide ${isProfitable ? 'text-emerald-500' : 'text-red-500'}`}>
                   Utilité
                 </p>
-                <p className={`text-2xl font-bold ${isProfitable ? 'text-emerald-900' : 'text-orange-900'}`}>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">
                   {formatAmount(pnlData.utilite)}
                 </p>
                 <div className="flex items-center justify-between mt-1">
-                  <p className={`text-xs ${isProfitable ? 'text-emerald-600' : 'text-orange-600'}`}>{currency}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">{currency}</p>
                   {pnlData.revenue > 0 && (
-                    <p className={`text-xs font-semibold ${isProfitable ? 'text-emerald-700' : 'text-orange-700'}`}>
+                    <p className={`text-xs font-semibold ${isProfitable ? 'text-emerald-500' : 'text-red-500'}`}>
                       {profitability.toFixed(1)}%
                     </p>
                   )}
@@ -305,47 +303,45 @@ export function ModernExpensesList({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-4 border border-green-200"
+                className="card-theme rounded-xl p-4 border-l-4 border-l-green-500"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
+                  <TrendingUp className="w-5 h-5 text-green-500" />
                 </div>
-                <p className="text-xs text-green-700 font-medium uppercase tracking-wide">TVA Collectée</p>
-                <p className="text-2xl font-bold text-green-900">{formatAmount(tvaSummary.tvaCollected)}</p>
-                <p className="text-xs text-green-600 mt-1">{currency}</p>
+                <p className="text-xs text-green-500 font-medium uppercase tracking-wide">TVA Collectée</p>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{formatAmount(tvaSummary.tvaCollected)}</p>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">{currency}</p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className="bg-gradient-to-br from-orange-50 to-amber-100 rounded-xl p-4 border border-orange-200"
+                className="card-theme rounded-xl p-4 border-l-4 border-l-amber-500"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <TrendingDown className="w-5 h-5 text-orange-600" />
+                  <TrendingDown className="w-5 h-5 text-amber-500" />
                 </div>
-                <p className="text-xs text-orange-700 font-medium uppercase tracking-wide">TVA Déductible</p>
-                <p className="text-2xl font-bold text-orange-900">{formatAmount(tvaSummary.tvaDeductible)}</p>
-                <p className="text-xs text-orange-600 mt-1">{currency}</p>
+                <p className="text-xs text-amber-500 font-medium uppercase tracking-wide">TVA Déductible</p>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{formatAmount(tvaSummary.tvaDeductible)}</p>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">{currency}</p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className={`rounded-xl p-4 border-2 ${
-                  tvaSummary.tvaNet >= 0 
-                    ? 'bg-gradient-to-br from-red-50 to-rose-100 border-red-300' 
-                    : 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-300'
+                className={`card-theme rounded-xl p-4 border-l-4 ${
+                  tvaSummary.tvaNet >= 0 ? 'border-l-red-500' : 'border-l-teal-500'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <DollarSign className={`w-5 h-5 ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`} />
-                  <Sparkles className={`w-4 h-4 ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-green-500'}`} />
+                  <DollarSign className={`w-5 h-5 ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-teal-500'}`} />
+                  <Sparkles className={`w-4 h-4 ${tvaSummary.tvaNet >= 0 ? 'text-red-400' : 'text-teal-400'}`} />
                 </div>
-                <p className={`text-xs font-medium uppercase tracking-wide ${tvaSummary.tvaNet >= 0 ? 'text-red-700' : 'text-green-700'}`}>
+                <p className={`text-xs font-medium uppercase tracking-wide ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-teal-500'}`}>
                   TVA Nette {tvaSummary.tvaNet >= 0 ? 'à payer' : 'à récupérer'}
                 </p>
-                <p className={`text-2xl font-bold ${tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'}`}>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">
                   {formatAmount(Math.abs(tvaSummary.tvaNet))}
                 </p>
-                <p className={`text-xs mt-1 ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`}>{currency}</p>
+                <p className="text-xs mt-1 text-[var(--color-text-secondary)]">{currency}</p>
               </motion.div>
             </div>
           )}
@@ -447,35 +443,35 @@ export function ModernExpensesList({
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 border border-indigo-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-indigo-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <Receipt className="w-5 h-5 text-indigo-600" />
+                <Receipt className="w-5 h-5 text-indigo-500" />
               </div>
-              <p className="text-sm text-indigo-700 font-medium">Total charges</p>
-              <p className="text-2xl font-bold text-indigo-900">{stats.total}</p>
+              <p className="text-sm text-indigo-500 font-medium">Total charges</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.total}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-purple-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <DollarSign className="w-5 h-5 text-purple-600" />
+                <DollarSign className="w-5 h-5 text-purple-500" />
               </div>
-              <p className="text-sm text-purple-700 font-medium">Montant total</p>
-              <p className="text-2xl font-bold text-purple-900">{formatAmount(stats.totalAmount)}</p>
+              <p className="text-sm text-purple-500 font-medium">Montant total</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{formatAmount(stats.totalAmount)}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-4 border border-pink-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-pink-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <FileText className="w-5 h-5 text-pink-600" />
+                <FileText className="w-5 h-5 text-pink-500" />
               </div>
-              <p className="text-sm text-pink-700 font-medium">Comptes utilisés</p>
-              <p className="text-2xl font-bold text-pink-900">{stats.accountsUsed}</p>
+              <p className="text-sm text-pink-500 font-medium">Comptes utilisés</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.accountsUsed}</p>
             </motion.div>
           </div>
         </div>
@@ -487,7 +483,7 @@ export function ModernExpensesList({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6"
+          className="card-theme rounded-2xl shadow-sm p-6 mb-6"
         >
           {/* Search Bar */}
           <div className="relative mb-4">
@@ -497,14 +493,14 @@ export function ModernExpensesList({
               placeholder="Rechercher par libellé, fournisseur, notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              className="w-full pl-12 pr-4 py-3 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-[var(--color-text-tertiary)]"
             />
           </div>
 
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
                 <Calendar className="w-3 h-3 inline mr-1" />
                 Du
               </label>
@@ -512,11 +508,11 @@ export function ModernExpensesList({
                 type="date" 
                 value={dateFrom} 
                 onChange={e => setDateFrom(e.target.value)} 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" 
+                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" 
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
                 <Calendar className="w-3 h-3 inline mr-1" />
                 Au
               </label>
@@ -524,15 +520,15 @@ export function ModernExpensesList({
                 type="date" 
                 value={dateTo} 
                 onChange={e => setDateTo(e.target.value)} 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" 
+                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" 
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Compte</label>
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Compte</label>
               <select 
                 value={selectedAccount} 
                 onChange={e => setSelectedAccount(e.target.value)} 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               >
                 <option value="all">Tous les comptes</option>
                 {accounts.map(a => (
@@ -541,11 +537,11 @@ export function ModernExpensesList({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Devise</label>
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Devise</label>
               <select 
                 value={currency} 
                 onChange={e => setCurrency(e.target.value as Currency)} 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               >
                 <option value="CHF">CHF</option>
                 <option value="EUR">EUR</option>

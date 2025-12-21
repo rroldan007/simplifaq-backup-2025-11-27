@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../services/database';
 import { ApiResponse, AppError } from '../types';
 import { UnifiedPDFGenerator, DocumentData } from '../services/UnifiedPDFGenerator';
+import { generateInvoicePDFWithQRBill, InvoiceData, PDFAdvancedConfig } from '../utils/invoicePDF';
 import { featureFlags } from '../features/featureFlags';
 import { SwissQRBillData, QRReferenceType, generateQRReference, formatIBAN, isValidSwissIBAN, isQRIBAN, isValidQRReference, validateQRBillData } from '../utils/swissQRBill';
 import archiver from 'archiver';
@@ -1324,13 +1325,18 @@ export const generateInvoicePDF = async (req: Request, res: Response): Promise<v
 
     if (!invoice) throw new AppError('Facture non trouvée', 404, 'INVOICE_NOT_FOUND');
 
-    // Debug: Log global discount values from DB
+    // Debug: Log discount values from DB
     console.log('[generateInvoicePDF] Global discount from DB:', {
       globalDiscountValue: invoice.globalDiscountValue,
       globalDiscountType: invoice.globalDiscountType,
       globalDiscountNote: invoice.globalDiscountNote,
       hasValue: invoice.globalDiscountValue && invoice.globalDiscountValue > 0
     });
+    console.log('[generateInvoicePDF] Line discounts from DB:', invoice.items.map(item => ({
+      desc: item.description,
+      lineDiscountValue: (item as any).lineDiscountValue,
+      lineDiscountType: (item as any).lineDiscountType
+    })));
 
     // Calculate QR Data
     const qrBillData = await createQRBillFromInvoice(invoice);
@@ -1338,6 +1344,19 @@ export const generateInvoicePDF = async (req: Request, res: Response): Promise<v
     // Prepare Doc Data
     const selectedTemplate = (typeof template === 'string' && template) ? template : ((invoice.user as any)?.pdfTemplate || 'swiss_minimal');
     const selectedColor = (typeof accentColor === 'string' && accentColor) ? accentColor : ((invoice.user as any)?.pdfPrimaryColor || '#000000');
+    
+    // Parse advanced config if exists
+    let advancedConfig = null;
+    if ((invoice.user as any)?.pdfAdvancedConfig) {
+      try {
+        advancedConfig = typeof (invoice.user as any).pdfAdvancedConfig === 'string' 
+          ? JSON.parse((invoice.user as any).pdfAdvancedConfig)
+          : (invoice.user as any).pdfAdvancedConfig;
+        console.log('[generateInvoicePDF] Using advanced config:', advancedConfig);
+      } catch (error) {
+        console.warn('[generateInvoicePDF] Failed to parse pdfAdvancedConfig:', error);
+      }
+    }
 
     const docData: DocumentData = {
       type: 'INVOICE',
@@ -1357,8 +1376,19 @@ export const generateInvoicePDF = async (req: Request, res: Response): Promise<v
         tvaRate: Number(item.tvaRate),
         total: Number(item.total),
         unit: (item as any).unit,
-        lineDiscountValue: (item as any).lineDiscountValue,
-        lineDiscountType: (item as any).lineDiscountType
+        lineDiscountValue: (item as any).lineDiscountValue != null
+          ? Number((item as any).lineDiscountValue)
+          : undefined,
+        lineDiscountType: (item as any).lineDiscountType || undefined,
+        discountAmount: (item as any).discountAmount != null
+          ? Number((item as any).discountAmount)
+          : undefined,
+        subtotalBeforeDiscount: (item as any).subtotalBeforeDiscount != null
+          ? Number((item as any).subtotalBeforeDiscount)
+          : undefined,
+        subtotalAfterDiscount: (item as any).subtotalAfterDiscount != null
+          ? Number((item as any).subtotalAfterDiscount)
+          : Number(item.total),
       })),
       globalDiscount: (invoice.globalDiscountValue && invoice.globalDiscountValue > 0) ? {
         value: Number(invoice.globalDiscountValue),
@@ -1402,6 +1432,7 @@ export const generateInvoicePDF = async (req: Request, res: Response): Promise<v
         totalBgColor: (invoice.user as any).pdfTotalBgColor,
         totalTextColor: (invoice.user as any).pdfTotalTextColor,
       },
+      advancedConfig: advancedConfig,
       qrData: qrBillData
     };
 
@@ -1411,8 +1442,89 @@ export const generateInvoicePDF = async (req: Request, res: Response): Promise<v
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="Facture_${invoice.invoiceNumber}.pdf"`);
 
-    const generator = new UnifiedPDFGenerator(docData, res);
-    await generator.generate();
+    // Use Puppeteer generator for custom templates with advanced config
+    if (selectedTemplate === 'custom' && advancedConfig) {
+      console.log('[generateInvoicePDF] Using Puppeteer generator for custom template');
+      
+      // Prepare data for Puppeteer generator
+      const invoiceDataPuppeteer: InvoiceData = {
+        invoiceNumber: invoice.invoiceNumber,
+        issueDate: invoice.issueDate,
+        dueDate: invoice.dueDate,
+        subtotal: Number(invoice.subtotal),
+        tvaAmount: Number(invoice.tvaAmount),
+        total: Number(invoice.total),
+        currency: (invoice.currency as 'CHF' | 'EUR'),
+        language: (invoice.language || 'fr') as 'fr' | 'de' | 'it' | 'en',
+        items: invoice.items.map(item => ({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          tvaRate: item.tvaRate,
+          total: Number(item.total),
+          unit: item.unit || undefined,
+          lineDiscountValue: (item as any).lineDiscountValue != null
+            ? Number((item as any).lineDiscountValue)
+            : undefined,
+          lineDiscountType: (item as any).lineDiscountType || undefined,
+          discountAmount: (item as any).discountAmount != null
+            ? Number((item as any).discountAmount)
+            : undefined,
+          subtotalBeforeDiscount: (item as any).subtotalBeforeDiscount != null
+            ? Number((item as any).subtotalBeforeDiscount)
+            : undefined,
+          subtotalAfterDiscount: (item as any).subtotalAfterDiscount != null
+            ? Number((item as any).subtotalAfterDiscount)
+            : Number(item.total),
+        })),
+        company: {
+          name: invoice.user.companyName,
+          address: `${invoice.user.street}, ${invoice.user.postalCode} ${invoice.user.city}`,
+          street: invoice.user.street,
+          city: invoice.user.city,
+          postalCode: invoice.user.postalCode,
+          country: invoice.user.country || 'Switzerland',
+          phone: invoice.user.phone || undefined,
+          email: invoice.user.email,
+          website: invoice.user.website || undefined,
+          vatNumber: invoice.user.vatNumber || undefined,
+          iban: invoice.user.iban || undefined,
+          logoUrl: invoice.user.logoUrl || undefined
+        },
+        client: {
+          name: invoice.client.companyName || `${invoice.client.firstName} ${invoice.client.lastName}`,
+          address: `${invoice.client.street}, ${invoice.client.postalCode} ${invoice.client.city}`,
+          street: invoice.client.street,
+          city: invoice.client.city,
+          postalCode: invoice.client.postalCode,
+          country: invoice.client.country || 'Switzerland'
+        },
+        notes: invoice.notes || undefined,
+        terms: invoice.terms || undefined,
+        globalDiscount: invoice.globalDiscountValue && invoice.globalDiscountValue > 0 ? {
+          value: Number(invoice.globalDiscountValue),
+          type: invoice.globalDiscountType as 'PERCENT' | 'AMOUNT',
+          note: invoice.globalDiscountNote || undefined
+        } : undefined
+      };
+
+      const pdfBuffer = await generateInvoicePDFWithQRBill(
+        invoiceDataPuppeteer,
+        qrBillData,
+        {
+          accentColor: selectedColor,
+          language: (invoice.language || 'fr') as 'fr' | 'de' | 'it' | 'en',
+          advancedConfig: advancedConfig
+        }
+      );
+
+      res.send(pdfBuffer);
+    } else {
+      // Use PDFKit generator for standard templates
+      console.log('[generateInvoicePDF] Using PDFKit generator for standard template');
+      const generator = new UnifiedPDFGenerator(docData, res);
+      await generator.generate();
+    }
 
   } catch (error) {
     console.error('Error generating invoice PDF:', error);
@@ -1575,8 +1687,8 @@ export const duplicateInvoice = async (req: Request, res: Response): Promise<voi
   }
 };
 /**
- 
-* Converts Prisma invoice data to PDF format
+ * @deprecated Legacy helper no longer used by invoice PDF generation.
+ * The active flow builds docData/invoiceDataPuppeteer directly inside generateInvoicePDF.
  */
 async function convertInvoiceToPDFData(invoice: any): Promise<any> {
   // Ensure client data is properly formatted
@@ -1635,6 +1747,19 @@ async function convertInvoiceToPDFData(invoice: any): Promise<any> {
         : (item.product && typeof item.product.unit === 'string' && item.product.unit.trim().length > 0
             ? item.product.unit
             : undefined),
+      lineDiscountValue: typeof item.lineDiscountValue !== 'undefined' && item.lineDiscountValue !== null
+        ? Number(item.lineDiscountValue)
+        : undefined,
+      lineDiscountType: item.lineDiscountType || undefined,
+      discountAmount: typeof item.discountAmount !== 'undefined' && item.discountAmount !== null
+        ? Number(item.discountAmount)
+        : undefined,
+      subtotalBeforeDiscount: typeof item.subtotalBeforeDiscount !== 'undefined' && item.subtotalBeforeDiscount !== null
+        ? Number(item.subtotalBeforeDiscount)
+        : undefined,
+      subtotalAfterDiscount: typeof item.subtotalAfterDiscount !== 'undefined' && item.subtotalAfterDiscount !== null
+        ? Number(item.subtotalAfterDiscount)
+        : undefined,
     })),
     
     subtotal: Number(invoice.subtotal),

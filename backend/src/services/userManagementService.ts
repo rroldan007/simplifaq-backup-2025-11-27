@@ -769,10 +769,11 @@ export class UserManagementService {
       });
 
       // Delete user's feedbacks (set to null by schema, but delete if exists)
-      await tx.feedback.updateMany({
-        where: { userId: id },
-        data: { userId: null }
-      });
+      // COMMENTED: Feedback model does not exist in schema
+      // await tx.feedback.updateMany({
+      //   where: { userId: id },
+      //   data: { userId: null }
+      // });
 
       // Finally delete the user
       await tx.user.delete({

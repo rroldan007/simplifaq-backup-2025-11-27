@@ -62,6 +62,7 @@ model User {
   pdfShowCompanyNameWithLogo Boolean  @default(true)   // Show company name even if logo exists
   pdfPrimaryColor            String   @default("#4F46E5") // Primary color for header/accents
   pdfTemplate                String   @default("swiss_classic") // Template: swiss_classic, european_minimal, swiss_blue, german_formal
+  pdfAdvancedConfig          String?  @db.Text // JSON with advanced PDF editor config (elements, images, colors, etc.)
   
   // Header Information Display Settings
   pdfShowVAT                 Boolean  @default(true)   // Show VAT number in header
@@ -169,6 +170,12 @@ model Product {
   tvaRate     Float    // Swiss TVA rates: 0.00, 3.50, 8.10
   unit        String   @default("piece") // hour, piece, day, etc.
   isActive    Boolean  @default(true)
+  
+  // SKU / Barcode fields
+  sku              String?  // Stock Keeping Unit - product code
+  barcodeType      String?  // EAN13, EAN8, CODE128, QR, or null
+  isVariableWeight Boolean  @default(false) // For products sold by weight (uses EAN-13 prefix 20-29)
+  weightUnit       String?  // kg, g, lb for variable weight products
   
   // Discount fields
   discountValue  Float?  // Discount amount or percentage

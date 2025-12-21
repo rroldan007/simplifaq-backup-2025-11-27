@@ -22,6 +22,7 @@ import NewQuotePage from './pages/NewQuotePage';
 import { ClientsPage } from './pages/ClientsPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { BillingHubPage, BillingHubPageTest } from './pages/BillingHubPage';
 import { SettingsPage } from './pages/SettingsPage';
 import SmtpSettingsPage from './pages/user/SmtpSettingsPage';
 import ExpensesListPage from './pages/expenses/ExpensesListPage';
@@ -95,6 +96,14 @@ function App() {
           <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/auth/registration-success" element={<RegistrationSuccessPage />} />
+
+          {/* BILLING TEST - PRIMERA PRIORIDAD */}
+          <Route path="/billing" element={
+            <div style={{ padding: '50px', backgroundColor: 'yellow', minHeight: '100vh', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}>
+              <h1 style={{ fontSize: '48px', color: 'red', fontWeight: 'bold' }}>🎉 BILLING PAGE TEST</h1>
+              <p style={{ fontSize: '24px', color: 'black' }}>Si ves esto amarillo, el routing funciona correctamente.</p>
+            </div>
+          } />
 
           {/* AUTHENTICATED ROUTES - SEPARATE STRUCTURE */}
           <Route path="/login" element={

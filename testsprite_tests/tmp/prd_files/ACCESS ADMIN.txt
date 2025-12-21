@@ -1,0 +1,3 @@
+ACCESS ADMIN
+usuario: admin@simplifaq.ch 
+pass: AdminSimpliFaq2024

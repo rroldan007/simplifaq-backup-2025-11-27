@@ -245,31 +245,31 @@ export function ModernDevisList({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
+    <div className="min-h-screen">
       {/* Header with Stats */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white border-b border-purple-200 shadow-sm"
+        className="card-theme border-b shadow-sm"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-[var(--color-text-primary)] flex items-center gap-3">
                 <ClipboardList className="w-8 h-8 text-purple-600" />
                 Devis
-                <span className="text-lg font-normal text-slate-500">({stats.total})</span>
+                <span className="text-lg font-normal text-[var(--color-text-secondary)]">({stats.total})</span>
               </h1>
-              <p className="text-slate-600 mt-1">Gérez vos devis et suivez vos propositions commerciales</p>
+              <p className="text-[var(--color-text-secondary)] mt-1">Gérez vos devis et suivez vos propositions commerciales</p>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="p-3 rounded-xl bg-purple-100 hover:bg-purple-200 transition-colors duration-200"
+                className="p-3 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 transition-colors duration-200"
                 title="Actualiser"
               >
-                <RefreshCw className={`w-5 h-5 text-purple-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-5 h-5 text-purple-500 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
               <button
                 onClick={onCreateNew}
@@ -285,60 +285,60 @@ export function ModernDevisList({
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-purple-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <DollarSign className="w-5 h-5 text-purple-600" />
-                <TrendingUp className="w-4 h-4 text-purple-500" />
+                <DollarSign className="w-5 h-5 text-purple-500" />
+                <TrendingUp className="w-4 h-4 text-purple-400" />
               </div>
-              <p className="text-sm text-purple-700 font-medium">Total</p>
-              <p className="text-2xl font-bold text-purple-900">
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Total</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">
                 {stats.totalAmount.toLocaleString('fr-CH')} CHF
               </p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-green-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
               </div>
-              <p className="text-sm text-green-700 font-medium">Acceptés</p>
-              <p className="text-2xl font-bold text-green-900">{stats.accepted}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Acceptés</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.accepted}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-blue-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <Send className="w-5 h-5 text-blue-600" />
+                <Send className="w-5 h-5 text-blue-500" />
               </div>
-              <p className="text-sm text-blue-700 font-medium">Envoyés</p>
-              <p className="text-2xl font-bold text-blue-900">{stats.sent}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Envoyés</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.sent}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-slate-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <FileText className="w-5 h-5 text-slate-600" />
+                <FileText className="w-5 h-5 text-[var(--color-text-tertiary)]" />
               </div>
-              <p className="text-sm text-slate-700 font-medium">Brouillons</p>
-              <p className="text-2xl font-bold text-slate-900">{stats.draft}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Brouillons</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.draft}</p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200"
+              className="card-theme rounded-xl p-4 border-l-4 border-l-red-500"
             >
               <div className="flex items-center justify-between mb-2">
-                <XCircle className="w-5 h-5 text-red-600" />
+                <XCircle className="w-5 h-5 text-red-500" />
               </div>
-              <p className="text-sm text-red-700 font-medium">Refusés</p>
-              <p className="text-2xl font-bold text-red-900">{stats.rejected}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-medium">Refusés</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stats.rejected}</p>
             </motion.div>
           </div>
         </div>
@@ -350,7 +350,7 @@ export function ModernDevisList({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-sm border border-purple-200 p-6 mb-6"
+          className="card-theme rounded-2xl shadow-sm p-6 mb-6"
         >
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search */}
@@ -361,14 +361,14 @@ export function ModernDevisList({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher par numéro, client, montant..."
-                className="w-full pl-12 pr-4 py-3 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                className="w-full pl-12 pr-4 py-3 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder:text-[var(--color-text-tertiary)]"
               />
             </div>
 
             {/* Filters Button */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="px-6 py-3 bg-purple-100 hover:bg-purple-200 rounded-xl transition-all duration-200 flex items-center gap-2 font-medium text-purple-700"
+              className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl transition-all duration-200 flex items-center gap-2 font-medium text-purple-500"
             >
               <Filter className="w-5 h-5" />
               Filtres
@@ -376,13 +376,13 @@ export function ModernDevisList({
             </button>
 
             {/* View Mode Toggle */}
-            <div className="flex items-center bg-purple-100 rounded-xl p-1">
+            <div className="flex items-center bg-[var(--color-bg-secondary)] rounded-xl p-1">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`px-4 py-2 rounded-lg transition-all duration-200 ${
                   viewMode === 'grid'
-                    ? 'bg-white shadow-sm text-purple-600'
-                    : 'text-purple-600 hover:text-purple-900'
+                    ? 'bg-[var(--color-bg-tertiary)] shadow-sm text-purple-500'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
                 <LayoutGrid className="w-5 h-5" />
@@ -391,8 +391,8 @@ export function ModernDevisList({
                 onClick={() => setViewMode('list')}
                 className={`px-4 py-2 rounded-lg transition-all duration-200 ${
                   viewMode === 'list'
-                    ? 'bg-white shadow-sm text-purple-600'
-                    : 'text-purple-600 hover:text-purple-900'
+                    ? 'bg-[var(--color-bg-tertiary)] shadow-sm text-purple-500'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
                 <List className="w-5 h-5" />
@@ -410,17 +410,17 @@ export function ModernDevisList({
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="pt-6 mt-6 border-t border-purple-200">
+                <div className="pt-6 mt-6 border-t border-[var(--color-border-primary)]">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Status Filter */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
                         Statut
                       </label>
                       <select
                         value={selectedStatus}
                         onChange={(e) => setSelectedStatus(e.target.value as DevisStatus)}
-                        className="w-full px-4 py-2.5 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        className="w-full px-4 py-2.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       >
                         <option value="all">Tous les statuts</option>
                         <option value="draft">Brouillons</option>
@@ -433,13 +433,13 @@ export function ModernDevisList({
 
                     {/* Sort By */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
                         Trier par
                       </label>
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'client' | 'status')}
-                        className="w-full px-4 py-2.5 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        className="w-full px-4 py-2.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       >
                         <option value="date">Date</option>
                         <option value="amount">Montant</option>

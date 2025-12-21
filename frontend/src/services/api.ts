@@ -70,13 +70,17 @@ async function apiRequest<T>(
     ? document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
     : undefined) || undefined;
 
+  // Detectar si el body es FormData para no establecer Content-Type
+  const isFormData = options.body instanceof FormData;
+  
   // Prepare request configuration for interceptor
   const requestConfig: RequestConfig = {
     url: `${API_BASE_URL}${endpoint}`,
     method: options.method || 'GET',
     credentials: 'include' as RequestCredentials,
     headers: {
-      'Content-Type': 'application/json; charset=UTF-8',
+      // No establecer Content-Type para FormData (el navegador lo hace automáticamente)
+      ...(isFormData ? {} : { 'Content-Type': 'application/json; charset=UTF-8' }),
       'X-Requested-With': 'XMLHttpRequest', // CSRF protection
       // Attach CSRF header for state-changing methods if available
       ...((method !== 'GET' && method !== 'HEAD' && csrfToken)
@@ -1537,10 +1541,13 @@ export const api = {
     return { data: { success: true, data } as ApiResponse<T> };
   },
   post: async <T = unknown>(endpoint: string, body?: unknown, config?: { headers?: Record<string, string> }): Promise<{ data: ApiResponse<T> }> => {
+    // Si el body es FormData, no lo convertir a JSON y no establecer Content-Type
+    const isFormData = body instanceof FormData;
+    
     const data = await apiRequest<T>(endpoint, {
       method: 'POST',
-      headers: config?.headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: isFormData ? {} : config?.headers, // No headers para FormData
+      body: isFormData ? body : (body !== undefined ? JSON.stringify(body) : undefined),
     });
     return { data: { success: true, data } as ApiResponse<T> };
   },

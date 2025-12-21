@@ -12,6 +12,11 @@ const baseProductSchema = z.object({
   unitPrice: z.number().positive('Le prix unitaire doit être positif'),
   tvaRate: z.number().min(0, 'Le taux TVA ne peut pas être négatif').max(100, 'Le taux TVA ne peut pas dépasser 100%'),
   unit: z.string().min(1, 'L\'unité est requise').max(50).default('piece'),
+  // SKU / Barcode fields
+  sku: z.string().max(50).nullable().optional(),
+  barcodeType: z.enum(['EAN13', 'EAN8', 'CODE128', 'QR']).nullable().optional(),
+  isVariableWeight: z.boolean().default(false),
+  weightUnit: z.enum(['kg', 'g', 'lb']).nullable().optional(),
   // Discount fields - accept null and convert to undefined
   discountValue: z.number().min(0, 'La valeur du rabais ne peut pas être négative').nullable().optional(),
   discountType: z.enum(['PERCENT', 'AMOUNT']).nullable().optional(),
@@ -43,6 +48,9 @@ const createProductSchema = baseProductSchema.refine(
   // Convert null to undefined for database compatibility
   discountValue: data.discountValue ?? undefined,
   discountType: data.discountType ?? undefined,
+  sku: data.sku ?? undefined,
+  barcodeType: data.barcodeType ?? undefined,
+  weightUnit: data.weightUnit ?? undefined,
 }));
 
 const updateProductSchema = baseProductSchema.partial().refine(
@@ -70,6 +78,9 @@ const updateProductSchema = baseProductSchema.partial().refine(
   // Convert null to undefined for database compatibility
   discountValue: data.discountValue ?? undefined,
   discountType: data.discountType ?? undefined,
+  sku: data.sku ?? undefined,
+  barcodeType: data.barcodeType ?? undefined,
+  weightUnit: data.weightUnit ?? undefined,
 }));
 
 export const getProducts = async (req: Request, res: Response): Promise<void> => {

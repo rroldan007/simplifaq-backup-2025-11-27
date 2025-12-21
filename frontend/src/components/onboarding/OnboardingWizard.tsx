@@ -127,20 +127,31 @@ export default function OnboardingWizard({ onComplete, onClose }: OnboardingWiza
   };
 
   const handleSkipStep = async () => {
-    if (!status) return;
+    if (!status) {
+      console.warn('[OnboardingWizard] handleSkipStep called but status is null');
+      return;
+    }
 
     try {
       const currentStep = steps[currentStepIndex];
+      console.log(`[OnboardingWizard] Skipping step: ${currentStep.id}`);
+      
       const updatedStatus = await onboardingApi.skipStep(currentStep.id as OnboardingStep);
+      console.log('[OnboardingWizard] Skip successful, updated status:', updatedStatus);
+      
       setStatus(updatedStatus);
 
       // Move to next step
       const nextStepIndex = currentStepIndex + 1;
+      console.log(`[OnboardingWizard] Moving from step ${currentStepIndex} to ${nextStepIndex}`);
+      
       if (nextStepIndex < steps.length) {
         setCurrentStepIndex(nextStepIndex);
+      } else {
+        console.log('[OnboardingWizard] No more steps, onboarding should be complete');
       }
     } catch (err) {
-      console.error('Error skipping step:', err);
+      console.error('[OnboardingWizard] Error skipping step:', err);
       setError('Erreur lors du saut de l\'étape');
     }
   };

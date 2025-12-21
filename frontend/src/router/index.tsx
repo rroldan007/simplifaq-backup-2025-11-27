@@ -35,6 +35,7 @@ import ExpensesListPage from '../pages/expenses/ExpensesListPage';
 import ExpenseFormPage from '../pages/expenses/ExpenseFormPage';
 import {TvaReportPage} from '../pages/TvaReportPage';
 import SmtpSettingsPage from '../pages/user/SmtpSettingsPage';
+import {BillingHubPage} from '../pages/BillingHubPage';
 import {ProfilePage} from '../pages/settings/ProfilePage';
 import {CompanyPage} from '../pages/settings/CompanyPage';
 import {BillingPage as UserBillingPage} from '../pages/settings/BillingPage';
@@ -124,6 +125,7 @@ export const AppRouter: React.FC = () => {
                     >
                         <Route index element={<DashboardPage/>}/>
                         <Route path="dashboard" element={<DashboardPage/>}/>
+                        <Route path="billing" element={<BillingHubPage/>}/>
                         <Route path="invoices" element={<InvoicesPage/>}/>
                         <Route path="invoices/new" element={<NewInvoicePage/>}/>
                         <Route path="invoices/:id" element={<InvoiceDetailPage/>}/>
