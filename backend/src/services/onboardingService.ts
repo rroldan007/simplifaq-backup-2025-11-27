@@ -53,12 +53,11 @@ function normalizeSkippedSteps(skippedSteps: any): string[] {
 
 /**
  * Helper function to serialize skippedSteps for DB
- * Returns string[] for PostgreSQL, string for SQLite
+ * Returns string[] for PostgreSQL (native array support)
  */
-function serializeSkippedSteps(skippedSteps: string[]): string {
-  // For SQLite, we need to convert array to comma-separated string
-  // Prisma expects a String type for SQLite, not String[]
-  return skippedSteps.join(',');
+function serializeSkippedSteps(skippedSteps: string[]): string[] {
+  // PostgreSQL supports native arrays, return as-is
+  return skippedSteps;
 }
 
 /**
