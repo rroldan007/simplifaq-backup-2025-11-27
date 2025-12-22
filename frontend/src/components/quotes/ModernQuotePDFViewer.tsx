@@ -58,6 +58,7 @@ export const ModernQuotePDFViewer: React.FC<ModernQuotePDFViewerProps> = ({
         URL.revokeObjectURL(pdfUrl);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId, currentUser]);
 
   return (

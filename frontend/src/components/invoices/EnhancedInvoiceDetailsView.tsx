@@ -3,7 +3,6 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { InvoiceStatusSelector } from './InvoiceStatusSelector';
 import type { InvoiceStatus } from './InvoiceStatusBadge';
-import { useAuth } from '../../hooks/useAuth';
 import { ModernInvoicePDFViewer } from './ModernInvoicePDFViewer';
 
 interface ClientInfo {
@@ -86,7 +85,7 @@ export const EnhancedInvoiceDetailsView: React.FC<EnhancedInvoiceDetailsViewProp
   onDownloadPdf,
   onSend,
   onAddPayment,
-  onCancelRecurrence,
+  onCancelRecurrence: _onCancelRecurrence,
   onBack,
   loading = {}
 }) => {

@@ -251,6 +251,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
         console.error('[PDFThemeEditor] Error loading advanced config:', error);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Solo ejecutar una vez al montar
 
   useEffect(() => {
@@ -264,6 +265,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
       const config = exportConfig();
       setEditableCode(JSON.stringify(config, null, 2));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCode]);
 
   // ============================================

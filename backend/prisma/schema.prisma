@@ -141,6 +141,7 @@ model Client {
   paymentTerms Int      @default(30) // Payment terms in days
   notes        String?
   isActive     Boolean  @default(true)
+  isCompany    Boolean  @default(false) // Whether client is a company or individual
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -167,6 +168,7 @@ model Product {
   name        String
   description String?
   unitPrice   Float    // SQLite uses Float instead of Decimal
+  currency    String   @default("CHF") // Product currency (CHF, EUR)
   tvaRate     Float    // Swiss TVA rates: 0.00, 3.50, 8.10
   unit        String   @default("piece") // hour, piece, day, etc.
   isActive    Boolean  @default(true)

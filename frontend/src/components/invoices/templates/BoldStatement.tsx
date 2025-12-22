@@ -17,14 +17,7 @@ export const BoldStatement: React.FC<{
 }> = ({ 
   data, 
   accentColor = '#7C3AED', 
-  showHeader = true,
-  logoPosition = 'left',
-  logoSize = 'medium',
-  fontColorHeader = '#FFFFFF',
-  fontColorBody = '#1F2937',
-  tableHeadColor = '#7C3AED',
-  headerBgColor = '#7C3AED',
-  altRowColor = '#F9FAFB'
+  showHeader = true
 }) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;
