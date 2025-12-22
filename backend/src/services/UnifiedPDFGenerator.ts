@@ -28,6 +28,9 @@ export interface DocumentData {
     unit?: string;
     lineDiscountValue?: number;
     lineDiscountType?: 'PERCENT' | 'AMOUNT';
+    discountAmount?: number;
+    subtotalBeforeDiscount?: number;
+    subtotalAfterDiscount?: number;
   }>;
   globalDiscount?: {
     value: number;
@@ -71,6 +74,7 @@ export interface DocumentData {
     totalBgColor?: string;
     totalTextColor?: string;
   };
+  advancedConfig?: any; // Advanced PDF editor configuration (elements, images, colors)
   qrData?: any; // Only for invoices
 }
 

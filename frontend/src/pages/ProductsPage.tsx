@@ -172,22 +172,22 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
-      <section className="border-b border-slate-200 bg-white/80 backdrop-blur">
+    <div className="min-h-screen">
+      <section className="border-b border-[var(--color-border-primary)] card-theme backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 text-sm font-medium text-blue-600">
+              <div className="inline-flex items-center gap-2 text-sm font-medium text-blue-500">
                 <Sparkles className="w-4 h-4" />
                 Catalogue intelligent
               </div>
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-500 flex items-center justify-center">
                   <Package className="w-6 h-6" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-900">Produits & Services</h1>
-                  <p className="text-slate-600">Centralisez vos tarifs, unités et TVA dans un espace élégant</p>
+                  <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">Produits & Services</h1>
+                  <p className="text-[var(--color-text-secondary)]">Centralisez vos tarifs, unités et TVA dans un espace élégant</p>
                 </div>
               </div>
             </div>
@@ -222,54 +222,54 @@ export function ProductsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-5 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-              <p className="text-sm text-blue-700 font-medium">Catalogue total</p>
+            <Card className="p-5 card-theme border-l-4 border-l-blue-500">
+              <p className="text-sm text-blue-500 font-medium">Catalogue total</p>
               <div className="mt-2 flex items-end gap-2">
-                <span className="text-3xl font-bold text-blue-900">{stats.total}</span>
-                <span className="text-sm text-blue-600">éléments</span>
+                <span className="text-3xl font-bold text-[var(--color-text-primary)]">{stats.total}</span>
+                <span className="text-sm text-[var(--color-text-secondary)]">éléments</span>
               </div>
-              <p className="text-xs text-blue-500 mt-1">{stats.active} actifs • {stats.inactive} brouillons</p>
+              <p className="text-xs text-[var(--color-text-tertiary)] mt-1">{stats.active} actifs • {stats.inactive} brouillons</p>
             </Card>
 
-            <Card className="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200">
-              <p className="text-sm text-emerald-700 font-medium">Valeur catalogue</p>
+            <Card className="p-5 card-theme border-l-4 border-l-emerald-500">
+              <p className="text-sm text-emerald-500 font-medium">Valeur catalogue</p>
               <div className="mt-2 flex items-end gap-2">
-                <span className="text-3xl font-bold text-emerald-900">
+                <span className="text-3xl font-bold text-[var(--color-text-primary)]">
                   {stats.catalogValue.toLocaleString('fr-CH', { style: 'currency', currency: 'CHF' })}
                 </span>
               </div>
-              <p className="text-xs text-emerald-600 mt-1">Prix moyen {stats.averagePrice.toFixed(2)} CHF</p>
+              <p className="text-xs text-[var(--color-text-tertiary)] mt-1">Prix moyen {stats.averagePrice.toFixed(2)} CHF</p>
             </Card>
 
-            <Card className="p-5 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200">
-              <p className="text-sm text-orange-700 font-medium">Services</p>
+            <Card className="p-5 card-theme border-l-4 border-l-orange-500">
+              <p className="text-sm text-orange-500 font-medium">Services</p>
               <div className="mt-2 flex items-end gap-2">
-                <span className="text-3xl font-bold text-orange-900">{stats.services}</span>
-                <span className="text-sm text-orange-600">entrées</span>
+                <span className="text-3xl font-bold text-[var(--color-text-primary)]">{stats.services}</span>
+                <span className="text-sm text-[var(--color-text-secondary)]">entrées</span>
               </div>
-              <p className="text-xs text-orange-600 mt-1">{Math.round((stats.services / Math.max(stats.total, 1)) * 100)}% du catalogue</p>
+              <p className="text-xs text-[var(--color-text-tertiary)] mt-1">{Math.round((stats.services / Math.max(stats.total, 1)) * 100)}% du catalogue</p>
             </Card>
 
-            <Card className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
-              <p className="text-sm text-slate-700 font-medium">Activation</p>
+            <Card className="p-5 card-theme border-l-4 border-l-purple-500">
+              <p className="text-sm text-purple-500 font-medium">Activation</p>
               <div className="mt-2 flex items-end gap-2">
-                <span className="text-3xl font-bold text-slate-900">
+                <span className="text-3xl font-bold text-[var(--color-text-primary)]">
                   {Math.round((stats.active / Math.max(stats.total, 1)) * 100)}%
                 </span>
-                <span className="text-sm text-slate-600">actifs</span>
+                <span className="text-sm text-[var(--color-text-secondary)]">actifs</span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">Optimisez vos fiches inactives pour gagner du temps</p>
+              <p className="text-xs text-[var(--color-text-tertiary)] mt-1">Optimisez vos fiches inactives pour gagner du temps</p>
             </Card>
           </div>
         </div>
       </section>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <Card className="p-6 shadow-sm border border-slate-200 bg-white/90">
+        <Card className="p-6 shadow-sm card-theme">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-slate-700">Conseil express</p>
-              <p className="text-slate-500 mt-1 max-w-2xl">
+              <p className="text-sm font-semibold text-[var(--color-text-primary)]">Conseil express</p>
+              <p className="text-[var(--color-text-secondary)] mt-1 max-w-2xl">
                 Harmonisez les unités, couleurs et descriptions pour retrouver rapidement vos services dans les Factures et Devis.
                 Vous pouvez importer des tarifs existants ou dupliquer un produit populaire pour gagner du temps.
               </p>

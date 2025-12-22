@@ -199,7 +199,7 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
         <LoadingSpinner size="lg" />
-        <p className="text-slate-600">Chargement du catalogue...</p>
+        <p className="text-[var(--color-text-secondary)]">Chargement du catalogue...</p>
       </div>
     );
   }
@@ -208,8 +208,8 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
     return (
       <Card className="p-8 text-center">
         <div className="text-6xl mb-4">😕</div>
-        <h3 className="text-xl font-semibold text-slate-900 mb-2">Oups ! Une erreur s'est produite</h3>
-        <p className="text-slate-600 mb-6">{error}</p>
+        <h3 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">Oups ! Une erreur s'est produite</h3>
+        <p className="text-[var(--color-text-secondary)] mb-6">{error}</p>
         <Button onClick={() => window.location.reload()} variant="primary">
           🔄 Réessayer
         </Button>
@@ -226,22 +226,22 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
           transition={{ duration: 0.35 }}
           className="grid grid-cols-1 md:grid-cols-3 gap-4"
         >
-          <Card className="p-5 border border-blue-100 bg-gradient-to-br from-blue-50 to-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Activation</p>
-            <p className="text-3xl font-bold text-blue-900 mt-2">{catalogInsights.activeRatio}%</p>
-            <p className="text-sm text-blue-600">de votre catalogue est prêt à l'emploi</p>
+          <Card className="p-5 card-theme border-l-4 border-l-blue-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">Activation</p>
+            <p className="text-3xl font-bold text-[var(--color-text-primary)] mt-2">{catalogInsights.activeRatio}%</p>
+            <p className="text-sm text-[var(--color-text-secondary)]">de votre catalogue est prêt à l'emploi</p>
           </Card>
-          <Card className="p-5 border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Prix moyen</p>
-            <p className="text-3xl font-bold text-emerald-900 mt-2">
+          <Card className="p-5 card-theme border-l-4 border-l-emerald-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500">Prix moyen</p>
+            <p className="text-3xl font-bold text-[var(--color-text-primary)] mt-2">
               {catalogInsights.averagePrice.toLocaleString('fr-CH', { style: 'currency', currency })}
             </p>
-            <p className="text-sm text-emerald-600">Optimisez vos marges en gardant ce KPI à jour</p>
+            <p className="text-sm text-[var(--color-text-secondary)]">Optimisez vos marges en gardant ce KPI à jour</p>
           </Card>
-          <Card className="p-5 border border-orange-100 bg-gradient-to-br from-orange-50 to-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-orange-600">Services</p>
-            <p className="text-3xl font-bold text-orange-900 mt-2">{catalogInsights.serviceRatio}%</p>
-            <p className="text-sm text-orange-600 flex items-center gap-1">
+          <Card className="p-5 card-theme border-l-4 border-l-orange-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">Services</p>
+            <p className="text-3xl font-bold text-[var(--color-text-primary)] mt-2">{catalogInsights.serviceRatio}%</p>
+            <p className="text-sm text-[var(--color-text-secondary)] flex items-center gap-1">
               <Sparkles className="w-4 h-4" /> {catalogInsights.topProduct || 'Aucun produit premium identifié'}
             </p>
           </Card>
@@ -370,10 +370,10 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
           
           {searchQuery || selectedFilter !== 'all' ? (
             <>
-              <h3 className="text-2xl font-semibold text-slate-900 mb-3">
+              <h3 className="text-2xl font-semibold text-[var(--color-text-primary)] mb-3">
                 Aucun produit trouvé
               </h3>
-              <p className="text-slate-600 mb-8 text-lg">
+              <p className="text-[var(--color-text-secondary)] mb-8 text-lg">
                 Aucun produit ne correspond à vos critères de recherche.
               </p>
               <Button
@@ -462,17 +462,17 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className="min-w-full text-sm border border-[var(--color-border-primary)] rounded-2xl overflow-hidden shadow-sm"
+              className="w-full text-sm border border-[var(--color-border-primary)] rounded-2xl overflow-hidden shadow-sm table-fixed"
             >
               <thead className="bg-[var(--color-bg-secondary)]/80 text-[var(--color-text-secondary)]">
                 <tr>
-                  <th className="px-3 py-2 text-left">Nom</th>
-                  <th className="px-3 py-2 text-left">Type</th>
-                  <th className="px-3 py-2 text-left">TVA</th>
-                  <th className="px-3 py-2 text-right">Prix</th>
-                  <th className="px-3 py-2 text-left">Unité</th>
-                  <th className="px-3 py-2 text-left">Statut</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
+                  <th className="px-3 py-2 text-left w-[35%]">Nom</th>
+                  <th className="px-3 py-2 text-left w-[10%]">Type</th>
+                  <th className="px-3 py-2 text-left w-[8%]">TVA</th>
+                  <th className="px-3 py-2 text-right w-[12%]">Prix</th>
+                  <th className="px-3 py-2 text-left w-[8%]">Unité</th>
+                  <th className="px-3 py-2 text-left w-[10%]">Statut</th>
+                  <th className="px-3 py-2 text-right w-[17%]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -487,14 +487,14 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
                       className="border-t border-[var(--color-border-primary)] hover:bg-[var(--color-bg-secondary)]/70"
                     >
                       <td className="px-3 py-2">
-                        <div className="font-medium text-[var(--color-text-primary)] truncate flex items-center gap-2">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-bg-secondary)] text-[var(--color-text-tertiary)]">
+                        <div className="font-medium text-[var(--color-text-primary)] flex items-center gap-2 min-w-0">
+                          <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-secondary)] text-[var(--color-text-tertiary)]">
                             {getProductIcon(product)}
                           </span>
-                          {product.name}
+                          <span className="truncate" title={product.name}>{product.name}</span>
                         </div>
                         {product.description && (
-                          <div className="text-[11px] text-[var(--color-text-tertiary)] truncate max-w-[32ch]">{product.description}</div>
+                          <div className="text-[11px] text-[var(--color-text-tertiary)] truncate ml-8" title={product.description}>{product.description}</div>
                         )}
                       </td>
                       <td className="px-3 py-2">{getProductType(product)}</td>
@@ -502,15 +502,39 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
                       <td className="px-3 py-2 text-right font-semibold">{formatPrice(product.unitPrice)}</td>
                       <td className="px-3 py-2">{product.unit}</td>
                       <td className="px-3 py-2">
-                        <span className={`px-2 py-1 rounded-full text-xs ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                        <span className={`px-2 py-1 rounded-full text-xs ${product.isActive ? 'bg-emerald-500/20 text-emerald-500' : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]'}`}>
                           {product.isActive ? 'Actif' : 'Inactif'}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <div className="inline-flex gap-2">
-                          {onEdit && (<button onClick={() => onEdit(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Modifier</button>)}
-                          {onDuplicate && (<button onClick={() => onDuplicate(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Dupliquer</button>)}
-                          {onDelete && (<button onClick={() => onDelete(product.id)} className="px-2 py-1 text-xs chip-neutral rounded-md">Supprimer</button>)}
+                        <div className="inline-flex gap-1">
+                          {onEdit && (
+                            <button 
+                              onClick={() => onEdit(product.id)} 
+                              className="p-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-500 transition-colors"
+                              title="Modifier"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {onDuplicate && (
+                            <button 
+                              onClick={() => onDuplicate(product.id)} 
+                              className="p-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-500 transition-colors"
+                              title="Dupliquer"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button 
+                              onClick={() => onDelete(product.id)} 
+                              className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-500 transition-colors"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>

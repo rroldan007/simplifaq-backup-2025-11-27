@@ -468,7 +468,7 @@
   
   /* Cards con variables CSS */
   .card-theme {
-    background-color: var(--color-surface-primary);
+    background: var(--color-surface-primary) !important;
     border: 1px solid var(--color-border-primary);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-sm);
@@ -477,6 +477,21 @@
   
   .card-theme:hover {
     box-shadow: var(--shadow-md);
+  }
+  
+  /* Dark mode card improvements */
+  .dark .card-theme {
+    background: linear-gradient(145deg, 
+      rgba(255, 255, 255, 0.05) 0%, 
+      rgba(255, 255, 255, 0.02) 100%
+    ) !important;
+    border-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+  }
+  
+  .dark .card-theme:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
   
   /* Navegación con variables CSS */
@@ -670,4 +685,57 @@
 [data-theme="synthwave"] .hover\:bg-slate-100:hover,
 [data-theme="synthwave"] .hover\:bg-gray-100:hover {
   background-color: oklch(25% 0.05 281.288) !important;
+}
+
+/* ===== DARK MODE ENHANCEMENTS ===== */
+
+/* Stat cards in dark mode - glassmorphism effect */
+.dark .stat-card,
+.dark [class*="bg-white"],
+.dark [class*="bg-slate-50"],
+.dark [class*="bg-gray-50"] {
+  background: linear-gradient(145deg, 
+    rgba(255, 255, 255, 0.06) 0%, 
+    rgba(255, 255, 255, 0.02) 100%
+  ) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Subtle glow for active/focused elements */
+.dark .ring-primary-500,
+.dark [class*="focus:ring"] {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Better shadows in dark mode */
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .shadow-lg {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Scrollbar styling for dark mode */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }

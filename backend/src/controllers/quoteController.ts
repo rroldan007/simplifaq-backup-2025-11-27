@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../services/database';
 import { ApiResponse, AppError } from '../types';
 import { UnifiedPDFGenerator, DocumentData } from '../services/UnifiedPDFGenerator';
+import { generateQuotePDFWithPuppeteer, QuoteData } from '../utils/quotePDF';
 
 const toInt = (v: unknown, def: number) => {
   const n = typeof v === 'string' ? parseInt(v, 10) : Number(v);
@@ -364,7 +365,25 @@ export const updateQuote = async (req: Request, res: Response): Promise<void> =>
         throw new AppError('Données de ligne de devis invalides', 400, 'INVALID_QUOTE_ITEM');
       }
 
-      const itemTotal = quantity * unitPrice;
+      // Calculate base total before discount
+      const subtotalBefore = quantity * unitPrice;
+      
+      // Process line-level discount
+      const lineDiscountValue = item.lineDiscountValue ? sanitizeNumber(item.lineDiscountValue) : undefined;
+      const lineDiscountType: 'PERCENT' | 'AMOUNT' | undefined = item.lineDiscountType;
+      const lineDiscountSource: 'FROM_PRODUCT' | 'MANUAL' | 'NONE' = item.lineDiscountSource || 'NONE';
+      
+      let discountAmt = 0;
+      if (lineDiscountSource !== 'NONE' && lineDiscountValue && lineDiscountValue > 0) {
+        if (lineDiscountType === 'PERCENT') {
+          discountAmt = subtotalBefore * (lineDiscountValue / 100);
+        } else if (lineDiscountType === 'AMOUNT') {
+          discountAmt = Math.min(lineDiscountValue, subtotalBefore);
+        }
+      }
+      
+      const subtotalAfter = subtotalBefore - discountAmt;
+      const itemTotal = subtotalAfter;
       const itemTva = itemTotal * (tvaRate / 100);
 
       subtotal += itemTotal;
@@ -379,6 +398,13 @@ export const updateQuote = async (req: Request, res: Response): Promise<void> =>
         total: itemTotal,
         order: index + 1,
         unit,
+        // Line discount fields
+        lineDiscountValue: lineDiscountValue || null,
+        lineDiscountType: lineDiscountType || null,
+        lineDiscountSource,
+        subtotalBeforeDiscount: subtotalBefore,
+        discountAmount: discountAmt,
+        subtotalAfterDiscount: subtotalAfter,
       };
     });
 
@@ -504,6 +530,13 @@ export const generateQuotePDF = async (req: Request, res: Response): Promise<voi
     // Prepare Document Data
     const selectedTemplate = (typeof template === 'string' && template) ? template : ((quote.user as any)?.pdfTemplate || 'swiss_minimal');
     const selectedColor = (typeof accentColor === 'string' && accentColor) ? accentColor : ((quote.user as any)?.pdfPrimaryColor || '#000000');
+    
+    // Parse advancedConfig
+    const advancedConfig = (quote.user as any).pdfAdvancedConfig 
+      ? (typeof (quote.user as any).pdfAdvancedConfig === 'string' 
+          ? JSON.parse((quote.user as any).pdfAdvancedConfig) 
+          : (quote.user as any).pdfAdvancedConfig)
+      : undefined;
 
     // Log para depurar descuentos en PDF
     console.log('🔍 [PDF DEBUG] Items desde BD:', quote.items.map(item => ({
@@ -579,14 +612,104 @@ export const generateQuotePDF = async (req: Request, res: Response): Promise<voi
         tableHeadColor: (quote.user as any).pdfTableHeadColor,
         totalBgColor: (quote.user as any).pdfTotalBgColor,
         totalTextColor: (quote.user as any).pdfTotalTextColor,
-      }
+      },
+      advancedConfig: advancedConfig
     };
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="Devis_${quote.invoiceNumber}.pdf"`);
 
-    const generator = new UnifiedPDFGenerator(docData, res);
-    await generator.generate();
+    // Use Puppeteer for custom templates with advanced config
+    if (selectedTemplate === 'custom' && advancedConfig) {
+      console.log('[generateQuotePDF] Using Puppeteer generator for custom template');
+      
+      // Log raw item data from database
+      console.log('[generateQuotePDF] Raw items from DB:', JSON.stringify(quote.items.map(item => ({
+        description: item.description,
+        lineDiscountValue: (item as any).lineDiscountValue,
+        lineDiscountType: (item as any).lineDiscountType,
+        discountAmount: (item as any).discountAmount,
+        subtotalBeforeDiscount: (item as any).subtotalBeforeDiscount,
+        subtotalAfterDiscount: (item as any).subtotalAfterDiscount
+      })), null, 2));
+
+      const quoteDataPuppeteer: QuoteData = {
+        quoteNumber: quote.invoiceNumber,
+        issueDate: quote.issueDate,
+        validUntil: quote.validUntil || undefined,
+        subtotal: Number(quote.subtotal),
+        tvaAmount: Number(quote.tvaAmount),
+        total: Number(quote.total),
+        currency: (quote.currency as 'CHF' | 'EUR'),
+        language: (quote.language || 'fr') as 'fr' | 'de' | 'it' | 'en',
+        items: quote.items.map(item => ({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          tvaRate: item.tvaRate,
+          total: Number(item.total),
+          unit: item.unit || undefined,
+          lineDiscountValue: (item as any).lineDiscountValue != null
+            ? Number((item as any).lineDiscountValue)
+            : undefined,
+          lineDiscountType: (item as any).lineDiscountType || undefined,
+          discountAmount: (item as any).discountAmount != null
+            ? Number((item as any).discountAmount)
+            : undefined,
+          subtotalBeforeDiscount: (item as any).subtotalBeforeDiscount != null
+            ? Number((item as any).subtotalBeforeDiscount)
+            : undefined,
+          subtotalAfterDiscount: (item as any).subtotalAfterDiscount != null
+            ? Number((item as any).subtotalAfterDiscount)
+            : Number(item.total)
+        })),
+        company: {
+          name: quote.user.companyName,
+          address: `${quote.user.street}, ${quote.user.postalCode} ${quote.user.city}`,
+          street: quote.user.street,
+          city: quote.user.city,
+          postalCode: quote.user.postalCode,
+          country: quote.user.country || 'Switzerland',
+          phone: quote.user.phone || undefined,
+          email: quote.user.email,
+          website: quote.user.website || undefined,
+          vatNumber: quote.user.vatNumber || undefined,
+          logoUrl: quote.user.logoUrl || undefined
+        },
+        client: {
+          name: quote.client.companyName || `${quote.client.firstName} ${quote.client.lastName}`,
+          address: `${quote.client.street}, ${quote.client.postalCode} ${quote.client.city}`,
+          street: quote.client.street,
+          city: quote.client.city,
+          postalCode: quote.client.postalCode,
+          country: quote.client.country || 'Switzerland',
+          vatNumber: quote.client.vatNumber || undefined
+        },
+        notes: quote.notes || undefined,
+        terms: quote.terms || undefined,
+        globalDiscount: quote.globalDiscountValue && quote.globalDiscountValue > 0 ? {
+          value: Number(quote.globalDiscountValue),
+          type: quote.globalDiscountType as 'PERCENT' | 'AMOUNT',
+          note: quote.globalDiscountNote || undefined
+        } : undefined
+      };
+
+      const pdfBuffer = await generateQuotePDFWithPuppeteer(
+        quoteDataPuppeteer,
+        {
+          accentColor: selectedColor,
+          language: (quote.language || 'fr') as 'fr' | 'de' | 'it' | 'en',
+          advancedConfig: advancedConfig
+        }
+      );
+
+      res.send(pdfBuffer);
+    } else {
+      // Use PDFKit for standard templates
+      console.log('[generateQuotePDF] Using PDFKit generator for standard template');
+      const generator = new UnifiedPDFGenerator(docData, res);
+      await generator.generate();
+    }
 
   } catch (error) {
     console.error('Error generating quote PDF:', error);

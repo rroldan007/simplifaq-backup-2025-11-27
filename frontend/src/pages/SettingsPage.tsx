@@ -7,7 +7,38 @@ import { sanitizeTextInput } from '../utils/security';
 import { LogoUpload } from '../components/settings/LogoUpload';
 import { SwissAddressAutocomplete } from '../components/clients/SwissAddressAutocomplete';
 import { ColorPicker } from '../components/ui/ColorPicker';
-import { PDFPreview } from '../components/settings/PDFPreview';
+import { PDFThemeEditor } from '../components/settings/PDFThemeEditor';
+
+// Theme color configurations
+const THEME_COLORS: Record<string, {
+  primary: string;
+  headerBg: string;
+  tableHeaderBg: string;
+  headerText: string;
+  bodyText: string;
+}> = {
+  swiss_minimal: {
+    primary: '#000000',
+    headerBg: '#FFFFFF',
+    tableHeaderBg: '#F3F4F6',
+    headerText: '#000000',
+    bodyText: '#333333'
+  },
+  modern_blue: {
+    primary: '#2563EB',
+    headerBg: '#EFF6FF',
+    tableHeaderBg: '#DBEAFE',
+    headerText: '#1E3A8A',
+    bodyText: '#334155'
+  },
+  creative_bold: {
+    primary: '#7C3AED',
+    headerBg: '#7C3AED',
+    tableHeaderBg: '#EDE9FE',
+    headerText: '#FFFFFF',
+    bodyText: '#1F2937'
+  }
+};
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -17,6 +48,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [savingIban, setSavingIban] = useState(false);
   const [changingPwd, setChangingPwd] = useState(false);
+  const [showAdvancedEditor, setShowAdvancedEditor] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ msg, type });
@@ -802,382 +834,234 @@ export function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'pdf' && (
-            <div className="space-y-8 max-w-7xl">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-6 border border-indigo-100">
-                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  Apparence des Documents
+          {activeTab === 'pdf' && user && !showAdvancedEditor && (
+            <div className="space-y-8 max-w-4xl">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                  Personnalisation PDF
                 </h3>
-                <p className="text-sm text-slate-600">
-                  Personnalisez l'apparence de vos factures et devis pour refléter votre identité de marque
+                <p className="text-sm text-slate-600 mb-6">
+                  Personnalisez l'apparence de vos documents PDF (factures, devis, etc.)
                 </p>
               </div>
 
-              {/* Main Content Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                
-                {/* Left Side - Configuration Cards */}
-                <div className="xl:col-span-1 space-y-6">
-                  
-                  {/* Template Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-                      </svg>
-                      <h4 className="font-semibold text-slate-800">Modèle de Document</h4>
-                    </div>
-                    <select
-                      value={user?.pdfTemplate || 'minimal_modern'}
+              {/* Selección de Tema */}
+              <div className="border border-slate-200 rounded-lg p-6 bg-white">
+                <h4 className="text-base font-semibold text-slate-800 mb-4">
+                  Modèle de Document
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Choisir un modèle
+                    </label>
+                    <select 
+                      value={user.pdfTemplate || 'swiss_minimal'}
                       onChange={async (e) => {
                         try {
-                          const result = await api.put('/auth/me', { pdfTemplate: e.target.value });
-                          const nextUser = extractUserFromResponse(result);
-                          if (nextUser) {
-                            updateUser(nextUser);
-                            showToast('Modèle mis à jour', 'success');
+                          setSaving(true);
+                          const updateData: any = { pdfTemplate: e.target.value };
+                          
+                          // Si se selecciona un tema estándar, limpiar la configuración avanzada
+                          if (e.target.value !== 'custom') {
+                            updateData.pdfAdvancedConfig = null;
                           }
-                        } catch {
+                          
+                          const result = await api.put('/auth/me', updateData);
+                          const updated = extractUserFromResponse(result);
+                          if (updated) {
+                            updateUser(updated);
+                            showToast('Modèle mis à jour avec succès', 'success');
+                          }
+                        } catch (error) {
                           showToast('Erreur lors de la mise à jour', 'error');
+                        } finally {
+                          setSaving(false);
                         }
                       }}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all bg-slate-50 hover:bg-white"
+                      disabled={saving}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <option value="swiss_minimal">🇨🇭 Swiss Minimal (Recommandé)</option>
-                      <option value="modern_blue">💼 Modern Blue</option>
-                      <option value="creative_bold">🎨 Creative Bold</option>
+                      <option value="swiss_minimal">Swiss Minimal</option>
+                      <option value="modern_blue">Modern Blue</option>
+                      <option value="creative_bold">Creative Bold</option>
+                      <option value="custom">✨ Personnalisé</option>
                     </select>
+                    {user.pdfTemplate === 'custom' && (
+                      <p className="text-xs text-indigo-600 mt-2 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Vous utilisez une configuration personnalisée. Pour revenir à un thème standard, ouvrez l'éditeur avancé et sélectionnez un thème.
+                      </p>
+                    )}
                   </div>
 
-                  {/* Color Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                      </svg>
-                      <h4 className="font-semibold text-slate-800">Couleur de Marque</h4>
-                    </div>
+                  <div>
                     <ColorPicker
-                      label="Couleur d'accentuation"
-                      value={user?.pdfPrimaryColor || '#4F46E5'}
+                      label="Couleur principale"
+                      value={user.pdfPrimaryColor || '#000000'}
                       onChange={async (color) => {
                         try {
                           const result = await api.put('/auth/me', { pdfPrimaryColor: color });
-                          const nextUser = extractUserFromResponse(result);
-                          if (nextUser) {
-                            updateUser(nextUser);
+                          const updated = extractUserFromResponse(result);
+                          if (updated) {
+                            updateUser(updated);
                             showToast('Couleur mise à jour', 'success');
                           }
-                        } catch {
+                        } catch (error) {
                           showToast('Erreur lors de la mise à jour', 'error');
                         }
                       }}
                     />
-                    <p className="text-xs text-slate-500 mt-2">
-                      Cette couleur sera utilisée pour les titres et éléments importants
-                    </p>
-                  </div>
-
-                  {/* Advanced Customization Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                      </svg>
-                      <h4 className="font-semibold text-slate-800">Personnalisation Avancée</h4>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      {/* Logo Position */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Position du Logo</label>
-                        <select
-                          value={(user as any)?.pdfLogoPosition || 'left'}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfLogoPosition: e.target.value });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) updateUser(nextUser);
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        >
-                          <option value="left">Gauche</option>
-                          <option value="center">Centre</option>
-                          <option value="right">Droite</option>
-                        </select>
-                      </div>
-
-                      {/* Logo Size */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Taille du Logo</label>
-                        <select
-                          value={(user as any)?.pdfLogoSize || 'medium'}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfLogoSize: e.target.value });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) updateUser(nextUser);
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        >
-                          <option value="small">Petit</option>
-                          <option value="medium">Moyen</option>
-                          <option value="large">Grand</option>
-                        </select>
-                      </div>
-
-                      {/* Advanced Colors */}
-                      <div className="pt-4 border-t border-slate-100">
-                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">Couleurs Spécifiques</p>
-                        <div className="space-y-4">
-                           <ColorPicker 
-                              label="Texte En-tête" 
-                              value={(user as any)?.pdfFontColorHeader || '#1F2937'} 
-                              onChange={async (color) => {
-                                try {
-                                  const result = await api.put('/auth/me', { pdfFontColorHeader: color });
-                                  const nextUser = extractUserFromResponse(result);
-                                  if (nextUser) updateUser(nextUser);
-                                } catch { showToast('Erreur', 'error'); }
-                              }} 
-                           />
-                           <ColorPicker 
-                              label="Texte Principal" 
-                              value={(user as any)?.pdfFontColorBody || '#374151'} 
-                              onChange={async (color) => {
-                                try {
-                                  const result = await api.put('/auth/me', { pdfFontColorBody: color });
-                                  const nextUser = extractUserFromResponse(result);
-                                  if (nextUser) updateUser(nextUser);
-                                } catch { showToast('Erreur', 'error'); }
-                              }} 
-                           />
-                           <ColorPicker 
-                              label="Fond En-tête Tableau" 
-                              value={(user as any)?.pdfTableHeadColor || '#F3F4F6'} 
-                              onChange={async (color) => {
-                                try {
-                                  const result = await api.put('/auth/me', { pdfTableHeadColor: color });
-                                  const nextUser = extractUserFromResponse(result);
-                                  if (nextUser) updateUser(nextUser);
-                                } catch { showToast('Erreur', 'error'); }
-                              }} 
-                           />
-                           <ColorPicker 
-                              label="Fond Bloc Total" 
-                              value={(user as any)?.pdfTotalBgColor || '#1E3A8A'} 
-                              onChange={async (color) => {
-                                try {
-                                  const result = await api.put('/auth/me', { pdfTotalBgColor: color });
-                                  const nextUser = extractUserFromResponse(result);
-                                  if (nextUser) updateUser(nextUser);
-                                } catch { showToast('Erreur', 'error'); }
-                              }} 
-                           />
-                           <ColorPicker 
-                              label="Texte Bloc Total" 
-                              value={(user as any)?.pdfTotalTextColor || '#FFFFFF'} 
-                              onChange={async (color) => {
-                                try {
-                                  const result = await api.put('/auth/me', { pdfTotalTextColor: color });
-                                  const nextUser = extractUserFromResponse(result);
-                                  if (nextUser) updateUser(nextUser);
-                                } catch { showToast('Erreur', 'error'); }
-                              }} 
-                           />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Display Options Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                      <h4 className="font-semibold text-slate-800">Informations en En-tête</h4>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={user?.pdfShowCompanyNameWithLogo !== false}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfShowCompanyNameWithLogo: e.target.checked });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) {
-                                updateUser(nextUser);
-                              }
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 transition-colors"
-                        />
-                        <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">
-                          Nom de l'entreprise + logo
-                        </span>
-                      </label>
-                      
-                      <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={user?.pdfShowVAT !== false}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfShowVAT: e.target.checked });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) {
-                                updateUser(nextUser);
-                              }
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 transition-colors"
-                        />
-                        <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">Numéro TVA</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={user?.pdfShowPhone !== false}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfShowPhone: e.target.checked });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) {
-                                updateUser(nextUser);
-                              }
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 transition-colors"
-                        />
-                        <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">Téléphone</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={user?.pdfShowEmail !== false}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfShowEmail: e.target.checked });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) {
-                                updateUser(nextUser);
-                              }
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 transition-colors"
-                        />
-                        <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">Email</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={user?.pdfShowWebsite !== false}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfShowWebsite: e.target.checked });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) {
-                                updateUser(nextUser);
-                              }
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 transition-colors"
-                        />
-                        <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">Site web</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={user?.pdfShowIBAN === true}
-                          onChange={async (e) => {
-                            try {
-                              const result = await api.put('/auth/me', { pdfShowIBAN: e.target.checked });
-                              const nextUser = extractUserFromResponse(result);
-                              if (nextUser) {
-                                updateUser(nextUser);
-                              }
-                            } catch {
-                              showToast('Erreur lors de la mise à jour', 'error');
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500 transition-colors"
-                        />
-                        <div className="flex-1">
-                          <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 block">IBAN dans l'en-tête</span>
-                          <span className="text-xs text-slate-500">En plus du QR Bill</span>
-                        </div>
-                      </label>
-                    </div>
                   </div>
                 </div>
-
-                {/* Right Side - Live Preview */}
-                <div className="xl:col-span-2">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sticky top-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        <h4 className="font-semibold text-slate-800">Aperçu en Temps Réel</h4>
-                      </div>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-200">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        Live
-                      </span>
-                    </div>
-                    
-                    <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-8 border-2 border-slate-200 overflow-auto">
-                      {user && (
-                        <PDFPreview 
-                          user={user}
-                          companyData={company}
-                        />
-                      )}
-                    </div>
-                    
-                    <div className="mt-4 flex items-start gap-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div className="text-sm">
-                        <p className="font-medium text-blue-900 mb-1">Aperçu dynamique</p>
-                        <p className="text-blue-700">
-                          Les modifications sont visibles instantanément. Les données affichées proviennent de votre profil actuel.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
               </div>
+
+              {/* Botón Editor Avanzado */}
+              <div className="border border-indigo-200 rounded-lg p-6 bg-gradient-to-br from-indigo-50 to-purple-50">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 text-4xl">
+                    🎨
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-base font-semibold text-slate-800 mb-2">
+                      Personnalisation Avancée
+                    </h4>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Éditeur visuel complet pour personnaliser la position, taille et visibilité de chaque élément de vos documents.
+                    </p>
+                    <button
+                      onClick={() => setShowAdvancedEditor(true)}
+                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl"
+                    >
+                      Ouvrir l'Éditeur Avancé
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview Simple - Only for predefined themes */}
+              {user.pdfTemplate !== 'custom' && (() => {
+                const themeKey = user.pdfTemplate || 'swiss_minimal';
+                const themeColors = THEME_COLORS[themeKey] || THEME_COLORS.swiss_minimal;
+                const primaryColor = user.pdfPrimaryColor || themeColors.primary;
+                
+                return (
+              <div className="border border-slate-200 rounded-lg p-6 bg-white">
+                <h4 className="text-base font-semibold text-slate-800 mb-4">
+                  Aperçu Simplifié
+                </h4>
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <div className="bg-white rounded shadow-sm p-6 max-w-2xl mx-auto" style={{ aspectRatio: '210/297' }}>
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-6 pb-4 border-b" style={{ borderColor: primaryColor, backgroundColor: themeColors.headerBg }}>
+                      <div className="flex items-center gap-4">
+                        {user.logoUrl ? (
+                          <img 
+                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/${user.logoUrl}`}
+                            alt="Logo" 
+                            className="h-12 w-auto object-contain" 
+                          />
+                        ) : (
+                          <div className="h-12 w-16 bg-slate-200 rounded flex items-center justify-center text-2xl">
+                            🏢
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-sm" style={{ color: themeColors.headerText }}>
+                            {user.companyName || 'Votre Entreprise'}
+                          </div>
+                          <div className="text-xs text-slate-600">
+                            {user.email || 'email@exemple.ch'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg" style={{ color: themeColors.headerText }}>
+                          FACTURE
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          {user.invoicePrefix || 'FAC'}-001
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Content Area */}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <div className="font-semibold mb-1" style={{ color: themeColors.headerText }}>
+                            Entreprise
+                          </div>
+                          <div className="text-slate-600 space-y-0.5">
+                            <div>{user.companyName || 'Nom'}</div>
+                            <div>{user.street || 'Adresse'}</div>
+                            <div>{user.postalCode} {user.city || 'Ville'}</div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-semibold mb-1" style={{ color: themeColors.headerText }}>
+                            Client
+                          </div>
+                          <div className="text-slate-600 space-y-0.5">
+                            <div>Client Exemple</div>
+                            <div>Rue Example 1</div>
+                            <div>1000 Lausanne</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Table */}
+                      <div className="border border-slate-200 rounded overflow-hidden">
+                        <div className="grid grid-cols-4 gap-2 p-2 text-xs font-semibold" style={{ backgroundColor: themeColors.tableHeaderBg, color: themeColors.headerText }}>
+                          <div>Description</div>
+                          <div className="text-right">Qté</div>
+                          <div className="text-right">Prix</div>
+                          <div className="text-right">Total</div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 p-2 text-xs border-t border-slate-200">
+                          <div>Service exemple</div>
+                          <div className="text-right">1.00</div>
+                          <div className="text-right">100.00</div>
+                          <div className="text-right">100.00</div>
+                        </div>
+                      </div>
+
+                      {/* Total */}
+                      <div className="flex justify-end">
+                        <div className="text-sm w-48">
+                          <div className="flex justify-between py-1">
+                            <span>Sous-total:</span>
+                            <span>CHF 100.00</span>
+                          </div>
+                          <div className="flex justify-between py-1 font-bold border-t" style={{ color: primaryColor }}>
+                            <span>TOTAL:</span>
+                            <span>CHF 100.00</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-3 text-center">
+                  💡 Aperçu simplifié. Pour personnaliser la position et taille des éléments, utilisez l'éditeur avancé.
+                </p>
+              </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Editor Avanzado en Pantalla Completa */}
+          {showAdvancedEditor && user && (
+            <div className="fixed inset-0 z-50 bg-white">
+              <PDFThemeEditor 
+                user={user}
+                onUpdate={updateUser}
+                onShowToast={showToast}
+                onClose={() => setShowAdvancedEditor(false)}
+              />
             </div>
           )}
 

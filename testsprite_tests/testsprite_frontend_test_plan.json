@@ -1,0 +1,602 @@
+[
+  {
+    "id": "TC001",
+    "title": "User Registration with Valid Data",
+    "description": "Verify that a new user can successfully register using valid input data and receive appropriate confirmation.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the registration page."
+      },
+      {
+        "type": "action",
+        "description": "Input valid user details including email, password, and required personal info."
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that registration is successful and confirmation email is sent."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "User Login with Correct Credentials",
+    "description": "Check that a user can log in successfully using valid credentials and receive a JWT token.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to login page."
+      },
+      {
+        "type": "action",
+        "description": "Input valid registered email and password."
+      },
+      {
+        "type": "action",
+        "description": "Click login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that login succeeds with valid JWT token received and session established."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "User Login with Incorrect Credentials",
+    "description": "Validate that login fails if an incorrect email or password is entered.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to login page."
+      },
+      {
+        "type": "action",
+        "description": "Input invalid or unregistered email and/or wrong password."
+      },
+      {
+        "type": "action",
+        "description": "Click login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that login fails with appropriate error message and no token is issued."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Password Reset Flow",
+    "description": "Ensure users can request a password reset email and successfully reset their password.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to 'Forgot Password' page."
+      },
+      {
+        "type": "action",
+        "description": "Enter registered email address and submit request."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that a password reset email is sent."
+      },
+      {
+        "type": "action",
+        "description": "Use link in email to open password reset form."
+      },
+      {
+        "type": "action",
+        "description": "Input and confirm new valid password."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm password is updated and user can log in with new password."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Client Management CRUD Operations",
+    "description": "Verify that users can create, read, update, archive, and search clients including Swiss fiscal data.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to Clients management page."
+      },
+      {
+        "type": "action",
+        "description": "Create a new client with all required Swiss-specific fiscal fields."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm client is saved and visible in client list."
+      },
+      {
+        "type": "action",
+        "description": "Edit the client details and save changes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated client details are correctly saved."
+      },
+      {
+        "type": "action",
+        "description": "Archive the client."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that the client no longer appears in active lists but is retrievable from archive."
+      },
+      {
+        "type": "action",
+        "description": "Use client search functionality with different filters."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify search results accurately reflect input criteria."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Invoice Creation and Validation",
+    "description": "Test invoice creation with Swiss-compliant structure, including validation of sequential numbering, line items, multiple TVA rates, and automatic calculations.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to New Invoice page."
+      },
+      {
+        "type": "action",
+        "description": "Select or add a client with valid fiscal data."
+      },
+      {
+        "type": "action",
+        "description": "Add multiple line items with various TVA rates."
+      },
+      {
+        "type": "action",
+        "description": "Save the invoice as a draft."
+      },
+      {
+        "type": "assertion",
+        "description": "Check invoice number is sequential and all totals, TVA calculations are correct."
+      },
+      {
+        "type": "action",
+        "description": "Mark the invoice as sent."
+      },
+      {
+        "type": "assertion",
+        "description": "Validate invoice status changes from Draft to Sent."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Swiss QR Bill Generation on Invoice PDF",
+    "description": "Verify that each invoice PDF includes a correctly generated Swiss QR Bill complying with legal format using the swissqrbill library.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a compliance-checked invoice with correct TVA and payment data."
+      },
+      {
+        "type": "action",
+        "description": "Generate or print the invoice PDF."
+      },
+      {
+        "type": "assertion",
+        "description": "Check PDF contains embedded Swiss QR Bill with proper data encoding and layout."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Invoice Emailing with Status Tracking",
+    "description": "Test forwarding invoice PDFs via email with custom messages and verify invoice status updates accordingly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Generate an invoice and mark it ready to send."
+      },
+      {
+        "type": "action",
+        "description": "Enter custom email message and recipient address."
+      },
+      {
+        "type": "action",
+        "description": "Send invoice email."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm email is sent successfully and invoice status updates to Sent."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Financial Dashboard Data Accuracy",
+    "description": "Ensure the dashboard displays accurate real-time KPIs such as total invoiced, TVA collected, unpaid invoices, and monthly trends.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in with a user having multiple invoices and transactions."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to Dashboard page."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all displayed metrics match calculated data from invoices and payments in the database."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "TVA Reporting and Export",
+    "description": "Validate TVA aggregation report generation and exporting options in PDF and CSV formats.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to TVA Report page."
+      },
+      {
+        "type": "action",
+        "description": "Select report parameters including date range."
+      },
+      {
+        "type": "action",
+        "description": "Generate TVA report."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm correct aggregation of TVA amounts by rate and period."
+      },
+      {
+        "type": "action",
+        "description": "Export report as PDF."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify PDF export is formatted correctly with all required content."
+      },
+      {
+        "type": "action",
+        "description": "Export report as CSV."
+      },
+      {
+        "type": "assertion",
+        "description": "Check CSV export contains accurate raw data matching report."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Admin Panel User and Subscription Management",
+    "description": "Test that admin can access the panel, view live user data, manage subscriptions, and filter invoices with real-time SaaS metrics.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as admin user."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to Admin panel dashboard."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify live data for users, subscriptions, invoices, and SaaS KPIs is displayed with no mock data."
+      },
+      {
+        "type": "action",
+        "description": "Use filters to search and sort invoices by status and client."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm filtering returns accurate, up-to-date results."
+      },
+      {
+        "type": "action",
+        "description": "Manually create subscription invoices for users."
+      },
+      {
+        "type": "assertion",
+        "description": "Check invoices are generated correctly and reflected in user account."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Stripe Subscription Integration Webhook Handling",
+    "description": "Verify that Stripe webhook events correctly update user subscription status and billing permissions in the application.",
+    "category": "integration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate Stripe subscription creation event to the webhook endpoint."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm user subscription status is activated accordingly."
+      },
+      {
+        "type": "action",
+        "description": "Simulate subscription cancellation or payment failure events."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify user access is revoked or fallback invoices are created."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Invoice Payment Status and Error Handling",
+    "description": "Validate that invoices correctly update status from Sent to Paid upon payment confirmation and handle error states gracefully.",
+    "category": "error handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send an invoice and mark status as Sent."
+      },
+      {
+        "type": "action",
+        "description": "Simulate payment notification event confirming invoice payment."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify invoice status updates to Paid."
+      },
+      {
+        "type": "action",
+        "description": "Simulate failed payment or invalid payment notification."
+      },
+      {
+        "type": "assertion",
+        "description": "Check system logs error and invoice status remains unchanged or set to appropriate error state."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "UI Responsiveness and Accessibility Check",
+    "description": "Ensure that all main user interface components including forms, tables, and navigation are responsive and accessible across devices.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Access core pages (Login, Dashboard, Client management, Invoice creation) on desktop and mobile screen sizes."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm all UI elements resize properly without layout breakage."
+      },
+      {
+        "type": "action",
+        "description": "Use keyboard navigation and screen reader tools on key pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all interactive elements are accessible and have appropriate aria-labels."
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Security of JWT Authentication and Password Storage",
+    "description": "Test that JWT tokens are securely issued and validated, and that passwords are stored using bcrypt encryption with no plaintext exposure.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Register a new user and inspect backend password storage."
+      },
+      {
+        "type": "assertion",
+        "description": "Check password is hashed and cannot be reversed to plaintext."
+      },
+      {
+        "type": "action",
+        "description": "Perform multiple login attempts and verify JWT tokens are unique and have expected expiration."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm tokens are invalidated after logout or expiration and cannot be reused."
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Product Catalog Management CRUD and Pricing",
+    "description": "Verify users can manage product catalog by adding, editing, deleting products, and prices are correctly reflected on invoices.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to product management page."
+      },
+      {
+        "type": "action",
+        "description": "Add a new product with name, description, and price."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm product appears in list with correct details."
+      },
+      {
+        "type": "action",
+        "description": "Edit product pricing and save."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated price is shown on invoices when product is added as line item."
+      },
+      {
+        "type": "action",
+        "description": "Delete a product."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm product is removed and cannot be added to new invoices."
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Quote Management and Conversion to Invoice",
+    "description": "Test that users can create quotes/estimates, edit them, and convert these quotes into fully compliant invoices.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to Quotes page and create a new quote with line items."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm quote is saved and displayed with correct totals."
+      },
+      {
+        "type": "action",
+        "description": "Edit the quote and update items or prices."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updates are saved and visible."
+      },
+      {
+        "type": "action",
+        "description": "Convert quote to invoice."
+      },
+      {
+        "type": "assertion",
+        "description": "Check invoice is generated with all quote details and Swiss invoicing compliance."
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Expense Tracking and Management",
+    "description": "Ensure users can record, edit, and delete expenses and that expense totals are reflected in financial reports.",
+    "category": "functional",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to expense management page."
+      },
+      {
+        "type": "action",
+        "description": "Add an expense with category, amount, and date."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify expense appears in the list with correct details."
+      },
+      {
+        "type": "action",
+        "description": "Edit the expense and update amount."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the updated expense amount is saved."
+      },
+      {
+        "type": "action",
+        "description": "Delete the expense."
+      },
+      {
+        "type": "assertion",
+        "description": "Check the expense no longer appears and totals are updated."
+      },
+      {
+        "type": "action",
+        "description": "Generate financial report including expenses."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify expense totals are correctly included."
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Settings Configuration Including SMTP and Themes",
+    "description": "Test that users can update company settings such as SMTP for email sending and select UI themes with saved preferences.",
+    "category": "functional",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to Settings page."
+      },
+      {
+        "type": "action",
+        "description": "Update SMTP server details and save."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm settings are saved and test email sending succeeds."
+      },
+      {
+        "type": "action",
+        "description": "Change UI theme preference and save."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify UI theme changes immediately and persists on reload."
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Prevent Implementation of Out-of-Scope Features",
+    "description": "Verify the system does not include any full accounting, payroll, or international invoicing features.",
+    "category": "functional",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Review UI, APIs, and admin panel to verify no options for accounting, payroll, or international invoice generation exist."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm these features or data fields are absent and no related APIs return such functionality."
+      }
+    ]
+  }
+]

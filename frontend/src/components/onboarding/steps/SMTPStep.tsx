@@ -3,29 +3,50 @@ import { ArrowRight, Mail, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface SMTPStepProps {
-  onComplete: () => void;
-  onSkip: () => void;
+  onComplete: () => void | Promise<void>;
+  onSkip: () => void | Promise<void>;
 }
 
 export default function SMTPStep({ onComplete, onSkip }: SMTPStepProps) {
   const navigate = useNavigate();
   const [choice, setChoice] = useState<'skip' | 'configure' | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleConfigureNow = () => {
+    console.log('[SMTPStep] Navigating to SMTP settings');
     // Navigate to SMTP settings
     navigate('/settings/smtp');
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    console.log('[SMTPStep] handleSkip called');
     setChoice('skip');
-    onSkip();
+    setIsProcessing(true);
+    try {
+      await onSkip();
+      console.log('[SMTPStep] Skip successful');
+    } catch (error) {
+      console.error('[SMTPStep] Error skipping:', error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleContinue = () => {
-    if (choice === 'skip') {
-      onSkip();
-    } else {
-      handleConfigureNow();
+  const handleContinue = async () => {
+    console.log('[SMTPStep] handleContinue called with choice:', choice);
+    setIsProcessing(true);
+    try {
+      if (choice === 'skip') {
+        console.log('[SMTPStep] Calling onSkip...');
+        await onSkip();
+        console.log('[SMTPStep] onSkip completed');
+      } else {
+        handleConfigureNow();
+      }
+    } catch (error) {
+      console.error('[SMTPStep] Error in handleContinue:', error);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -124,7 +145,8 @@ export default function SMTPStep({ onComplete, onSkip }: SMTPStepProps) {
         <button
           type="button"
           onClick={handleSkip}
-          className="px-6 py-3 text-gray-600 hover:text-gray-900 transition-colors font-medium"
+          disabled={isProcessing}
+          className="px-6 py-3 text-gray-600 hover:text-gray-900 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Passer cette étape
         </button>
@@ -132,10 +154,20 @@ export default function SMTPStep({ onComplete, onSkip }: SMTPStepProps) {
           <button
             type="button"
             onClick={handleContinue}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors font-medium"
+            disabled={isProcessing}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continuer
-            <ArrowRight className="h-5 w-5" />
+            {isProcessing ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Traitement...</span>
+              </>
+            ) : (
+              <>
+                Continuer
+                <ArrowRight className="h-5 w-5" />
+              </>
+            )}
           </button>
         )}
       </div>

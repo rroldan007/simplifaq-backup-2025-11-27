@@ -14,6 +14,11 @@ interface ProductFormData {
   discountValue?: number;
   discountType?: 'PERCENT' | 'AMOUNT';
   discountActive: boolean;
+  // SKU / Barcode fields
+  sku?: string;
+  barcodeType?: 'EAN13' | 'EAN8' | 'CODE128' | 'QR';
+  isVariableWeight: boolean;
+  weightUnit?: 'kg' | 'g' | 'lb';
 }
 
 interface ProductFormProps {
@@ -43,6 +48,11 @@ export function ProductForm({
     discountValue: undefined,
     discountType: 'PERCENT',
     discountActive: false,
+    // SKU / Barcode defaults
+    sku: undefined,
+    barcodeType: undefined,
+    isVariableWeight: false,
+    weightUnit: undefined,
     ...initialData
   });
 
@@ -203,6 +213,11 @@ export function ProductForm({
         discountValue: formData.discountValue,
         discountType: formData.discountType,
         discountActive: formData.discountActive,
+        // SKU / Barcode fields
+        sku: formData.sku,
+        barcodeType: formData.barcodeType,
+        isVariableWeight: formData.isVariableWeight,
+        weightUnit: formData.weightUnit,
       };
       onSubmit(cleanData);
     }
@@ -340,6 +355,141 @@ export function ProductForm({
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+            </div>
+          </Card>
+
+          {/* SKU / Barcode */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              📊 Code produit (SKU / Code-barres)
+            </h2>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    SKU (Code article)
+                  </label>
+                  <Input
+                    value={formData.sku || ''}
+                    onChange={(e) => updateFormData('sku', e.target.value || undefined)}
+                    placeholder="ABC-12345"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Code unique pour identifier ce produit
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Type de code-barres
+                  </label>
+                  <select
+                    value={formData.barcodeType || ''}
+                    onChange={(e) => updateFormData('barcodeType', e.target.value || undefined)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Aucun</option>
+                    <option value="EAN13">EAN-13 (Standard européen)</option>
+                    <option value="EAN8">EAN-8 (Compact)</option>
+                    <option value="CODE128">Code 128 (Alphanumérique)</option>
+                    <option value="QR">QR Code</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Variable Weight Option */}
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <label className="flex items-start">
+                  <input
+                    type="checkbox"
+                    checked={formData.isVariableWeight}
+                    onChange={(e) => {
+                      updateFormData('isVariableWeight', e.target.checked);
+                      if (e.target.checked) {
+                        // Auto-set to EAN13 and kg for variable weight
+                        if (!formData.barcodeType) {
+                          updateFormData('barcodeType', 'EAN13');
+                        }
+                        if (!formData.weightUnit) {
+                          updateFormData('weightUnit', 'kg');
+                        }
+                        // Change unit to kg
+                        updateFormData('unit', 'kg');
+                      }
+                    }}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 mt-0.5"
+                  />
+                  <div className="ml-3">
+                    <span className="text-sm font-medium text-amber-900">
+                      ⚖️ Produit à poids variable
+                    </span>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Pour les produits vendus au poids (fruits, légumes, viande, etc.)
+                      <br />
+                      Utilise le préfixe EAN-13 (20-29) avec le poids encodé dans le code-barres
+                    </p>
+                  </div>
+                </label>
+                
+                {formData.isVariableWeight && (
+                  <div className="mt-4 pt-4 border-t border-amber-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-amber-900 mb-1">
+                          Unité de poids
+                        </label>
+                        <select
+                          value={formData.weightUnit || 'kg'}
+                          onChange={(e) => updateFormData('weightUnit', e.target.value as 'kg' | 'g' | 'lb')}
+                          className="w-full px-3 py-2 border border-amber-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white"
+                        >
+                          <option value="kg">Kilogrammes (kg)</option>
+                          <option value="g">Grammes (g)</option>
+                          <option value="lb">Livres (lb)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-amber-900 mb-1">
+                          Code produit (5 chiffres)
+                        </label>
+                        <Input
+                          value={formData.sku || ''}
+                          onChange={(e) => {
+                            // Only allow 5 digits for variable weight products
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 5);
+                            updateFormData('sku', val || undefined);
+                          }}
+                          placeholder="12345"
+                          maxLength={5}
+                          className="border-amber-300 focus:ring-amber-500"
+                        />
+                        <p className="text-xs text-amber-700 mt-1">
+                          Le code final sera: 20{formData.sku?.padStart(5, '0') || '00000'}PPPPC
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-3 p-3 bg-white rounded border border-amber-200">
+                      <p className="text-xs text-amber-800 font-medium mb-1">
+                        Format du code-barres poids variable (EAN-13):
+                      </p>
+                      <div className="font-mono text-sm text-amber-900 bg-amber-100 px-2 py-1 rounded">
+                        <span className="text-red-600">20</span>
+                        <span className="text-blue-600">{formData.sku?.padStart(5, '0') || '00000'}</span>
+                        <span className="text-green-600">PPPP</span>
+                        <span className="text-purple-600">C</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 text-xs mt-2">
+                        <span className="text-red-600">20 = Préfixe</span>
+                        <span className="text-blue-600">5 dig = Produit</span>
+                        <span className="text-green-600">4 dig = Prix/Poids</span>
+                        <span className="text-purple-600">1 dig = Contrôle</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </Card>

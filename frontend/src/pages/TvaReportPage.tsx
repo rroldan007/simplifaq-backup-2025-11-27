@@ -86,7 +86,7 @@ Devise: ${currency}
 
 ═══════════════════════════════════════════════════════
 
-TVA COLLECTÉE (Facturas pagadas)
+TVA COLLECTÉE (Factures payées)
 Montant Total: ${formatAmount(tvaSummary.tvaCollected)} ${currency}
 
 Détail par taux:
@@ -133,7 +133,7 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <motion.div
@@ -142,12 +142,12 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
           className="mb-8"
         >
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <FileText className="w-6 h-6 text-blue-600" />
+            <div className="p-3 bg-blue-500/20 rounded-lg">
+              <FileText className="w-6 h-6 text-blue-500" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Rapport TVA</h1>
-              <p className="text-slate-600">Déclaration trimestrielle de la TVA</p>
+              <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">Rapport TVA</h1>
+              <p className="text-[var(--color-text-secondary)]">Déclaration trimestrielle de la TVA</p>
             </div>
           </div>
         </motion.div>
@@ -157,18 +157,18 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6"
+          className="card-theme rounded-2xl shadow-sm p-6 mb-6"
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
                 <Calendar className="w-4 h-4 inline mr-1" />
                 Trimestre
               </label>
               <select
                 value={JSON.stringify(selectedQuarter)}
                 onChange={(e) => setSelectedQuarter(JSON.parse(e.target.value))}
-                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {getQuarters().map((q) => (
                   <option key={q.label} value={JSON.stringify(q)}>
@@ -178,11 +178,11 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Devise</label>
+              <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Devise</label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value as Currency)}
-                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="CHF">CHF</option>
                 <option value="EUR">EUR</option>
@@ -224,62 +224,61 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
               className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"
             >
               {/* TVA Collectée */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl p-6 border-2 border-green-200 shadow-sm">
+              <div className="card-theme rounded-2xl p-6 border-l-4 border-l-green-500 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <TrendingUp className="w-8 h-8 text-green-600" />
-                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <TrendingUp className="w-8 h-8 text-green-500" />
+                  <CheckCircle className="w-5 h-5 text-green-400" />
                 </div>
-                <p className="text-sm text-green-700 font-medium uppercase tracking-wide mb-2">
+                <p className="text-sm text-green-500 font-medium uppercase tracking-wide mb-2">
                   TVA Collectée
                 </p>
-                <p className="text-3xl font-bold text-green-900 mb-1">
+                <p className="text-3xl font-bold text-[var(--color-text-primary)] mb-1">
                   {formatAmount(tvaSummary.tvaCollected)}
                 </p>
-                <p className="text-sm text-green-600">{currency}</p>
-                <p className="text-xs text-green-700 mt-3">
+                <p className="text-sm text-[var(--color-text-secondary)]">{currency}</p>
+                <p className="text-xs text-[var(--color-text-tertiary)] mt-3">
                   TVA facturée aux clients (facturas pagadas)
                 </p>
               </div>
 
               {/* TVA Déductible */}
-              <div className="bg-gradient-to-br from-orange-50 to-amber-100 rounded-2xl p-6 border-2 border-orange-200 shadow-sm">
+              <div className="card-theme rounded-2xl p-6 border-l-4 border-l-amber-500 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <TrendingDown className="w-8 h-8 text-orange-600" />
-                  <CheckCircle className="w-5 h-5 text-orange-500" />
+                  <TrendingDown className="w-8 h-8 text-amber-500" />
+                  <CheckCircle className="w-5 h-5 text-amber-400" />
                 </div>
-                <p className="text-sm text-orange-700 font-medium uppercase tracking-wide mb-2">
+                <p className="text-sm text-amber-500 font-medium uppercase tracking-wide mb-2">
                   TVA Déductible
                 </p>
-                <p className="text-3xl font-bold text-orange-900 mb-1">
+                <p className="text-3xl font-bold text-[var(--color-text-primary)] mb-1">
                   {formatAmount(tvaSummary.tvaDeductible)}
                 </p>
-                <p className="text-sm text-orange-600">{currency}</p>
-                <p className="text-xs text-orange-700 mt-3">
+                <p className="text-sm text-[var(--color-text-secondary)]">{currency}</p>
+                <p className="text-xs text-[var(--color-text-tertiary)] mt-3">
                   Impôt préalable (compte 1170)
                 </p>
               </div>
 
               {/* TVA Nette */}
-              <div className={`rounded-2xl p-6 border-2 shadow-sm ${tvaSummary.tvaNet >= 0
-                ? 'bg-gradient-to-br from-red-50 to-rose-100 border-red-300'
-                : 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-300'
+              <div className={`card-theme rounded-2xl p-6 border-l-4 shadow-sm ${tvaSummary.tvaNet >= 0
+                ? 'border-l-red-500'
+                : 'border-l-teal-500'
                 }`}>
                 <div className="flex items-center justify-between mb-4">
-                  <DollarSign className={`w-8 h-8 ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`} />
-                  <AlertCircle className={`w-5 h-5 ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-green-500'}`} />
+                  <DollarSign className={`w-8 h-8 ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-teal-500'}`} />
+                  <AlertCircle className={`w-5 h-5 ${tvaSummary.tvaNet >= 0 ? 'text-red-400' : 'text-teal-400'}`} />
                 </div>
-                <p className={`text-sm font-medium uppercase tracking-wide mb-2 ${tvaSummary.tvaNet >= 0 ? 'text-red-700' : 'text-green-700'
+                <p className={`text-sm font-medium uppercase tracking-wide mb-2 ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-teal-500'
                   }`}>
                   TVA Nette {tvaSummary.tvaNet >= 0 ? 'à payer' : 'à récupérer'}
                 </p>
-                <p className={`text-3xl font-bold mb-1 ${tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'
-                  }`}>
+                <p className="text-3xl font-bold mb-1 text-[var(--color-text-primary)]">
                   {formatAmount(Math.abs(tvaSummary.tvaNet))}
                 </p>
-                <p className={`text-sm ${tvaSummary.tvaNet >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                <p className="text-sm text-[var(--color-text-secondary)]">
                   {currency}
                 </p>
-                <p className={`text-xs mt-3 ${tvaSummary.tvaNet >= 0 ? 'text-red-700' : 'text-green-700'}`}>
+                <p className="text-xs mt-3 text-[var(--color-text-tertiary)]">
                   {tvaSummary.tvaNet >= 0
                     ? 'Montant à verser à l\'AFC'
                     : 'Montant à récupérer de l\'AFC'}
@@ -292,28 +291,28 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-6 print:shadow-none"
+              className="card-theme rounded-2xl shadow-sm p-8 mb-6 print:shadow-none"
             >
-              <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              <h2 className="text-xl font-bold text-[var(--color-text-primary)] mb-6 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-600" />
                 Détail de la déclaration TVA
               </h2>
 
               <div className="space-y-6">
                 {/* Period */}
-                <div className="pb-4 border-b border-slate-200">
-                  <p className="text-sm text-slate-600 mb-1">Période de déclaration</p>
-                  <p className="text-lg font-semibold text-slate-900">
+                <div className="pb-4 border-b border-[var(--color-border-primary)]">
+                  <p className="text-sm text-[var(--color-text-secondary)] mb-1">Période de déclaration</p>
+                  <p className="text-lg font-semibold text-[var(--color-text-primary)]">
                     {selectedQuarter.label} - {formatDate(selectedQuarter.from)} au {formatDate(selectedQuarter.to)}
                   </p>
                 </div>
 
                 {/* Calculations */}
                 <div className="space-y-4">
-                  <div className="bg-green-50 rounded-lg overflow-hidden">
+                  <div className="bg-green-500/10 rounded-lg overflow-hidden">
                     <div className="flex justify-between items-center p-4">
-                      <span className="font-medium text-slate-700">TVA Collectée (chiffre 200)</span>
-                      <span className="text-lg font-bold text-green-900">
+                      <span className="font-medium text-[var(--color-text-primary)]">TVA Collectée (chiffre 200)</span>
+                      <span className="text-lg font-bold text-green-500">
                         {formatAmount(tvaSummary.tvaCollected)} {currency}
                       </span>
                     </div>
@@ -347,21 +346,21 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
                     )}
                   </div>
 
-                  <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
-                    <span className="font-medium text-slate-700">TVA Déductible (chiffre 400)</span>
-                    <span className="text-lg font-bold text-orange-900">
+                  <div className="flex justify-between items-center p-4 bg-amber-500/10 rounded-lg">
+                    <span className="font-medium text-[var(--color-text-primary)]">TVA Déductible (chiffre 400)</span>
+                    <span className="text-lg font-bold text-amber-500">
                       -{formatAmount(tvaSummary.tvaDeductible)} {currency}
                     </span>
                   </div>
 
                   <div className={`flex justify-between items-center p-4 rounded-lg border-2 ${tvaSummary.tvaNet >= 0
-                    ? 'bg-red-50 border-red-200'
-                    : 'bg-green-50 border-green-200'
+                    ? 'bg-red-500/10 border-red-500/30'
+                    : 'bg-teal-500/10 border-teal-500/30'
                     }`}>
-                    <span className="font-bold text-slate-900">
+                    <span className="font-bold text-[var(--color-text-primary)]">
                       Montant {tvaSummary.tvaNet >= 0 ? 'à payer' : 'à récupérer'} (chiffre 500)
                     </span>
-                    <span className={`text-2xl font-bold ${tvaSummary.tvaNet >= 0 ? 'text-red-900' : 'text-green-900'
+                    <span className={`text-2xl font-bold ${tvaSummary.tvaNet >= 0 ? 'text-red-500' : 'text-teal-500'
                       }`}>
                       {formatAmount(Math.abs(tvaSummary.tvaNet))} {currency}
                     </span>
@@ -369,11 +368,11 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
                 </div>
 
                 {/* Instructions */}
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-900 font-medium mb-2">
+                <div className="mt-6 p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                  <p className="text-sm text-[var(--color-text-primary)] font-medium mb-2">
                     📋 Instructions pour la déclaration
                   </p>
-                  <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                  <ul className="text-sm text-[var(--color-text-secondary)] space-y-1 list-disc list-inside">
                     <li>Connectez-vous au portail de l'AFC (www.estv.admin.ch)</li>
                     <li>Sélectionnez "Décompte TVA" puis "{selectedQuarter.label}"</li>
                     <li>Reportez les montants ci-dessus dans les chiffres correspondants</li>
@@ -419,7 +418,7 @@ Généré le: ${new Date().toLocaleString('fr-CH')}
           loading && (
             <div className="flex flex-col items-center justify-center py-20">
               <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-              <p className="text-slate-600">Chargement du rapport TVA...</p>
+              <p className="text-[var(--color-text-secondary)]">Chargement du rapport TVA...</p>
             </div>
           )
         }

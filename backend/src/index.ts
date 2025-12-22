@@ -107,15 +107,24 @@ app.get('/api/health', async (req, res) => {
 
 // Global error handler
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[GLOBAL ERROR HANDLER] Caught error:', JSON.stringify(error, null, 2));
+  console.error('[GLOBAL ERROR HANDLER] Caught error:', error);
+  console.error('[GLOBAL ERROR HANDLER] Error code:', error.code);
+  console.error('[GLOBAL ERROR HANDLER] Error message:', error.message);
+  console.error('[GLOBAL ERROR HANDLER] Error stack:', error.stack);
+  
   let statusCode = error.statusCode || 500;
   let message = error.message || 'Erreur interne du serveur';
   let code = error.code || 'INTERNAL_SERVER_ERROR';
 
   if (error.code === 'LIMIT_FILE_SIZE') {
     statusCode = 400;
-    message = 'Le fichier est trop volumineux. La taille maximale est de 5MB.';
+    message = 'Le fichier est trop volumineux. La taille maximale est de 10MB.';
     code = 'FILE_TOO_LARGE';
+  }
+
+  if (error.code === 'INVALID_FILE_TYPE') {
+    statusCode = 400;
+    code = 'INVALID_FILE_TYPE';
   }
 
   res.status(statusCode).json({

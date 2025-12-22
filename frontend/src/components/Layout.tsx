@@ -32,7 +32,7 @@ const navigation: NavigationItem[] = [
   },
   {
     name: 'Facturation',
-    href: '/invoices',
+    href: '/billing',
     icon: InvoiceIcon,
     description: 'Factures et devis',
     children: [
@@ -72,7 +72,11 @@ const navigation: NavigationItem[] = [
   },
 ];
 
-export function Layout() {
+interface LayoutProps {
+  children?: React.ReactNode;
+}
+
+export function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
   const { getDisplayName, getInitials } = useUserDisplay();
   const location = useLocation();
@@ -167,7 +171,7 @@ export function Layout() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
             {navigation.map((item) => {
               const hasChildren = Array.isArray(item.children) && item.children.length > 0;
               const isSectionActive = location.pathname.startsWith(item.href);
@@ -181,57 +185,99 @@ export function Layout() {
                     to={item.href}
                     onClick={() => setIsSidebarOpen(false)}
                     className={cn(
-                      'flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 group',
-                      isActive ? 'border-r-2' : ''
+                      'group flex items-center px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200',
+                      'hover:bg-[var(--color-bg-secondary)]',
+                      isActive && 'shadow-sm'
                     )}
                     style={{
-                      color: isActive ? 'var(--color-primary-500)' : 'var(--color-text-secondary)',
-                      background: isActive ? 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.12) 100%)' : 'transparent',
-                      borderRightColor: isActive ? 'var(--color-primary-600)' : 'transparent'
+                      color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                      background: isActive ? 'var(--color-bg-secondary)' : 'transparent',
                     }}
                   >
-                    <span className="mr-3 w-5 h-5 inline-flex items-center justify-center" style={{ color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }}>
-                      <IconComponent className={cn('w-5 h-5 transition-colors')} />
+                    <span 
+                      className={cn(
+                        'mr-3 w-9 h-9 inline-flex items-center justify-center rounded-lg transition-all',
+                        isActive 
+                          ? 'bg-gradient-to-br from-[var(--color-primary-500)] to-[var(--color-primary-700)] text-white shadow-lg shadow-[var(--color-primary-500)]/25' 
+                          : 'bg-[var(--color-text-primary)]/5 dark:bg-white/10 group-hover:bg-[var(--color-text-primary)]/10 dark:group-hover:bg-white/15'
+                      )}
+                    >
+                      <IconComponent className="w-5 h-5" />
                     </span>
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-xs mt-0.5 hidden xl:block" style={{ color: 'var(--color-text-secondary)' }}>
-                        {item.description}
-                      </div>
-                    </div>
+                    <span className="font-medium">{item.name}</span>
                   </Link>
                 );
               }
 
               const isOpen = openSubmenus[item.name] ?? isSectionActive;
+              const isParentActive = location.pathname === item.href;
               return (
                 <div key={item.name}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenSubmenus((s) => ({ ...s, [item.name]: !isOpen }))}
-                    className={cn(
-                      'w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200',
-                      isSectionActive ? 'border-r-2' : ''
-                    )}
-                    style={{
-                      color: isSectionActive ? 'var(--color-primary-500)' : 'var(--color-text-secondary)',
-                      background: isSectionActive ? 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.12) 100%)' : 'transparent',
-                      borderRightColor: isSectionActive ? 'var(--color-primary-600)' : 'transparent'
-                    }}
-                  >
-                    <span className="mr-3 w-5 h-5 inline-flex items-center justify-center" style={{ color: isSectionActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }}>
-                      <IconComponent className={cn('w-5 h-5 transition-colors')} />
-                    </span>
-                    <div className="flex-1 text-left">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-xs mt-0.5 hidden xl:block" style={{ color: 'var(--color-text-secondary)' }}>
-                        {item.description}
-                      </div>
-                    </div>
-                    <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{isOpen ? '▾' : '▸'}</span>
-                  </button>
+                  <div className="flex items-center">
+                    {/* Main link that navigates to the hub page */}
+                    <Link
+                      to={item.href}
+                      onClick={() => {
+                        setIsSidebarOpen(false);
+                        setOpenSubmenus((s) => ({ ...s, [item.name]: true }));
+                      }}
+                      className={cn(
+                        'group flex-1 flex items-center px-3 py-2.5 text-sm font-medium rounded-l-xl transition-all duration-200',
+                        'hover:bg-[var(--color-bg-secondary)]',
+                        (isSectionActive || isParentActive) && 'shadow-sm'
+                      )}
+                      style={{
+                        color: (isSectionActive || isParentActive) ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                        background: (isSectionActive || isParentActive) ? 'var(--color-bg-secondary)' : 'transparent',
+                      }}
+                    >
+                      <span 
+                        className={cn(
+                          'mr-3 w-9 h-9 inline-flex items-center justify-center rounded-lg transition-all',
+                          (isSectionActive || isParentActive) 
+                            ? 'bg-gradient-to-br from-[var(--color-primary-500)] to-[var(--color-primary-700)] text-white shadow-lg shadow-[var(--color-primary-500)]/25' 
+                            : 'bg-[var(--color-text-primary)]/5 dark:bg-white/10 group-hover:bg-[var(--color-text-primary)]/10 dark:group-hover:bg-white/15'
+                        )}
+                      >
+                        <IconComponent className="w-5 h-5" />
+                      </span>
+                      <span className="font-medium">{item.name}</span>
+                    </Link>
+                    {/* Toggle button for submenu */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenSubmenus((s) => ({ ...s, [item.name]: !isOpen }));
+                      }}
+                      className={cn(
+                        'px-2 py-2.5 rounded-r-xl transition-all duration-200',
+                        'hover:bg-[var(--color-bg-secondary)]',
+                        (isSectionActive || isParentActive) && 'bg-[var(--color-bg-secondary)]'
+                      )}
+                    >
+                      <svg 
+                        className={cn(
+                          'w-4 h-4 transition-transform duration-200',
+                          isOpen && 'rotate-180'
+                        )}
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
                   {isOpen && item.children && (
-                    <div className="mt-1 ml-8 space-y-1">
+                    <div className="mt-1 ml-12 space-y-0.5 relative">
+                      {/* Vertical line connector */}
+                      <div 
+                        className="absolute left-0 top-0 bottom-0 w-0.5 rounded-full bg-gradient-to-b from-[var(--color-primary-500)]/30 to-transparent"
+                        style={{ marginLeft: '-8px' }}
+                      />
                       {item.children.map((child) => {
                         const ChildIcon = child.icon || IconComponent;
                         const active = location.pathname === child.href || location.pathname.startsWith(child.href + '/');
@@ -240,15 +286,25 @@ export function Layout() {
                             key={child.name}
                             to={child.href}
                             onClick={() => setIsSidebarOpen(false)}
-                            className={cn('flex items-center px-2 py-2 text-sm rounded-md', active ? 'border-r-2' : '')}
+                            className={cn(
+                              'flex items-center px-3 py-2 text-sm rounded-lg transition-all duration-200',
+                              'hover:bg-[var(--color-bg-secondary)]',
+                              active && 'font-medium'
+                            )}
                             style={{
-                              color: active ? 'var(--color-primary-500)' : 'var(--color-text-secondary)',
-                              background: active ? 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.10) 100%)' : 'transparent',
-                              borderRightColor: active ? 'var(--color-primary-600)' : 'transparent'
+                              color: active ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                              background: active ? 'var(--color-bg-secondary)' : 'transparent',
                             }}
                           >
-                            <span className="mr-2 w-4 h-4 inline-flex items-center justify-center" style={{ color: active ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }}>
-                              <ChildIcon className={cn('w-4 h-4')} />
+                            <span 
+                              className={cn(
+                                'mr-2 w-6 h-6 inline-flex items-center justify-center rounded-md transition-all',
+                                active 
+                                  ? 'bg-[var(--color-primary-500)]/20 text-[var(--color-primary-500)]' 
+                                  : 'text-[var(--color-text-tertiary)]'
+                              )}
+                            >
+                              <ChildIcon className="w-4 h-4" />
                             </span>
                             {child.name}
                           </Link>
@@ -262,22 +318,25 @@ export function Layout() {
           </nav>
 
           {/* User info */}
-          <div className="p-4 space-y-3" style={{ borderTop: '1px solid var(--color-border-primary)' }}>
-            <div className="flex items-center">
+          <div className="p-3 space-y-2" style={{ borderTop: '1px solid var(--color-border-primary)' }}>
+            <div className="flex items-center p-2 rounded-xl bg-[var(--color-text-primary)]/5 dark:bg-white/5 backdrop-blur-sm">
               <div className="flex-shrink-0">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium" style={{ backgroundColor: 'var(--color-primary-600)', color: 'var(--color-text-inverse)' }}>
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold shadow-sm" 
+                  style={{ 
+                    background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-700) 100%)', 
+                    color: 'white' 
+                  }}
+                >
                   {getInitials()}
                 </div>
               </div>
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>
+                <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>
                   {getDisplayName()}
                 </p>
-                <p className="text-xs truncate" style={{ color: 'var(--color-text-secondary)' }}>
-                  {user?.email}
-                </p>
                 {user?.companyName && (
-                  <p className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <p className="text-xs truncate" style={{ color: 'var(--color-text-secondary)' }}>
                     {user.companyName}
                   </p>
                 )}
@@ -288,11 +347,10 @@ export function Layout() {
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
               style={{
-                color: 'var(--color-error)',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.2)'
+                color: 'white',
+                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
               }}
             >
               {isLoggingOut ? (
@@ -340,7 +398,7 @@ export function Layout() {
         {/* Contenu principal */}
         <main className="p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            <Outlet />
+            {children || <Outlet />}
           </div>
         </main>
       </div>

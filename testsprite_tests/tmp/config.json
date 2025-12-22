@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "demo@chocolaterie-suisse.ch",
+  "loginPassword": "DemoUser2024!",
+  "executionArgs": {
+    "projectName": "simplifaq-backup-2025-11-27",
+    "projectPath": "/home/roberto/Público/Beta_SimpliFaq/simplifaq-backup-2025-11-27",
+    "testIds": [],
+    "additionalInstruction": "Use login email test@simplifaq.ch and password Test123456! Frontend: http://localhost:3000, backend: http://localhost:3001. Multi-session is supported.",
+    "envs": {
+      "API_KEY": "sk-user-jd_a2w5FXyoumPaE5xPtDkWUTg5WHF9USxiwaEYz9woNczys_K-9I089hWOBXL6fZmR3RZFjVjXjmgeabwPt3LfG4RumB6hWv7qPpTHwNQ99WP2GiWbItPAJiRnms2uydJQ"
+    }
+  },
+  "proxy": "http://04a1aa1f-d786-4630-a54b-547634433f75:J2PlFjhEguU9BIiNz4Yc94nQeiMOMtXW@tun.testsprite.com:8080"
+}

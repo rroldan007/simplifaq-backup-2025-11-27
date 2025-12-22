@@ -385,13 +385,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
       // PDF appearance fields
       pdfPrimaryColor,
       pdfTemplate,
-      pdfLogoPosition,
-      pdfLogoSize,
-      pdfFontColorHeader,
-      pdfFontColorBody,
-      pdfTableHeadColor,
-      pdfTotalBgColor,
-      pdfTotalTextColor,
+      pdfAdvancedConfig, // JSON con configuración avanzada del editor
       pdfShowCompanyNameWithLogo,
       pdfShowVAT,
       pdfShowPhone,
@@ -681,19 +675,18 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
     // PDF appearance settings
     if (pdfPrimaryColor !== undefined) dataToUpdate.pdfPrimaryColor = pdfPrimaryColor;
     if (pdfTemplate !== undefined) dataToUpdate.pdfTemplate = pdfTemplate;
-    if (pdfLogoPosition !== undefined) dataToUpdate.pdfLogoPosition = pdfLogoPosition;
-    if (pdfLogoSize !== undefined) dataToUpdate.pdfLogoSize = pdfLogoSize;
-    if (pdfFontColorHeader !== undefined) dataToUpdate.pdfFontColorHeader = pdfFontColorHeader;
-    if (pdfFontColorBody !== undefined) dataToUpdate.pdfFontColorBody = pdfFontColorBody;
-    if (pdfTableHeadColor !== undefined) dataToUpdate.pdfTableHeadColor = pdfTableHeadColor;
-    if (pdfTotalBgColor !== undefined) dataToUpdate.pdfTotalBgColor = pdfTotalBgColor;
-    if (pdfTotalTextColor !== undefined) dataToUpdate.pdfTotalTextColor = pdfTotalTextColor;
     if (pdfShowCompanyNameWithLogo !== undefined) dataToUpdate.pdfShowCompanyNameWithLogo = pdfShowCompanyNameWithLogo;
     if (pdfShowVAT !== undefined) dataToUpdate.pdfShowVAT = pdfShowVAT;
     if (pdfShowPhone !== undefined) dataToUpdate.pdfShowPhone = pdfShowPhone;
     if (pdfShowEmail !== undefined) dataToUpdate.pdfShowEmail = pdfShowEmail;
     if (pdfShowWebsite !== undefined) dataToUpdate.pdfShowWebsite = pdfShowWebsite;
     if (pdfShowIBAN !== undefined) dataToUpdate.pdfShowIBAN = pdfShowIBAN;
+
+    // Advanced PDF Editor configuration (all in one JSON field)
+    if (pdfAdvancedConfig !== undefined) {
+      // Serialize advanced config as JSON string if it's an object
+      dataToUpdate.pdfAdvancedConfig = typeof pdfAdvancedConfig === 'string' ? pdfAdvancedConfig : JSON.stringify(pdfAdvancedConfig);
+    }
 
     // Numbering settings
     if (invoicePrefix !== undefined) dataToUpdate.invoicePrefix = invoicePrefix;
@@ -864,14 +857,39 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
     // Generate token pair
     const tokenPair = generateTokenPair(user.id, user.email);
 
-    // Atomically delete old session and create a new one
+    // Multi-session support: Allow up to 5 concurrent sessions per user
     await prisma.$transaction(async (tx) => {
-      // 1. Delete any existing session for this user to prevent unique constraint errors
+      const MAX_SESSIONS_PER_USER = 5;
+      const now = new Date();
+
+      // 1. Delete expired sessions for this user
       await tx.session.deleteMany({
-        where: { userId: user.id },
+        where: {
+          userId: user.id,
+          OR: [
+            { refreshExpiresAt: { lt: now.toISOString() } },
+            { expiresAt: { lt: now.toISOString() } }
+          ]
+        },
       });
 
-      // 2. Create the new session
+      // 2. Check how many active sessions remain
+      const activeSessions = await tx.session.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'asc' }, // Oldest first
+      });
+
+      // 3. If we have too many sessions, delete the oldest ones
+      if (activeSessions.length >= MAX_SESSIONS_PER_USER) {
+        const sessionsToDelete = activeSessions.slice(0, activeSessions.length - MAX_SESSIONS_PER_USER + 1);
+        await tx.session.deleteMany({
+          where: {
+            id: { in: sessionsToDelete.map(s => s.id) }
+          }
+        });
+      }
+
+      // 4. Create the new session
       // Convert Date to ISO string for SQLite compatibility
       const expiresAtDate = tokenPair.accessExpiresAt instanceof Date 
         ? tokenPair.accessExpiresAt 
