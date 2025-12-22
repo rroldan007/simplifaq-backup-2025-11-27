@@ -176,6 +176,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
       logoUrl: logoUrl || undefined,
       quantityDecimals: (userOpts.quantityDecimals === 3 ? 3 : 2) as 2 | 3,
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyData, logoUrl, user]);
 
   return (

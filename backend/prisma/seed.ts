@@ -45,161 +45,137 @@ async function main() {
       pdfShowWebsite: true,
       pdfShowIBAN: false,
       pdfShowCompanyNameWithLogo: true,
+      // Email confirmado para demo (en producción requiere double opt-in)
+      emailConfirmed: true,
+      emailConfirmedAt: new Date(),
     }
   });
 
   console.log('✅ Demo user created:', demoUser.email);
 
-  // 2. Create demo clients
-  const clients = await Promise.all([
-    prisma.client.upsert({
-      where: { 
-        userId_companyName: {
-          userId: demoUser.id,
-          companyName: 'Restaurant Le Gourmet'
-        }
-      },
-      update: {},
-      create: {
+  // 2. Create demo clients (using findFirst + create pattern since no composite unique index)
+  const clientsData = [
+    {
+      companyName: 'Restaurant Le Gourmet',
+      firstName: 'Jean',
+      lastName: 'Dupont',
+      email: 'jean.dupont@legourmet.ch',
+      phone: '+41 22 345 67 89',
+      street: 'Rue du Rhône 25',
+      city: 'Genève',
+      postalCode: '1204',
+      country: 'Switzerland',
+      isCompany: true,
+    },
+    {
+      companyName: 'Café Bleu',
+      firstName: 'Marie',
+      lastName: 'Martin',
+      email: 'marie@cafebleu.ch',
+      phone: '+41 22 456 78 90',
+      street: 'Place du Molard 3',
+      city: 'Genève',
+      postalCode: '1204',
+      country: 'Switzerland',
+      isCompany: true,
+    },
+    {
+      companyName: 'Pâtisserie Sophie',
+      firstName: 'Sophie',
+      lastName: 'Rousseau',
+      email: 'sophie@patisserie-sophie.ch',
+      phone: '+41 22 567 89 01',
+      street: 'Rue de Carouge 45',
+      city: 'Genève',
+      postalCode: '1205',
+      country: 'Switzerland',
+      isCompany: true,
+    }
+  ];
+
+  const clients = [];
+  for (const clientData of clientsData) {
+    const existing = await prisma.client.findFirst({
+      where: {
         userId: demoUser.id,
-        companyName: 'Restaurant Le Gourmet',
-        contactFirstName: 'Jean',
-        contactLastName: 'Dupont',
-        email: 'jean.dupont@legourmet.ch',
-        phone: '+41 22 345 67 89',
-        street: 'Rue du Rhône 25',
-        city: 'Genève',
-        postalCode: '1204',
-        country: 'Switzerland',
-        isCompany: true,
+        email: clientData.email
       }
-    }),
-    prisma.client.upsert({
-      where: { 
-        userId_companyName: {
+    });
+    if (!existing) {
+      const client = await prisma.client.create({
+        data: {
           userId: demoUser.id,
-          companyName: 'Café Bleu'
+          ...clientData
         }
-      },
-      update: {},
-      create: {
-        userId: demoUser.id,
-        companyName: 'Café Bleu',
-        contactFirstName: 'Marie',
-        contactLastName: 'Martin',
-        email: 'marie@cafebleu.ch',
-        phone: '+41 22 456 78 90',
-        street: 'Place du Molard 3',
-        city: 'Genève',
-        postalCode: '1204',
-        country: 'Switzerland',
-        isCompany: true,
-      }
-    }),
-    prisma.client.upsert({
-      where: { 
-        userId_companyName: {
-          userId: demoUser.id,
-          companyName: 'Pâtisserie Sophie'
-        }
-      },
-      update: {},
-      create: {
-        userId: demoUser.id,
-        companyName: 'Pâtisserie Sophie',
-        contactFirstName: 'Sophie',
-        contactLastName: 'Rousseau',
-        email: 'sophie@patisserie-sophie.ch',
-        phone: '+41 22 567 89 01',
-        street: 'Rue de Carouge 45',
-        city: 'Genève',
-        postalCode: '1205',
-        country: 'Switzerland',
-        isCompany: true,
-      }
-    })
-  ]);
+      });
+      clients.push(client);
+    } else {
+      clients.push(existing);
+    }
+  }
 
   console.log(`✅ ${clients.length} demo clients created`);
 
-  // 3. Create demo products
-  const products = await Promise.all([
-    prisma.product.upsert({
+  // 3. Create demo products (using findFirst + create pattern since no composite unique index)
+  const productsData = [
+    {
+      name: 'Chocolat Noir 70%',
+      description: 'Tablette de chocolat noir premium',
+      unitPrice: 8.50,
+      currency: 'CHF',
+      unit: 'pièce',
+      tvaRate: 2.5,
+      isActive: true,
+    },
+    {
+      name: 'Chocolat au Lait',
+      description: 'Tablette de chocolat au lait suisse',
+      unitPrice: 7.50,
+      currency: 'CHF',
+      unit: 'pièce',
+      tvaRate: 2.5,
+      isActive: true,
+    },
+    {
+      name: 'Truffes Assorties',
+      description: 'Boîte de 12 truffes artisanales',
+      unitPrice: 25.00,
+      currency: 'CHF',
+      unit: 'boîte',
+      tvaRate: 2.5,
+      isActive: true,
+    },
+    {
+      name: 'Pralines Maison',
+      description: 'Assortiment de pralines faites main',
+      unitPrice: 32.00,
+      currency: 'CHF',
+      unit: 'boîte',
+      tvaRate: 2.5,
+      isActive: true,
+    }
+  ];
+
+  const products = [];
+  for (const productData of productsData) {
+    const existing = await prisma.product.findFirst({
       where: {
-        userId_name: {
-          userId: demoUser.id,
-          name: 'Chocolat Noir 70%'
-        }
-      },
-      update: {},
-      create: {
         userId: demoUser.id,
-        name: 'Chocolat Noir 70%',
-        description: 'Tablette de chocolat noir premium',
-        unitPrice: 8.50,
-        currency: 'CHF',
-        unit: 'pièce',
-        taxRate: 2.5,
-        isActive: true,
+        name: productData.name
       }
-    }),
-    prisma.product.upsert({
-      where: {
-        userId_name: {
+    });
+    if (!existing) {
+      const product = await prisma.product.create({
+        data: {
           userId: demoUser.id,
-          name: 'Chocolat au Lait'
+          ...productData
         }
-      },
-      update: {},
-      create: {
-        userId: demoUser.id,
-        name: 'Chocolat au Lait',
-        description: 'Tablette de chocolat au lait suisse',
-        unitPrice: 7.50,
-        currency: 'CHF',
-        unit: 'pièce',
-        taxRate: 2.5,
-        isActive: true,
-      }
-    }),
-    prisma.product.upsert({
-      where: {
-        userId_name: {
-          userId: demoUser.id,
-          name: 'Truffes Assorties'
-        }
-      },
-      update: {},
-      create: {
-        userId: demoUser.id,
-        name: 'Truffes Assorties',
-        description: 'Boîte de 12 truffes artisanales',
-        unitPrice: 25.00,
-        currency: 'CHF',
-        unit: 'boîte',
-        taxRate: 2.5,
-        isActive: true,
-      }
-    }),
-    prisma.product.upsert({
-      where: {
-        userId_name: {
-          userId: demoUser.id,
-          name: 'Pralines Maison'
-        }
-      },
-      update: {},
-      create: {
-        userId: demoUser.id,
-        name: 'Pralines Maison',
-        description: 'Assortiment de pralines faites main',
-        unitPrice: 32.00,
-        unit: 'boîte',
-        tvaRate: 2.5,
-        isActive: true,
-      }
-    })
-  ]);
+      });
+      products.push(product);
+    } else {
+      products.push(existing);
+    }
+  }
 
   console.log(`✅ ${products.length} demo products created`);
 

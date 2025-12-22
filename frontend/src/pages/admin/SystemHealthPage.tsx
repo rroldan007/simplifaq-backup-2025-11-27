@@ -94,6 +94,7 @@ export const SystemHealthPage: React.FC = () => {
 
   useEffect(() => {
     fetchHealthData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRefresh = () => {

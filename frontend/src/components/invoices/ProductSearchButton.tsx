@@ -148,6 +148,7 @@ export function ProductSearchButton({
 
     const timeoutId = setTimeout(performSearch, 300); // Debounce search
     return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentValue, searchProducts, onMatchCountChange, createdProduct]);
 
   const handleButtonClick = async (e: React.MouseEvent) => {

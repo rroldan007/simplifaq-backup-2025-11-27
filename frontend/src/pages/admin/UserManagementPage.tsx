@@ -65,6 +65,7 @@ export const UserManagementPage: React.FC = () => {
   // Fetch users from API
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterRole, filterStatus, searchTerm, currentPage]);
 
   useEffect(() => {
