@@ -78,10 +78,44 @@ export async function generateQuotePDFWithPuppeteer(
     
     await page.setContent(html, { waitUntil: 'networkidle0' });
     
+    // Page numbering configuration
+    const advancedConfig = options.advancedConfig;
+    const showPageNumbers = advancedConfig?.showPageNumbers ?? false;
+    const pageNumberPosition = advancedConfig?.pageNumberPosition ?? 'bottom-center';
+    const pageNumberFormat = advancedConfig?.pageNumberFormat ?? 'full';
+    
+    // Build header/footer templates for page numbers
+    let headerTemplate = '<span></span>';
+    let footerTemplate = '<span></span>';
+    
+    if (showPageNumbers) {
+      const pageNumText = pageNumberFormat === 'full' 
+        ? 'Page <span class="pageNumber"></span> / <span class="totalPages"></span>'
+        : '<span class="pageNumber"></span>';
+      
+      const baseStyle = 'font-size: 9px; font-family: Arial, sans-serif; color: #666; width: 100%; margin: 0; padding: 0;';
+      
+      if (pageNumberPosition === 'bottom-center') {
+        footerTemplate = `<div style="${baseStyle} text-align: center; margin-top: 5px;">${pageNumText}</div>`;
+      } else if (pageNumberPosition === 'bottom-right') {
+        footerTemplate = `<div style="${baseStyle} text-align: right; padding-right: 15mm; margin-top: 5px;">${pageNumText}</div>`;
+      } else if (pageNumberPosition === 'top-right') {
+        headerTemplate = `<div style="${baseStyle} text-align: right; padding-right: 15mm; margin-bottom: 5px;">${pageNumText}</div>`;
+      }
+    }
+    
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' }
+      margin: { 
+        top: showPageNumbers && pageNumberPosition === 'top-right' ? '12mm' : '0mm', 
+        right: '0mm', 
+        bottom: showPageNumbers && pageNumberPosition !== 'top-right' ? '10mm' : '0mm', 
+        left: '0mm' 
+      },
+      displayHeaderFooter: showPageNumbers,
+      headerTemplate: headerTemplate,
+      footerTemplate: footerTemplate,
     });
 
     return Buffer.from(pdfBuffer);
@@ -126,6 +160,23 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
     }).format(amount);
   };
 
+  // Check if unit is kilogram (handles various forms: kg, Kilogramme, kilogramme, kilo, etc.)
+  const isKilogramUnit = (unit?: string | null): boolean => {
+    if (!unit) return false;
+    const lower = unit.toLowerCase().trim();
+    const kgVariants = ['kg', 'kilogramme', 'kilogrammes', 'kilogram', 'kilograms', 'kilo', 'kilos'];
+    return kgVariants.some(v => lower === v || lower.includes(v));
+  };
+
+  // Format quantity with appropriate decimals (3 for kg, 2 for others)
+  const formatQuantity = (quantity: number, unit?: string): string => {
+    if (isKilogramUnit(unit)) {
+      return quantity.toFixed(3);
+    }
+    const formatted = quantity.toFixed(2);
+    return parseFloat(formatted).toString();
+  };
+
   // Debug: Log discount data
   console.log('[Quote PDF] quoteData.globalDiscount:', quoteData.globalDiscount);
   console.log('[Quote PDF] Items with discounts:', quoteData.items.map(item => ({
@@ -139,7 +190,7 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
     let itemHTML = `
     <tr class="invoice-item ${index > 0 && index % 15 === 0 ? 'page-break-before' : ''}">
       <td class="item-description">${item.description}</td>
-      <td class="item-quantity">${item.quantity}</td>
+      <td class="item-quantity">${formatQuantity(item.quantity, item.unit)}</td>
       <td class="item-price">${formatCurrency(item.unitPrice, quoteData.currency)}</td>
       <td class="item-tva">${item.tvaRate.toFixed(2)}%</td>
       <td class="item-total">${formatCurrency(item.total, quoteData.currency)}</td>

@@ -13,7 +13,7 @@ export const CreativePremium: React.FC<{
   tableHeadColor?: string;
   headerBgColor?: string;
   altRowColor?: string;
-}> = ({ data, accentColor = '#8B5CF6', showHeader = true, headerBgColor, altRowColor }) => {
+}> = ({ data, accentColor = '#8B5CF6', showHeader = true }) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;
     const normalized = unit.toLowerCase();

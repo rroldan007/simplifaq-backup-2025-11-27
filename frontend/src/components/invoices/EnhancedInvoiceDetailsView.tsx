@@ -85,7 +85,7 @@ export const EnhancedInvoiceDetailsView: React.FC<EnhancedInvoiceDetailsViewProp
   onDownloadPdf,
   onSend,
   onAddPayment,
-  onCancelRecurrence: _onCancelRecurrence,
+  // onCancelRecurrence is available for future use via props.onCancelRecurrence if needed
   onBack,
   loading = {}
 }) => {

@@ -145,14 +145,65 @@ router.get('/search', async (req, res) => {
       const m = CANTON_MAP[s.toLowerCase()];
       return m || '';
     };
+    
+    // Strip HTML tags from string
+    const stripHtml = (str: string): string => {
+      if (!str) return '';
+      return String(str).replace(/<[^>]*>/g, '').trim();
+    };
+    
+    // Parse geo.admin.ch label format: "Rue Name Number, ZIP City"
+    const parseGeoAdminLabel = (label: string) => {
+      const clean = stripHtml(label);
+      // Format: "Avenue KRIEG 7, 1208 Genève" or "Avenue KRIEG 7 1208 Genève"
+      const commaMatch = clean.match(/^(.+?),\s*(\d{4})\s+(.+)$/);
+      if (commaMatch) {
+        return {
+          streetWithNumber: commaMatch[1].trim(),
+          zip: commaMatch[2],
+          city: commaMatch[3].trim()
+        };
+      }
+      // Try without comma: "Avenue KRIEG 7 1208 Genève"
+      const spaceMatch = clean.match(/^(.+?)\s+(\d{4})\s+(.+)$/);
+      if (spaceMatch) {
+        return {
+          streetWithNumber: spaceMatch[1].trim(),
+          zip: spaceMatch[2],
+          city: spaceMatch[3].trim()
+        };
+      }
+      return { streetWithNumber: clean, zip: '', city: '' };
+    };
+    
     const normalizeGeoAdmin = (r: any) => {
       const a = (r && (r.attrs || r.attributes || r.properties)) || {};
-      const street = a.street || a.strname || a.label || r.label || '';
-      const number = a.number || a.housenumber || a.house_no || '';
-      const zip = a.zip || a.postcode || a.zipcode || '';
-      const city = a.city || a.municipality || a.commune || a.locality || '';
+      
+      // Try to get structured data first
+      let street = stripHtml(a.street || a.strname || '');
+      let number = stripHtml(a.number || a.housenumber || a.house_no || '');
+      let zip = stripHtml(a.zip || a.postcode || a.zipcode || '');
+      let city = stripHtml(a.city || a.municipality || a.commune || a.locality || '');
       const cantonRaw = a.canton || a.state || a.district || a.cantoncode || '';
       const canton = normalizeCanton(cantonRaw);
+      
+      // If we don't have structured data, parse the label
+      if (!street && (a.label || r.label)) {
+        const parsed = parseGeoAdminLabel(a.label || r.label);
+        street = parsed.streetWithNumber;
+        if (!zip) zip = parsed.zip;
+        if (!city) city = parsed.city;
+      }
+      
+      // Extract number from street if combined (e.g., "Avenue KRIEG 7")
+      if (street && !number) {
+        const streetMatch = street.match(/^(.+?)\s+(\d+[a-zA-Z]?)$/);
+        if (streetMatch) {
+          street = streetMatch[1].trim();
+          number = streetMatch[2];
+        }
+      }
+      
       return { attrs: { street, number, zip, city, canton } };
     };
     const dedupe = (list: any[]) => {

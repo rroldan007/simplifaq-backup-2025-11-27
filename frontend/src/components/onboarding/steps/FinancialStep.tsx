@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, CreditCard } from 'lucide-react';
 import { api } from '../../../services/api';
+import { useAuth } from '../../../hooks/useAuth';
+import type { User } from '../../../contexts/authTypes';
+import { FloatingLabelInput } from '../../ui/FloatingLabelInput';
 
 interface FinancialStepProps {
   onComplete: () => void;
 }
 
 export default function FinancialStep({ onComplete }: FinancialStepProps) {
+  const { updateUser } = useAuth();
   const [iban, setIban] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +66,15 @@ export default function FinancialStep({ onComplete }: FinancialStepProps) {
 
     try {
       await api.put('/auth/me', { iban: iban.replace(/\s/g, '') });
+      
+      // Refresh user data in AuthContext so Settings page sees the updated IBAN
+      const response = await api.get('/auth/me');
+      type UserResponse = { data?: { user?: User } };
+      const userData = (response.data as UserResponse)?.data?.user;
+      if (userData) {
+        updateUser(userData);
+      }
+      
       onComplete();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
@@ -109,17 +122,13 @@ export default function FinancialStep({ onComplete }: FinancialStepProps) {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          IBAN suisse *
-        </label>
-        <input
-          type="text"
+        <FloatingLabelInput
+          label="IBAN suisse *"
           required
           value={iban}
           onChange={handleIBANChange}
-          maxLength={26} // 21 chars + 5 spaces
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-          placeholder="CH00 0000 0000 0000 0000 0"
+          maxLength={26}
+          className="font-mono"
         />
         <p className="mt-1 text-sm text-gray-500">
           Format: CH suivi de 19 chiffres

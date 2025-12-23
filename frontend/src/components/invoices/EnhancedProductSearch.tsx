@@ -129,8 +129,8 @@ export function EnhancedProductSearch({
   return (
     <div className="relative">
       {/* Search Input */}
-      <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]">
+      <div className="relative group">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
           <Search className="w-5 h-5" />
         </div>
         
@@ -143,14 +143,14 @@ export function EnhancedProductSearch({
           placeholder={placeholder}
           autoFocus={autoFocus}
           className={cn(
-            'w-full pl-10 pr-10 py-3 rounded-lg',
+            'w-full pl-12 pr-12 py-3.5 rounded-xl',
             'border-2 transition-all duration-200',
-            'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]',
-            'placeholder-[var(--color-text-tertiary)]',
-            'focus:outline-none',
+            'bg-slate-50/50 text-slate-800',
+            'placeholder-slate-400',
+            'focus:outline-none focus:bg-white',
             isFocused
-              ? 'border-[var(--color-primary-600)] ring-4 ring-[var(--color-primary-600)]/10'
-              : 'border-[var(--color-border-primary)] hover:border-[var(--color-border-secondary)]'
+              ? 'border-blue-400 ring-4 ring-blue-500/10 shadow-lg shadow-blue-500/5'
+              : 'border-slate-200 hover:border-slate-300 hover:bg-white'
           )}
         />
 
@@ -162,9 +162,9 @@ export function EnhancedProductSearch({
             exit={{ scale: 0, opacity: 0 }}
             type="button"
             onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-500 hover:text-slate-700 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-3.5 h-3.5" />
           </motion.button>
         )}
 
@@ -173,10 +173,10 @@ export function EnhancedProductSearch({
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="absolute right-3 top-1/2 -translate-y-1/2"
+            className="absolute right-4 top-1/2 -translate-y-1/2"
           >
-            <span className="text-xs text-[var(--color-text-tertiary)] bg-[var(--color-bg-secondary)] px-2 py-1 rounded border border-[var(--color-border-primary)]">
-              ↵ Entrée pour sélectionner
+            <span className="text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-medium">
+              ↵ Entrée
             </span>
           </motion.div>
         )}
@@ -187,17 +187,17 @@ export function EnhancedProductSearch({
         {showSuggestions && (
           <motion.div
             ref={dropdownRef}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute z-30 mt-2 w-full max-h-[400px] overflow-auto rounded-lg border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] shadow-2xl"
+            className="absolute z-30 mt-2 w-full max-h-[400px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50"
           >
             {/* Search Results */}
             {hasSuggestions && (
               <div className="p-2">
-                <div className="px-2 py-1 text-xs font-medium text-[var(--color-text-tertiary)] uppercase tracking-wide">
-                  Résultats de recherche
+                <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Résultats
                 </div>
                 {suggestions.map((product, idx) => (
                   <motion.button

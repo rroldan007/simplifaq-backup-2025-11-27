@@ -54,9 +54,7 @@ export const ElegantClassic: React.FC<{
   logoSize = 'medium',
   fontColorHeader = '#000000',
   fontColorBody = '#111111',
-  tableHeadColor = '#FAFAFA',
-  headerBgColor = '#FFFFFF',
-  altRowColor = '#FFFFFF'
+  tableHeadColor = '#FAFAFA'
 }) => {
   const resolveDecimals = (unit?: string) => {
     if (!unit) return data.quantityDecimals;

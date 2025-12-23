@@ -20,10 +20,27 @@ interface ProductSearchButtonProps {
   onProductSelect: (product: Product) => void;
   onMatchCountChange?: (count: number) => void;
   disabled?: boolean;
-  onAddNew?: (name: string) => void;
+  onAddNew?: (name: string, unit: string, isService: boolean) => void;
   // Optional: when parent just created a product, we can inject it to avoid stale cache
   createdProduct?: Product | null;
 }
+
+// Units for products (physical goods)
+const PRODUCT_UNITS = [
+  { value: 'piece', label: 'Pièce' },
+  { value: 'kg', label: 'Kilogramme (kg)' },
+  { value: 'liter', label: 'Litre' },
+  { value: 'meter', label: 'Mètre' },
+];
+
+// Units for services (time-based or intangible)
+const SERVICE_UNITS = [
+  { value: 'hour', label: 'Heure' },
+  { value: 'day', label: 'Jour' },
+  { value: 'service', label: 'Forfait' },
+  { value: 'consultation', label: 'Consultation' },
+  { value: 'project', label: 'Projet' },
+];
 
 export function ProductSearchButton({
   currentValue,
@@ -37,6 +54,8 @@ export function ProductSearchButton({
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [quickCreateUnit, setQuickCreateUnit] = useState('piece');
+  const [quickCreateIsService, setQuickCreateIsService] = useState(false);
   const { searchProducts } = useProducts();
   const searchRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -329,26 +348,79 @@ export function ProductSearchButton({
 
       {/* Quick-create action even when there are matches */}
       {onAddNew && safeCurrentValue.trim().length >= 2 && (
-        <div className="p-2 border-t border-slate-200 bg-slate-50 flex-shrink-0">
+        <div className="p-3 border-t border-slate-200 bg-gradient-to-b from-slate-50 to-white flex-shrink-0">
+          {/* Type toggle: Produit / Service */}
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => {
+                setQuickCreateIsService(false);
+                setQuickCreateUnit('piece'); // Reset to default product unit
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                !quickCreateIsService
+                  ? 'border-blue-400 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              <span>📦</span>
+              <span>Produit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setQuickCreateIsService(true);
+                setQuickCreateUnit('hour'); // Reset to default service unit
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                quickCreateIsService
+                  ? 'border-amber-400 bg-amber-50 text-amber-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              <span>💼</span>
+              <span>Service</span>
+            </button>
+          </div>
+          
+          {/* Unit selector - different options for products vs services */}
+          <div className="mb-3">
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {quickCreateIsService ? 'Unité de temps' : 'Unité de mesure'}
+            </label>
+            <select
+              value={quickCreateUnit}
+              onChange={(e) => setQuickCreateUnit(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+            >
+              {(quickCreateIsService ? SERVICE_UNITS : PRODUCT_UNITS).map((unit) => (
+                <option key={unit.value} value={unit.value}>
+                  {unit.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Create button */}
           <button
             type="button"
-            className="w-full py-2 px-3 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 border border-green-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-2.5 px-3 text-sm font-semibold text-white bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isCreating}
             onClick={async () => {
               setIsCreating(true);
               setIsOpen(false);
               try {
-                await onAddNew(currentValue.trim());
+                await onAddNew(currentValue.trim(), quickCreateUnit, quickCreateIsService);
                 setTimeout(() => setIsCreating(false), 800);
               } catch {
                 setIsCreating(false);
               }
             }}
-            title={`Créer un nouveau produit "${safeCurrentValue.trim()}"`}
+            title={`Créer un nouveau ${quickCreateIsService ? 'service' : 'produit'} "${safeCurrentValue.trim()}"`}
           >
-            {isCreating ? '⏳ Création...' : `➕ Créer un nouveau produit "${safeCurrentValue.trim()}"`}
+            {isCreating ? '⏳ Création...' : `➕ Créer "${safeCurrentValue.trim()}" (${(quickCreateIsService ? SERVICE_UNITS : PRODUCT_UNITS).find(u => u.value === quickCreateUnit)?.label || quickCreateUnit})`}
           </button>
-          <div className="mt-1 text-xs text-slate-500 text-center">Appuyez sur Échap pour fermer</div>
+          <div className="mt-2 text-xs text-slate-400 text-center">Échap pour fermer</div>
         </div>
       )}
     </div>
