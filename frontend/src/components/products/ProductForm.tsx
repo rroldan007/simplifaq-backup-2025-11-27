@@ -10,6 +10,7 @@ interface ProductFormData {
   unitPrice: number;
   tvaRate: number;
   unit: string;
+  isService: boolean; // true for services, false for physical products
   isActive: boolean;
   discountValue?: number;
   discountType?: 'PERCENT' | 'AMOUNT';
@@ -44,6 +45,7 @@ export function ProductForm({
     unitPrice: 0,
     tvaRate: 8.1, // Default to normal Swiss TVA rate
     unit: 'piece',
+    isService: false,
     isActive: true,
     discountValue: undefined,
     discountType: 'PERCENT',
@@ -209,6 +211,7 @@ export function ProductForm({
         unitPrice: formData.unitPrice,
         tvaRate: formData.tvaRate,
         unit: formData.unit,
+        isService: formData.isService,
         isActive: formData.isActive,
         discountValue: formData.discountValue,
         discountType: formData.discountType,
@@ -355,6 +358,48 @@ export function ProductForm({
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+
+              {/* Product/Service Type Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Type
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateFormData('isService', false)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                      !formData.isService
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <span className="font-medium">Produit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateFormData('isService', true)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                      formData.isService
+                        ? 'border-amber-500 bg-amber-50 text-amber-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span className="font-medium">Service</span>
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  {formData.isService 
+                    ? 'Un service est une prestation immatérielle (consultation, formation, etc.)'
+                    : 'Un produit est un bien physique ou numérique vendable'}
+                </p>
               </div>
             </div>
           </Card>

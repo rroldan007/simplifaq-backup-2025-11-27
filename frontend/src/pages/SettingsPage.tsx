@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { sanitizeTextInput } from '../utils/security';
 import { LogoUpload } from '../components/settings/LogoUpload';
 import { SwissAddressAutocomplete } from '../components/clients/SwissAddressAutocomplete';
+import { FloatingLabelInput } from '../components/ui/FloatingLabelInput';
 import { ColorPicker } from '../components/ui/ColorPicker';
 import { PDFThemeEditor } from '../components/settings/PDFThemeEditor';
 
@@ -433,68 +434,38 @@ export function SettingsPage() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Nom de la société <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      value={company.companyName} 
-                      onChange={(e)=>setCompany(prev=>({...prev, companyName:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="Ex: SimpliFaq SA"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Nom de la société *"
+                    value={company.companyName}
+                    onChange={(e)=>setCompany(prev=>({...prev, companyName:e.target.value}))}
+                  />
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Email professionnel <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      value={company.email} 
-                      onChange={(e)=>setCompany(prev=>({...prev, email:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="contact@exemple.ch"
-                      type="email"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Email professionnel *"
+                    type="email"
+                    value={company.email}
+                    onChange={(e)=>setCompany(prev=>({...prev, email:e.target.value}))}
+                  />
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Téléphone
-                    </label>
-                    <input 
-                      value={company.phone} 
-                      onChange={(e)=>setCompany(prev=>({...prev, phone:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="+41 21 123 45 67"
-                      type="tel"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Téléphone"
+                    type="tel"
+                    value={company.phone}
+                    onChange={(e)=>setCompany(prev=>({...prev, phone:e.target.value}))}
+                  />
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Site web
-                    </label>
-                    <input 
-                      value={company.website} 
-                      onChange={(e)=>setCompany(prev=>({...prev, website:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="www.exemple.ch"
-                      type="url"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Site web"
+                    type="url"
+                    value={company.website}
+                    onChange={(e)=>setCompany(prev=>({...prev, website:e.target.value}))}
+                  />
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Numéro TVA
-                    </label>
-                    <input 
-                      value={company.vatNumber} 
-                      onChange={(e)=>setCompany(prev=>({...prev, vatNumber:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="CHE-123.456.789 TVA"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Numéro TVA"
+                    value={company.vatNumber}
+                    onChange={(e)=>setCompany(prev=>({...prev, vatNumber:e.target.value}))}
+                  />
                 </div>
               </div>
 
@@ -524,57 +495,33 @@ export function SettingsPage() {
                           country: addr.country || prev.country,
                         }));
                       }}
-                      nativeInput
+                      floatingLabel
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Code postal
-                    </label>
-                    <input 
-                      value={company.postalCode} 
-                      onChange={(e)=>setCompany(prev=>({...prev, postalCode:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="1000"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Code postal"
+                    value={company.postalCode}
+                    onChange={(e)=>setCompany(prev=>({...prev, postalCode:e.target.value}))}
+                  />
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Ville
-                    </label>
-                    <input 
-                      value={company.city} 
-                      onChange={(e)=>setCompany(prev=>({...prev, city:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="Lausanne"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Ville"
+                    value={company.city}
+                    onChange={(e)=>setCompany(prev=>({...prev, city:e.target.value}))}
+                  />
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Canton
-                    </label>
-                    <input 
-                      value={company.canton} 
-                      onChange={(e)=>setCompany(prev=>({...prev, canton:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="VD"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Canton"
+                    value={company.canton}
+                    onChange={(e)=>setCompany(prev=>({...prev, canton:e.target.value}))}
+                  />
                   
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Pays
-                    </label>
-                    <input 
-                      value={company.country} 
-                      onChange={(e)=>setCompany(prev=>({...prev, country:e.target.value}))}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="Suisse"
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Pays"
+                    value={company.country}
+                    onChange={(e)=>setCompany(prev=>({...prev, country:e.target.value}))}
+                  />
                 </div>
               </div>
 

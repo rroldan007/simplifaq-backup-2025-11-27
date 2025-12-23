@@ -70,7 +70,9 @@ export default function LogoStep({ onComplete, onSkip }: LogoStepProps) {
       const response = await api.upload('/upload/logo', formData);
 
       // Backend returns { success: true, data: { url, logoUrl, filename, ... } }
-      const logoUrl = (response.data as any)?.url || (response.data as any)?.logoUrl;
+      type UploadResponse = { url?: string; logoUrl?: string };
+      const responseData = response.data as UploadResponse;
+      const logoUrl = responseData?.url || responseData?.logoUrl;
       
       if (!logoUrl) {
         throw new Error('Logo URL not received from server');

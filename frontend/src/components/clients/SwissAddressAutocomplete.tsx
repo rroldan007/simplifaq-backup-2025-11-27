@@ -17,6 +17,7 @@ interface SwissAddressAutocompleteProps {
   error?: string;
   onChange?: (value: string) => void;
   onAddressSelected?: (addr: SwissAddress) => void;
+  floatingLabel?: boolean;
 }
 
 // Small debounce hook
@@ -31,16 +32,18 @@ function useDebounced<T>(value: T, ms: number) {
 
 export function SwissAddressAutocomplete({
   label = 'Rue et numéro *',
-  placeholder = 'Rue et numéro (Suisse)',
+  placeholder,
   value = '',
   error,
   onChange,
   onAddressSelected,
   nativeInput,
+  floatingLabel = false,
 }: SwissAddressAutocompleteProps & { nativeInput?: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [userHasSelected, setUserHasSelected] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  
   type GeoResultAttrs = {
     street?: string;
     number?: string;
@@ -55,6 +58,10 @@ export function SwissAddressAutocomplete({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Track when user just selected - use a ref to persist across renders
+  const skipNextFetchRef = useRef(false);
+  const selectedValueRef = useRef<string | null>(null);
 
   // Close dropdown
   const closeDropdown = useCallback(() => {
@@ -66,8 +73,13 @@ export function SwissAddressAutocomplete({
   // Fetch suggestions
   useEffect(() => {
     // Don't fetch if user just selected an address
-    if (userHasSelected) {
-      setUserHasSelected(false);
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
+      return;
+    }
+    
+    // Don't fetch if value matches the last selected address
+    if (selectedValueRef.current && value === selectedValueRef.current) {
       return;
     }
 
@@ -141,7 +153,7 @@ export function SwissAddressAutocomplete({
     return () => {
       controller.abort();
     };
-  }, [debouncedQuery, userHasSelected, closeDropdown]);
+  }, [debouncedQuery, closeDropdown, value]);
 
   // Close on outside click
   useEffect(() => {
@@ -180,8 +192,12 @@ export function SwissAddressAutocomplete({
   };
 
   const handleInputChange = (newValue: string) => {
+    // Clear selected value when user types
+    if (selectedValueRef.current && newValue !== selectedValueRef.current) {
+      selectedValueRef.current = null;
+    }
+    
     onChange?.(newValue);
-    setUserHasSelected(false);
     
     // Only open if we have enough characters
     if (newValue.trim().length >= 3) {
@@ -192,86 +208,144 @@ export function SwissAddressAutocomplete({
   };
 
   const handleInputFocus = () => {
+    setIsFocused(true);
+    
+    // Don't reopen if we just selected an address
+    if (selectedValueRef.current && value === selectedValueRef.current) {
+      return;
+    }
+    
     // Only open if we have results and enough characters
     if (items.length > 0 && value.trim().length >= 3) {
       setOpen(true);
     }
   };
 
+  const handleInputBlur = () => {
+    setIsFocused(false);
+  };
+
   const handleAddressSelect = (item: GeoResult) => {
     const addr = parseAddress(item);
-    setUserHasSelected(true);
+    
+    // Mark that we just selected - skip next fetch
+    skipNextFetchRef.current = true;
+    selectedValueRef.current = addr.street;
+    
+    // Update the street field
     onChange?.(addr.street);
+    
+    // Notify parent to update all address fields
     onAddressSelected?.(addr);
+    
+    // Close dropdown immediately
     closeDropdown();
     
     // Remove focus from input
     inputRef.current?.blur();
   };
 
+  // Floating label logic
+  const shouldFloat = floatingLabel && (isFocused || value.length > 0);
+
   return (
-    <div ref={containerRef} className="autocomplete">
-      {label && <label className="block text-sm text-slate-600 mb-1">{label}</label>}
-      {nativeInput ? (
-        <input
-          ref={inputRef as React.RefObject<HTMLInputElement>}
-          value={value}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={handleInputFocus}
-          placeholder={placeholder}
-          autoComplete="off"
-          className="w-full border rounded px-3 py-2"
-        />
+    <div ref={containerRef} className="autocomplete relative">
+      {floatingLabel ? (
+        <div className="relative">
+          <input
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            value={value}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
+            placeholder=""
+            autoComplete="off"
+            className={`w-full px-4 pt-5 pb-2 border-2 rounded-lg transition-all duration-200 bg-white
+              ${error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'}
+              focus:outline-none focus:ring-2 focus:border-transparent`}
+          />
+          <label
+            className={`absolute left-4 transition-all duration-200 pointer-events-none bg-white px-1
+              ${shouldFloat 
+                ? '-top-2 text-xs font-medium' 
+                : 'top-3.5 text-sm'}
+              ${isFocused 
+                ? 'text-blue-600' 
+                : shouldFloat 
+                  ? 'text-slate-600' 
+                  : 'text-slate-400'}`}
+          >
+            {label}
+          </label>
+        </div>
       ) : (
-        <Input
-          ref={inputRef}
-          value={value}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={handleInputFocus}
-          placeholder={placeholder}
-          error={error}
-          autoComplete="off"
-        />
+        <>
+          {label && <label className="block text-sm text-slate-600 mb-1">{label}</label>}
+          {nativeInput ? (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              value={value}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
+              placeholder={placeholder}
+              autoComplete="off"
+              className="w-full border-2 border-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+          ) : (
+            <Input
+              ref={inputRef}
+              value={value}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
+              placeholder={placeholder}
+              error={error}
+              autoComplete="off"
+            />
+          )}
+        </>
       )}
       {open && (items.length > 0 || loading || errorText) && (
-        <div className="autocomplete__panel">
+        <div className="autocomplete__panel absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
           {loading && (
-            <div className="autocomplete__item autocomplete__item--disabled">
+            <div className="autocomplete__item px-4 py-3 text-slate-500 flex items-center">
               <span className="inline-block animate-spin mr-2">⟳</span>
               Recherche en cours…
             </div>
           )}
           {!loading && items.length > 0 && items.map((it, idx) => {
             const attrs = it?.attrs || {};
-            const labelTxt = [attrs.street, attrs.number, attrs.zip, attrs.city].filter(Boolean).join(' ');
+            const streetPart = [attrs.street, attrs.number].filter(Boolean).join(' ');
+            const locationPart = [attrs.zip, attrs.city].filter(Boolean).join(' ');
             return (
               <button
                 key={idx}
                 type="button"
-                className="autocomplete__item"
+                className="autocomplete__item w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-slate-100 last:border-b-0"
                 onMouseDown={(e) => {
                   // Prevent input blur before click
                   e.preventDefault();
                 }}
                 onClick={() => handleAddressSelect(it)}
               >
-                <div className="font-medium text-gray-900">{labelTxt}</div>
-                {attrs.canton && (
-                  <div className="text-xs text-gray-500 mt-0.5">{attrs.canton}, Suisse</div>
-                )}
+                <div className="font-medium text-gray-900">{streetPart}</div>
+                <div className="text-sm text-gray-600">{locationPart}{attrs.canton ? `, ${attrs.canton}` : ''}</div>
               </button>
             );
           })}
           {!loading && items.length === 0 && errorText && (
-            <div className="autocomplete__item autocomplete__item--disabled">
+            <div className="autocomplete__item px-4 py-3 text-slate-500">
               {errorText}
             </div>
           )}
         </div>
       )}
-      <small className="block mt-1 text-xs text-gray-500">
-        Tapez au moins 3 caractères pour rechercher une adresse suisse
-      </small>
+      {!floatingLabel && (
+        <small className="block mt-1 text-xs text-gray-500">
+          Tapez au moins 3 caractères pour rechercher une adresse suisse
+        </small>
+      )}
     </div>
   );
 }

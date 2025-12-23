@@ -108,6 +108,10 @@ export interface PDFAdvancedConfig {
     key: string;
     name?: string;
   };
+  // Page numbering options
+  showPageNumbers?: boolean;
+  pageNumberPosition?: 'bottom-center' | 'bottom-right' | 'top-right';
+  pageNumberFormat?: 'simple' | 'full'; // 'simple' = "1", 'full' = "Page 1 / 3"
 }
 
 export interface PDFGenerationOptions {
@@ -223,18 +227,47 @@ export async function generateInvoicePDFWithQRBill(
     // Calculate content height and determine if QR Bill fits on last page
     const contentMetrics = await calculateContentMetrics(page);
     
+    // Page numbering configuration
+    const showPageNumbers = opts.advancedConfig?.showPageNumbers ?? false;
+    const pageNumberPosition = opts.advancedConfig?.pageNumberPosition ?? 'bottom-center';
+    const pageNumberFormat = opts.advancedConfig?.pageNumberFormat ?? 'full';
+    
+    // Build header/footer templates for page numbers
+    let headerTemplate = '<span></span>';
+    let footerTemplate = '<span></span>';
+    
+    if (showPageNumbers) {
+      const pageNumText = pageNumberFormat === 'full' 
+        ? 'Page <span class="pageNumber"></span> / <span class="totalPages"></span>'
+        : '<span class="pageNumber"></span>';
+      
+      // Style based on position - minimal styling to avoid blank pages
+      const baseStyle = 'font-size: 9px; font-family: Arial, sans-serif; color: #666; width: 100%; margin: 0; padding: 0;';
+      
+      if (pageNumberPosition === 'bottom-center') {
+        footerTemplate = `<div style="${baseStyle} text-align: center; margin-top: 5px;">${pageNumText}</div>`;
+      } else if (pageNumberPosition === 'bottom-right') {
+        footerTemplate = `<div style="${baseStyle} text-align: right; padding-right: 15mm; margin-top: 5px;">${pageNumText}</div>`;
+      } else if (pageNumberPosition === 'top-right') {
+        headerTemplate = `<div style="${baseStyle} text-align: right; padding-right: 15mm; margin-bottom: 5px;">${pageNumText}</div>`;
+      }
+    }
+    
     // Generate PDF with proper page breaks
+    // Note: displayHeaderFooter requires at least some margin to render header/footer
     const pdfBuffer = await page.pdf({
       format: opts.format,
       margin: {
-        top: `${opts.margins.top}mm`,
+        top: showPageNumbers && pageNumberPosition === 'top-right' ? '12mm' : `${opts.margins.top}mm`,
         right: `${opts.margins.right}mm`,
-        bottom: `${opts.margins.bottom}mm`,
+        bottom: showPageNumbers && pageNumberPosition !== 'top-right' ? '10mm' : `${opts.margins.bottom}mm`,
         left: `${opts.margins.left}mm`,
       },
       printBackground: true,
       preferCSSPageSize: false,
-      displayHeaderFooter: false,
+      displayHeaderFooter: showPageNumbers,
+      headerTemplate: headerTemplate,
+      footerTemplate: footerTemplate,
       omitBackground: false,
     });
 
@@ -346,11 +379,13 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
       wrapper.className = 'qr-bill-page-wrapper';
       wrapper.style.cssText = `
         page-break-before: always !important;
+        page-break-after: avoid !important;
         width: 210mm !important;
         height: 297mm !important;
         position: relative !important;
         margin: 0 !important;
         padding: 0 !important;
+        overflow: hidden !important;
       `;
       
       // Insert wrapper before QR Bill
@@ -563,6 +598,25 @@ function generateInvoiceHTML(
     }).format(amount);
   };
 
+  // Check if unit is kilogram (handles various forms: kg, Kilogramme, kilogramme, kilo, etc.)
+  const isKilogramUnit = (unit?: string | null): boolean => {
+    if (!unit) return false;
+    const lower = unit.toLowerCase().trim();
+    const kgVariants = ['kg', 'kilogramme', 'kilogrammes', 'kilogram', 'kilograms', 'kilo', 'kilos'];
+    return kgVariants.some(v => lower === v || lower.includes(v));
+  };
+
+  // Format quantity with appropriate decimals (3 for kg, 2 for others)
+  const formatQuantity = (quantity: number, unit?: string): string => {
+    if (isKilogramUnit(unit)) {
+      // For kg, always show exactly 3 decimals
+      return quantity.toFixed(3);
+    }
+    // For other units, show up to 2 decimals, remove trailing zeros
+    const formatted = quantity.toFixed(2);
+    return parseFloat(formatted).toString();
+  };
+
   // Check if any item has discounts
   const hasLineDiscounts = invoiceData.items.some(item => item.lineDiscountValue && item.lineDiscountValue > 0);
 
@@ -579,7 +633,7 @@ function generateInvoiceHTML(
     let itemHTML = `
     <tr class="invoice-item ${index > 0 && index % 15 === 0 ? 'page-break-before' : ''}">
       <td class="item-description">${item.description}</td>
-      <td class="item-quantity">${item.quantity}</td>
+      <td class="item-quantity">${formatQuantity(item.quantity, item.unit)}</td>
       <td class="item-price">${formatCurrency(item.unitPrice, invoiceData.currency)}</td>
       <td class="item-tva">${item.tvaRate.toFixed(2)}%</td>
       <td class="item-total">${formatCurrency(item.total, invoiceData.currency)}</td>
@@ -821,7 +875,7 @@ function generateInvoiceHTML(
             let itemHTML = `
               <tr style="${rowStyle}">
                 <td style="${cellPadding} text-align: left; ${cellBorder}">${item.description}</td>
-                <td style="${cellPadding} text-align: center; ${cellBorder} width: 60px;">${item.quantity}</td>
+                <td style="${cellPadding} text-align: center; ${cellBorder} width: 60px;">${formatQuantity(item.quantity, item.unit)}</td>
                 <td style="${cellPadding} text-align: right; ${cellBorder} width: 70px;">${formatCurrency(item.unitPrice, invoiceData.currency)}</td>
                 <td style="${cellPadding} text-align: right; ${cellBorder} width: 50px;">${item.tvaRate.toFixed(2)}%</td>
                 <td style="${cellPadding} text-align: right; width: 70px; ${tableStyle === 'bold' ? 'font-weight: bold;' : ''}">${formatCurrency(item.total, invoiceData.currency)}</td>
@@ -1546,12 +1600,28 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       border: none;
     }
     
-    .items-table thead {
+    .items-table thead,
+    .positioned-table thead {
       display: table-header-group;
     }
 
-    .items-table tfoot {
+    .items-table tfoot,
+    .positioned-table tfoot {
       display: table-footer-group;
+    }
+    
+    /* Ensure table headers repeat on page breaks */
+    .positioned-table table {
+      page-break-inside: auto;
+    }
+    
+    .positioned-table thead {
+      display: table-header-group;
+    }
+    
+    .positioned-table tbody tr {
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     .items-table td {
@@ -1685,6 +1755,19 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       letter-spacing: 0.5px;
     }
     
+    /* QR Bill page wrapper - used when QR Bill needs to go to page 2 */
+    .qr-bill-page-wrapper {
+      page-break-before: always;
+      page-break-after: avoid !important;
+      page-break-inside: avoid;
+      width: 210mm;
+      height: 297mm;
+      position: relative;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    
     /* QR Bill container - Always positioned at the bottom of the page */
     .qr-bill-container {
       position: relative;
@@ -1692,7 +1775,7 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       height: 105mm;
       margin: 0;
       page-break-before: avoid;
-      page-break-after: avoid;
+      page-break-after: avoid !important;
       page-break-inside: avoid;
       padding: 0;
       z-index: 2000 !important; /* Above all positioned elements */
@@ -1717,9 +1800,13 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
     
     /* Ensure proper page breaks for print */
     @media print {
+      .qr-bill-page-wrapper {
+        page-break-after: avoid !important;
+      }
+      
       .qr-bill-container {
         page-break-before: avoid;
-        page-break-after: avoid;
+        page-break-after: avoid !important;
       }
       
       .invoice-content {
@@ -1733,6 +1820,12 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       
       .invoice-container {
         page-break-after: avoid;
+      }
+      
+      /* Prevent empty page at end */
+      html, body {
+        height: auto !important;
+        overflow: visible !important;
       }
     }
     

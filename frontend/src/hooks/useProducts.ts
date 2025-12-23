@@ -20,6 +20,7 @@ interface Product {
   id: string;
   name: string;
   description?: string;
+  sku?: string;
   unitPrice: number;
   tvaRate: number;
   unit: string;
@@ -34,6 +35,7 @@ interface CreateProductRequest {
   unitPrice: number;
   tvaRate: number;
   unit: string;
+  isService?: boolean;
   isActive: boolean;
   discountValue?: number;
   discountType?: 'PERCENT' | 'AMOUNT';

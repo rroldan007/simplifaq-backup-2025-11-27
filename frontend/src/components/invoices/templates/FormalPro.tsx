@@ -17,7 +17,6 @@ export const FormalPro: React.FC<{
   data, 
   accentColor = '#2563EB', 
   showHeader = true,
-  logoPosition = 'right',
   logoSize = 'medium',
   fontColorHeader = '#1E3A8A',
   fontColorBody = '#334155',

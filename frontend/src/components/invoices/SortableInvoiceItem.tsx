@@ -9,6 +9,7 @@ import { useProducts } from '../../hooks/useProducts';
 import { NotificationContainer } from '../ui/Notification';
 import { useAuth } from '../../hooks/useAuth';
 import { DEFAULT_DISCOUNT_VALUE, DEFAULT_DISCOUNT_TYPE } from '../../constants/discounts';
+import { isKilogramUnit, getQuantityDecimals, getQuantityStep, roundQuantity, normalizeUnit } from '../../utils/unitUtils';
 
 interface InvoiceItem {
   id: string;
@@ -94,14 +95,11 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
   }, [item.unit, item.productId, products, item.description]);
 
   // Determine decimals based on unit: 3 decimals for kg/Kilogramme, 2 for others
-  const isKilogramUnit = itemUnit?.toLowerCase().includes('kg') || itemUnit?.toLowerCase().includes('kilogramme');
+  const isKgUnit = isKilogramUnit(itemUnit);
   const userDecimals = ((user as { quantityDecimals?: number } | null | undefined)?.quantityDecimals === 3) ? 3 : 2;
-  const quantityDecimals: 2 | 3 = isKilogramUnit ? 3 : userDecimals;
-  const quantityStep = quantityDecimals === 3 ? '0.001' : '0.01';
-  const roundQty = (val: number) => {
-    const factor = Math.pow(10, quantityDecimals);
-    return Math.round((Number.isFinite(val) ? val : 0) * factor) / factor;
-  };
+  const quantityDecimals: 2 | 3 = isKgUnit ? 3 : userDecimals;
+  const quantityStep = getQuantityStep(itemUnit);
+  const roundQty = (val: number) => roundQuantity(Number.isFinite(val) ? val : 0, itemUnit);
 
   // Log for debugging
   useEffect(() => {
@@ -209,7 +207,7 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
                 setLastCreatedProduct(null); // clear any hint once user selects
               }}
               createdProduct={lastCreatedProduct}
-              onAddNew={async (name: string) => {
+              onAddNew={async (name: string, unit: string, isService: boolean) => {
                 const description = name.trim();
                 const unitPrice = Number(item.unitPrice) || 0;
                 const hasDescription = description.length >= 2;
@@ -227,13 +225,14 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
                   const tvaToUse = Number.isFinite(currentTva) && validRates.includes(currentTva)
                     ? currentTva
                     : validRates[0];
-                  try { console.debug('[QuickCreate] creating product', { description, unitPrice, tvaToUse }); } catch { /* noop */ }
+                  try { console.debug('[QuickCreate] creating product', { description, unitPrice, tvaToUse, unit, isService }); } catch { /* noop */ }
                   const created = await createProduct({
                     name: description,
                     description: description,
                     unitPrice: unitPrice,
                     tvaRate: tvaToUse,
-                    unit: 'unité',
+                    unit: unit || 'piece',
+                    isService: isService,
                     isActive: true,
                     discountActive: false,
                   });
@@ -354,8 +353,22 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
           <label className="block text-sm font-medium text-slate-700 mb-1 md:hidden">
             Total
           </label>
-          <div className="px-3 py-2 bg-slate-50 rounded-md text-right font-medium">
-            {formatCurrency(item.total)}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3 py-2 bg-slate-50 rounded-md text-right font-medium">
+              {formatCurrency(item.total)}
+            </div>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Supprimer cet article"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

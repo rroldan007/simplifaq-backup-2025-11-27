@@ -171,6 +171,7 @@ model Product {
   currency    String   @default("CHF") // Product currency (CHF, EUR)
   tvaRate     Float    // Swiss TVA rates: 0.00, 3.50, 8.10
   unit        String   @default("piece") // hour, piece, day, etc.
+  isService   Boolean  @default(false) // true if this is a service (not a physical product)
   isActive    Boolean  @default(true)
   
   // SKU / Barcode fields
