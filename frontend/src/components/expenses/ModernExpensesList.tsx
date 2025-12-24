@@ -6,12 +6,10 @@ import {
   LayoutGrid, 
   List, 
   TrendingUp,
-  TrendingDown,
   DollarSign,
   Receipt,
   FileText,
   RefreshCw,
-  Sparkles,
   Calendar,
   XCircle
 } from 'lucide-react';

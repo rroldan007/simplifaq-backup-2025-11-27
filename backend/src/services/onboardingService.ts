@@ -358,3 +358,27 @@ export async function markWelcomeMessageShown(userId: string): Promise<Onboardin
     nextStep
   };
 }
+
+/**
+ * Dismiss onboarding permanently (user chose "Ne plus afficher")
+ */
+export async function dismissOnboarding(userId: string): Promise<OnboardingStatus> {
+  await getOnboardingStatus(userId);
+
+  const updated = await prisma.userOnboarding.update({
+    where: { userId },
+    data: {
+      isCompleted: true,
+      completedAt: new Date(),
+      currentStep: 'completed',
+      welcomeMessageShown: true
+    }
+  });
+
+  return {
+    ...updated,
+    skippedSteps: normalizeSkippedSteps(updated.skippedSteps),
+    progress: 100,
+    nextStep: null
+  };
+}

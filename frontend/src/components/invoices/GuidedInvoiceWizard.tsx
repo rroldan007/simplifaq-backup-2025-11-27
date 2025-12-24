@@ -550,10 +550,10 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     };
   }, [data.items, data.globalDiscountValue, data.globalDiscountType]);
 
-  const update = (field: keyof InvoiceFormData, value: InvoiceFormData[keyof InvoiceFormData]) => {
+  const update = useCallback((field: keyof InvoiceFormData, value: InvoiceFormData[keyof InvoiceFormData]) => {
     setData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
-  };
+    setErrors(prev => prev[field] ? { ...prev, [field]: '' } : prev);
+  }, []);
 
   // Search normalization: lower, strip diacritics, tokenize
   const normalize = (s: string) =>
@@ -644,8 +644,9 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
 
   const addProductAsItem = (sugg: { id: string; name: string; unitPrice: number; tvaRate: number; unit?: string }) => {
     const nextOrder = (data.items?.length || 0);
+    const newItemId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newItem: InvoiceItem = {
-      id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: newItemId,
       description: sugg.name,
       quantity: 1,
       unitPrice: Number.isFinite(sugg.unitPrice) ? sugg.unitPrice : 0,
@@ -659,13 +660,22 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     update('items', next);
     setProductQuery('');
     setShowSuggestions(false);
+    
+    // Scroll to the new item after DOM update
+    setTimeout(() => {
+      const newItemElement = document.querySelector(`[data-item-id="${newItemId}"]`);
+      if (newItemElement) {
+        newItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
   };
 
   // Add multiple products from catalog modal
   const addProductsFromCatalog = (selectedProducts: { id: string; name: string; unitPrice: number; tvaRate: number; sku?: string; unit?: string }[]) => {
     const currentItems = data.items || [];
+    const timestamp = Date.now();
     const newItems: InvoiceItem[] = selectedProducts.map((prod, idx) => ({
-      id: `tmp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `tmp-${timestamp}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
       description: prod.name,
       quantity: 1,
       unitPrice: Number.isFinite(prod.unitPrice) ? prod.unitPrice : 0,
@@ -676,6 +686,17 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
       unit: prod.unit,
     }));
     update('items', [...currentItems, ...newItems]);
+    
+    // Scroll to the last added item after DOM update
+    if (newItems.length > 0) {
+      const lastItemId = newItems[newItems.length - 1].id;
+      setTimeout(() => {
+        const lastItemElement = document.querySelector(`[data-item-id="${lastItemId}"]`);
+        if (lastItemElement) {
+          lastItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
   };
 
   // ============================================
@@ -714,7 +735,7 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     
     // Filter to only groups with 2+ items (duplicates)
     return Array.from(groups.entries())
-      .filter(([_, items]) => items.length > 1)
+      .filter(([, items]) => items.length > 1)
       .map(([key, items]) => ({
         key,
         items,
@@ -758,7 +779,7 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     
     update('items', result);
     setShowDuplicatesBanner(false);
-  }, [data.items]);
+  }, [data.items, update]);
 
   // Combine a specific duplicate group
   const combineGroup = useCallback((groupKey: string) => {
@@ -792,7 +813,7 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     });
     
     update('items', rest);
-  }, [data.items]);
+  }, [data.items, update]);
 
   const validateStep = (targetStep = step): boolean => {
     const err: Record<string, string> = {};

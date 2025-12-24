@@ -7,6 +7,7 @@ interface SMTPStepProps {
   onSkip: () => void | Promise<void>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function SMTPStep({ onComplete, onSkip }: SMTPStepProps) {
   const navigate = useNavigate();
   const [choice, setChoice] = useState<'skip' | 'configure' | null>(null);

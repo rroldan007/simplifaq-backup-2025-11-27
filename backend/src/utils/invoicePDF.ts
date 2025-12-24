@@ -208,8 +208,8 @@ export async function generateInvoicePDFWithQRBill(
     // Forward console logs from page to backend console
     page.on('console', msg => {
       const text = msg.text();
-      if (text.includes('[QR Bill Placement]') || text.includes('[PDF Generation]')) {
-        console.log(`[Puppeteer Console] ${text}`);
+      if (text.includes('[Metrics]') || text.includes('[QR Bill]') || text.includes('[PDF Generation]') || text.includes('===')) {
+        console.log(`[Puppeteer] ${text}`);
       }
     });
 
@@ -260,7 +260,7 @@ export async function generateInvoicePDFWithQRBill(
       margin: {
         top: showPageNumbers && pageNumberPosition === 'top-right' ? '12mm' : `${opts.margins.top}mm`,
         right: `${opts.margins.right}mm`,
-        bottom: showPageNumbers && pageNumberPosition !== 'top-right' ? '10mm' : `${opts.margins.bottom}mm`,
+        bottom: showPageNumbers && pageNumberPosition !== 'top-right' ? '20mm' : `${opts.margins.bottom}mm`,
         left: `${opts.margins.left}mm`,
       },
       printBackground: true,
@@ -313,14 +313,25 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
     let maxContentBottomPx = 0;
     let maxElementInfo = 'none';
     
-    // Check positioned-content elements
-    const positionedContent = doc.querySelector('.positioned-content');
-    if (positionedContent) {
-      const allElements = positionedContent.querySelectorAll('*');
-      allElements.forEach((el: any) => {
+    // Check header container height (absolute elements sit inside it)
+    const headerContainer = doc.querySelector('.header-container');
+    if (headerContainer) {
+      const headerRect = headerContainer.getBoundingClientRect();
+      const bottomPx = headerRect.bottom - containerRect.top;
+      if (bottomPx > maxContentBottomPx) {
+        maxContentBottomPx = bottomPx;
+        maxElementInfo = 'header-container';
+      }
+    }
+
+    // Check flow content (table + totals)
+    const flowContent = doc.querySelector('.flow-content');
+    if (flowContent) {
+      const flowChildren = flowContent.querySelectorAll('*');
+      flowChildren.forEach((el: any) => {
         if (el.classList.contains('qr-bill-container')) return;
+        if (el.classList?.contains('qr-bill-spacer')) return;
         if (el.tagName === 'SCRIPT') return;
-        
         const rect = el.getBoundingClientRect();
         if (rect.height > 0 && rect.width > 0) {
           const bottomPx = rect.bottom - containerRect.top;
@@ -331,9 +342,9 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
         }
       });
     }
-    
-    // Check table rows
-    const tableRows = doc.querySelectorAll('.positioned-table tr, .items-table tr');
+
+    // Check table rows explicitly (flow-table)
+    const tableRows = doc.querySelectorAll('.flow-table tr, .items-table tr');
     tableRows.forEach((row: any) => {
       const rect = row.getBoundingClientRect();
       const bottomPx = rect.bottom - containerRect.top;
@@ -342,9 +353,9 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
         maxElementInfo = 'table-row';
       }
     });
-    
-    // Check totals
-    const totals = doc.querySelector('.positioned-totals');
+
+    // Check totals block (flow-totals)
+    const totals = doc.querySelector('.flow-totals');
     if (totals) {
       const rect = totals.getBoundingClientRect();
       const bottomPx = rect.bottom - containerRect.top;
@@ -354,72 +365,99 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
       }
     }
     
-    // Convert to mm
-    const maxContentBottomMM = maxContentBottomPx / MM_TO_PX;
-    const contentWithMarginMM = maxContentBottomMM + SAFETY_MARGIN_MM;
+    // Convert to mm and calculate remaining space on last page
+    // Account for PDF margins when calculating page breaks
+    const PDF_TOP_MARGIN_MM = 20;
+    const PDF_BOTTOM_MARGIN_MM = 20;
+    const EFFECTIVE_PAGE_HEIGHT_MM = PAGE_HEIGHT_MM - PDF_TOP_MARGIN_MM - PDF_BOTTOM_MARGIN_MM; // ~257mm
     
-    // Determine if QR Bill would overlap
-    const needsNewPageForQRBill = contentWithMarginMM > QR_BILL_TOP_MM;
+    const maxContentBottomMM = maxContentBottomPx / MM_TO_PX;
+    let usedInLastPageMM = maxContentBottomMM % EFFECTIVE_PAGE_HEIGHT_MM;
+    if (usedInLastPageMM === 0 && maxContentBottomMM > 0) {
+      usedInLastPageMM = EFFECTIVE_PAGE_HEIGHT_MM;
+    }
+    const spaceRemainingMM = EFFECTIVE_PAGE_HEIGHT_MM - usedInLastPageMM;
+    const fitsOnLastPage = spaceRemainingMM >= (QR_BILL_HEIGHT_MM + SAFETY_MARGIN_MM);
+    
+    console.log('[Metrics] Effective page height (with margins):', EFFECTIVE_PAGE_HEIGHT_MM, 'mm');
+    const needsNewPageForQRBill = !fitsOnLastPage;
     
     console.log('=== PDF Content Metrics ===');
     console.log('[Metrics] Max content bottom:', maxContentBottomMM.toFixed(2), 'mm');
     console.log('[Metrics] Max element:', maxElementInfo);
-    console.log('[Metrics] Content + margin:', contentWithMarginMM.toFixed(2), 'mm');
-    console.log('[Metrics] QR Bill zone:', QR_BILL_TOP_MM, 'mm');
-    console.log('[Metrics] Needs page 2?', needsNewPageForQRBill);
+    console.log('[Metrics] Space remaining on last page:', spaceRemainingMM.toFixed(2), 'mm');
+    console.log('[Metrics] Fits on last page?', fitsOnLastPage);
+    console.log('[Metrics] Needs new page for QR Bill?', needsNewPageForQRBill);
     
-    // APPLY QR BILL POSITIONING - ALWAYS AT BOTTOM OF PAGE (192mm)
+    // APPLY QR BILL POSITIONING - USE SPACER TO PUSH TO BOTTOM
+    // Use effective page height (already accounts for margins)
+    
     if (needsNewPageForQRBill) {
-      console.log('[Metrics] ⏭️  MOVING QR BILL TO PAGE 2 (at bottom)');
-      // QR Bill needs to go to page 2
-      // Create a wrapper page that positions QR at bottom
+      console.log('[Metrics] ⏭️  MOVING QR BILL TO NEW PAGE (at bottom)');
       
-      // Wrap QR Bill in a full-page container
-      const wrapper = doc.createElement('div');
-      wrapper.className = 'qr-bill-page-wrapper';
-      wrapper.style.cssText = `
-        page-break-before: always !important;
-        page-break-after: avoid !important;
-        width: 210mm !important;
-        height: 297mm !important;
-        position: relative !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-      `;
+      // Calculate spacer to push QR Bill to bottom of new page
+      // Effective page height = 257mm (297 - 20 top - 20 bottom)
+      // Spacer = effective height - QR Bill height = 257 - 105 = 152mm
+      const spacerHeightMM = EFFECTIVE_PAGE_HEIGHT_MM - QR_BILL_HEIGHT_MM;
+      const spacerHeightPx = spacerHeightMM * MM_TO_PX;
+      console.log('[Metrics] Creating spacer: height =', spacerHeightMM, 'mm =', spacerHeightPx.toFixed(0), 'px');
       
-      // Insert wrapper before QR Bill
-      qrBill.parentNode?.insertBefore(wrapper, qrBill);
-      // Move QR Bill inside wrapper
-      wrapper.appendChild(qrBill);
+      // Create spacer that forces page break and pushes QR to bottom
+      const spacer = doc.createElement('div');
+      spacer.className = 'qr-bill-spacer';
+      spacer.style.pageBreakBefore = 'always';
+      spacer.style.height = spacerHeightPx + 'px';
+      spacer.style.width = '100%';
+      spacer.style.margin = '0';
+      spacer.style.padding = '0';
       
-      // Position QR Bill at bottom of the wrapper (page 2)
-      qrBill.style.cssText = `
-        position: absolute !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        width: 210mm !important;
-        height: 105mm !important;
-        margin: 0 !important;
-        page-break-inside: avoid !important;
-        z-index: 2000 !important;
-        background: white !important;
-      `;
+      // Insert spacer before QR Bill
+      if (qrBill.parentNode) {
+        qrBill.parentNode.insertBefore(spacer, qrBill);
+        console.log('[Metrics] Spacer inserted successfully');
+      } else {
+        console.log('[Metrics] ERROR: qrBill has no parentNode');
+      }
+      
+      // Style QR Bill
+      qrBill.style.position = 'relative';
+      qrBill.style.width = '210mm';
+      qrBill.style.height = '105mm';
+      qrBill.style.margin = '0';
+      qrBill.style.pageBreakBefore = 'avoid';
+      qrBill.style.pageBreakInside = 'avoid';
+      qrBill.style.background = 'white';
     } else {
-      console.log('[Metrics] ✅ QR BILL FITS ON PAGE 1 at bottom (' + QR_BILL_TOP_MM + 'mm)');
-      // QR Bill fits on page 1 at bottom (absolute positioning)
-      qrBill.style.cssText = `
-        position: absolute !important;
-        top: ${QR_BILL_TOP_MM}mm !important;
-        left: 0 !important;
-        width: 210mm !important;
-        height: 105mm !important;
-        margin: 0 !important;
-        page-break-before: avoid !important;
-        page-break-inside: avoid !important;
-        z-index: 2000 !important;
-        background: white !important;
-      `;
+      console.log('[Metrics] ✅ QR BILL FITS ON LAST PAGE, aligning to bottom');
+      // Calculate spacer to push QR Bill to bottom of current page
+      // spacerMM = remaining space - QR Bill height
+      const spacerMM = Math.max(0, spaceRemainingMM - QR_BILL_HEIGHT_MM);
+      const spacerPx = spacerMM * MM_TO_PX;
+      
+      console.log('[Metrics] Spacer for same page:', spacerMM.toFixed(2), 'mm =', spacerPx.toFixed(0), 'px');
+      
+      if (spacerMM > 0 && qrBill.parentNode) {
+        const spacer = doc.createElement('div');
+        spacer.className = 'qr-bill-spacer';
+        spacer.style.height = spacerPx + 'px';
+        spacer.style.width = '100%';
+        spacer.style.margin = '0';
+        spacer.style.padding = '0';
+        spacer.style.pageBreakAfter = 'avoid';
+        qrBill.parentNode.insertBefore(spacer, qrBill);
+        console.log('[Metrics] ✅ Spacer inserted before QR Bill');
+      } else if (spacerMM > 0) {
+        console.log('[Metrics] ⚠️ Could not insert spacer - qrBill has no parentNode');
+      }
+      
+      // Style QR Bill
+      qrBill.style.position = 'relative';
+      qrBill.style.width = '210mm';
+      qrBill.style.height = '105mm';
+      qrBill.style.margin = '0';
+      qrBill.style.pageBreakBefore = 'avoid';
+      qrBill.style.pageBreakInside = 'avoid';
+      qrBill.style.background = 'white';
     }
     console.log('===========================');
 
@@ -815,14 +853,30 @@ function generateInvoiceHTML(
   let contentHTML = '';
   
   if (useCustomPositioning && advancedConfig.elements) {
-    // Render elements based on their configured positions
-    // Filter out footer and QR bill zone elements
-    const positionedElements = advancedConfig.elements
-      .filter((el: any) => el.visible !== false && el.id !== 'footer' && el.id !== 'qr_bill_zone')
+    // HYBRID APPROACH CORRECTED:
+    // - Header elements (logo, company, client, title, number) use ABSOLUTE positioning on page 1
+    // - Table and totals use FLOW positioning for proper page breaks
+    // - QR Bill uses ABSOLUTE positioning at bottom of last page
+    
+    const headerElementIds = ['logo', 'company_name', 'company_info', 'client_info', 'doc_title', 'doc_number'];
+    
+    // Render header elements with ABSOLUTE positioning (respects theme editor)
+    const headerElements = advancedConfig.elements
+      .filter((el: any) => el.visible !== false && headerElementIds.includes(el.id))
+      .map((el: any) => renderPositionedElement(el, invoiceData, colors))
+      .join('');
+    
+    // Get table config for flow content positioning
+    const tableConfig = advancedConfig.elements.find((el: any) => el.id === 'table' && el.visible !== false);
+    const tableTopMM = tableConfig ? pxToMM(tableConfig.position.y, false) : 80;
+    const tableLeftMM = tableConfig ? pxToMM(tableConfig.position.x, true) : 20;
+    const tableWidthMM = tableConfig ? pxToMM(tableConfig.size.width, true) : 170;
+    
+    // Render ONLY table and totals in flow layout
+    const flowElements = advancedConfig.elements
+      .filter((el: any) => el.visible !== false && (el.id === 'table' || el.id === 'totals'))
       .map((el: any) => {
         if (el.id === 'table') {
-          const leftMM = pxToMM(el.position.x, true);
-          const topMM = pxToMM(el.position.y, false);
           const widthMM = pxToMM(el.size.width, true);
           
           // Get table style from advanced config (default: classic)
@@ -930,10 +984,11 @@ function generateInvoiceHTML(
             return itemHTML;
           }).join('');
 
+          // Table uses FLOW positioning for page break support
           return `
-            <div class="positioned-table" data-element-id="table" data-left-mm="${leftMM}" data-top-mm="${topMM}" data-width-mm="${widthMM}" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; z-index: 10;">
+            <div class="flow-table" data-element-id="table" style="margin-left: ${tableLeftMM}mm; margin-right: ${210 - tableLeftMM - tableWidthMM}mm; width: ${tableWidthMM}mm;">
               <table style="width: 100%; border-collapse: collapse; font-size: 9px; ${tableContainerStyle}">
-                <thead>
+                <thead style="display: table-header-group;">
                   <tr style="${headerRowStyle}">
                     <th style="${headerCellStyle} text-align: left;">Description</th>
                     <th style="${headerCellStyle} text-align: center; width: 60px;">Qté</th>
@@ -949,8 +1004,6 @@ function generateInvoiceHTML(
             </div>
           `;
         } else if (el.id === 'totals') {
-          const leftMM = pxToMM(el.position.x, true);
-          const topMM = pxToMM(el.position.y, false);
           const widthMM = pxToMM(el.size.width, true);
           
           // Get totals style from advanced config (default: filled)
@@ -974,8 +1027,9 @@ function generateInvoiceHTML(
             totalBorderStyle = `border-top: 1px solid ${colors.primary}; color: ${colors.primary};`;
           }
 
+          // Totals uses FLOW positioning, aligned to right of table
           return `
-            <div class="positioned-totals" data-element-id="totals" data-left-mm="${leftMM}" data-top-mm="${topMM}" data-width-mm="${widthMM}" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; ${containerStyle} padding: 10px; border-radius: 8px; z-index: 10;">
+            <div class="flow-totals" data-element-id="totals" style="margin-left: auto; margin-right: ${210 - tableLeftMM - tableWidthMM}mm; margin-top: 8mm; margin-bottom: 15mm; width: ${widthMM}mm; ${containerStyle} padding: 10px; border-radius: 8px; page-break-inside: avoid;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 10px;">
                 <span>Sous-total:</span>
                 <span>${formatCurrency(invoiceData.subtotal, invoiceData.currency)}</span>
@@ -993,16 +1047,25 @@ function generateInvoiceHTML(
               </div>
             </div>
           `;
-        } else if (el.id === 'qr_bill_zone') {
-          // Skip rendering here - QR Bill will be rendered inline after content
-          return '';
-        } else {
-          return renderPositionedElement(el, invoiceData, colors);
         }
+        return '';
       })
+      .filter((html: string) => html.trim() !== '')
       .join('');
     
-    contentHTML = `<div class="positioned-content">${positionedElements}</div>`;
+    // HEADER CONTAINER APPROACH:
+    // 1. Header container occupies space on Page 1 (height = tableTopMM)
+    // 2. Absolute elements are positioned relative to this container
+    // 3. Flow content follows naturally
+    
+    contentHTML = `
+      <div class="header-container" style="position: relative; width: 100%; height: ${tableTopMM}mm;">
+        ${headerElements}
+      </div>
+      <div class="flow-content" style="position: relative; z-index: 10; padding-bottom: 40mm;">
+        ${flowElements}
+      </div>
+    `;
   } else {
     // Use default template with normal flow
     contentHTML = `
@@ -1149,267 +1212,33 @@ function generateInvoiceHTML(
             return match ? parseFloat(match) || 0 : 0;
           }
 
-          function positionTotals() {
-            const totals = document.querySelector('.positioned-totals');
-            const tableWrapper = document.querySelector('.positioned-table');
-            if (!totals || !tableWrapper) return;
-
-            const containerRect = document.querySelector('.invoice-container').getBoundingClientRect();
-            
-            // Find the actual table bottom by checking all rows
-            const table = tableWrapper.querySelector('table');
-            let tableBottomPx = 0;
-            
-            if (table) {
-              const allRows = Array.from(table.querySelectorAll('tr'));
-              allRows.forEach(row => {
-                const rowRect = row.getBoundingClientRect();
-                const rowBottomPx = rowRect.bottom - containerRect.top;
-                tableBottomPx = Math.max(tableBottomPx, rowBottomPx);
-              });
-            } else {
-              // Fallback to wrapper
-              const tableRect = tableWrapper.getBoundingClientRect();
-              tableBottomPx = tableRect.bottom - containerRect.top;
-            }
-            
-            console.log('[Totals] Table ends at:', tableBottomPx, 'px (', tableBottomPx / MM_TO_PX, 'mm)');
-            
-            // ALWAYS position totals below table - ignore theme editor position
-            const marginPx = mmToPx(8); // 8mm margin below table
-            const newTopPx = tableBottomPx + marginPx;
-            const newTopMM = newTopPx / MM_TO_PX;
-            
-            // Force the new position
-            totals.style.top = newTopMM + 'mm';
-            totals.setAttribute('data-top-mm', newTopMM.toString());
-            
-            console.log('[Totals] FORCED position at:', newTopMM.toFixed(2), 'mm');
-          }
-
-          function enforceTableBreaks() {
-            const table = document.querySelector('.positioned-table table, .items-table');
+          // With the hybrid layout, table and totals use document flow
+          // CSS handles page breaks - no JavaScript positioning needed
+          function markRowsForPageBreaks() {
+            const table = document.querySelector('.flow-table table, .items-table');
             if (!table) return;
-
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
-            const pageHeightPx = mmToPx(297 - 20 - 20);
-            const headerHeight = table.querySelector('thead')?.getBoundingClientRect().height || 0;
-            const containerRect = document.querySelector('.invoice-container').getBoundingClientRect();
-
-            let currentPageBottomPx = pageHeightPx;
-            rows.forEach((row) => {
-              const rowRect = row.getBoundingClientRect();
-              const rowTopPx = rowRect.top - containerRect.top;
-              const rowBottomPx = rowRect.bottom - containerRect.top;
-
-              if (rowBottomPx > currentPageBottomPx) {
-                const diff = rowBottomPx - currentPageBottomPx;
-                const offset = diff + 4;
-                row.style.marginTop = (row.style.marginTop ? parseFloat(row.style.marginTop) : 0) + offset + 'px';
-                currentPageBottomPx += pageHeightPx;
-                if (!row.classList.contains('discount-row')) {
-                  row.style.pageBreakBefore = 'always';
-                }
-              }
-            });
-
+            
+            // Mark discount rows to avoid breaking
             const discountRows = table.querySelectorAll('tr.discount-row');
             discountRows.forEach((row) => {
               row.style.pageBreakInside = 'avoid';
             });
+            
+            console.log('[Flow Layout] Table rows marked for page break handling');
           }
 
-          function adjustQRBillPlacement() {
-            const qrBill = document.querySelector('.qr-bill-container');
-            if (!qrBill) {
-              console.log('[QR Bill Placement] QR Bill container not found');
-              return;
-            }
-            
-            const container = document.querySelector('.invoice-container');
-            if (!container) {
-              console.log('[QR Bill Placement] Invoice container not found');
-              return;
-            }
-            
-            // Find all positioned elements (logo, company info, table, totals, etc.)
-            const positionedContent = document.querySelector('.positioned-content');
-            let maxBottomPx = 0;
-            
-            if (positionedContent) {
-              // Get all direct children that are positioned
-              const allElements = Array.from(positionedContent.querySelectorAll('*'));
-              const containerRect = container.getBoundingClientRect();
-              
-              allElements.forEach(el => {
-                const rect = el.getBoundingClientRect();
-                if (rect.height > 0 && rect.width > 0) {
-                  const bottomPx = rect.bottom - containerRect.top;
-                  maxBottomPx = Math.max(maxBottomPx, bottomPx);
-                }
-              });
-              
-              console.log('[QR Bill Placement] Found', allElements.length, 'positioned elements');
-            } else {
-              // Fallback: use invoice-content if no positioned-content
-              const invoiceContent = document.querySelector('.invoice-content');
-              if (invoiceContent) {
-                const containerRect = container.getBoundingClientRect();
-                const contentRect = invoiceContent.getBoundingClientRect();
-                maxBottomPx = contentRect.bottom - containerRect.top;
-                console.log('[QR Bill Placement] Using invoice-content fallback');
-              }
-            }
-            
-            // Calculate if QR Bill fits on page 1
-            const qrBillHeightMM = 105; // QR Bill standard height
-            const qrBillHeightPx = mmToPx(qrBillHeightMM);
-            const pageHeightPx = mmToPx(297); // A4 height
-            const marginsPx = mmToPx(10); // Only top margin, bottom can be minimal
-            const availableHeightPx = pageHeightPx - marginsPx;
-            
-            console.log('[QR Bill Placement] Max content bottom:', maxBottomPx, 'px');
-            console.log('[QR Bill Placement] QR Bill height:', qrBillHeightPx, 'px');
-            console.log('[QR Bill Placement] Available height:', availableHeightPx, 'px');
-            console.log('[QR Bill Placement] Total if added:', (maxBottomPx + qrBillHeightPx), 'px');
-            console.log('[QR Bill Placement] Would fit?', (maxBottomPx + qrBillHeightPx) < availableHeightPx);
-            
-            // If QR Bill fits on page 1, remove page break
-            if ((maxBottomPx + qrBillHeightPx + mmToPx(10)) < availableHeightPx) {
-              qrBill.style.pageBreakBefore = 'avoid';
-              qrBill.style.marginTop = '10mm';
-              console.log('[QR Bill Placement] ✅ Keeping QR Bill on page 1');
-            } else {
-              qrBill.style.pageBreakBefore = 'always';
-              console.log('[QR Bill Placement] ⏭️  Moving QR Bill to page 2');
-            }
-          }
-
-          function positionQRBillBelowContent() {
-            const qrBill = document.querySelector('.qr-bill-container');
-            const container = document.querySelector('.invoice-container');
-            
-            if (!qrBill || !container) {
-              console.log('[QR Bill] ERROR: Missing qrBill or container');
-              return;
-            }
-            
-            // Force reflow
-            void container.offsetHeight;
-            
-            const containerRect = container.getBoundingClientRect();
-            
-            // SIMPLE APPROACH: Find the maximum bottom position of ALL content elements
-            // This is the most reliable way to detect where the content ends
-            let maxContentBottomPx = 0;
-            let maxElement = null;
-            
-            // Scan ALL elements inside positioned-content (except QR Bill)
-            const positionedContent = document.querySelector('.positioned-content');
-            if (positionedContent) {
-              const allElements = positionedContent.querySelectorAll('*');
-              allElements.forEach(el => {
-                if (el.classList.contains('qr-bill-container')) return;
-                if (el.tagName === 'SCRIPT') return;
-                
-                const rect = el.getBoundingClientRect();
-                if (rect.height > 0 && rect.width > 0) {
-                  const bottomPx = rect.bottom - containerRect.top;
-                  if (bottomPx > maxContentBottomPx) {
-                    maxContentBottomPx = bottomPx;
-                    maxElement = el;
-                  }
-                }
-              });
-            }
-            
-            // Also check the table rows specifically (they might extend beyond)
-            const tableRows = document.querySelectorAll('.positioned-table tr, .items-table tr');
-            tableRows.forEach(row => {
-              const rect = row.getBoundingClientRect();
-              const bottomPx = rect.bottom - containerRect.top;
-              if (bottomPx > maxContentBottomPx) {
-                maxContentBottomPx = bottomPx;
-                maxElement = row;
-              }
-            });
-            
-            // Also check totals specifically
-            const totals = document.querySelector('.positioned-totals');
-            if (totals) {
-              const rect = totals.getBoundingClientRect();
-              const bottomPx = rect.bottom - containerRect.top;
-              if (bottomPx > maxContentBottomPx) {
-                maxContentBottomPx = bottomPx;
-                maxElement = totals;
-              }
-            }
-            
-            // Convert to mm
-            const maxContentBottomMM = maxContentBottomPx / MM_TO_PX;
-            
-            // QR Bill constants
-            const qrBillHeightMM = 105;
-            const pageHeightMM = 297;
-            const safetyMarginMM = 10;
-            
-            // QR Bill position at bottom of page
-            const qrBillTopMM = pageHeightMM - qrBillHeightMM; // 192mm
-            
-            // Check if content would overlap with QR Bill zone
-            const contentWithMarginMM = maxContentBottomMM + safetyMarginMM;
-            const wouldOverlap = contentWithMarginMM > qrBillTopMM;
-            
-            console.log('=== QR Bill Positioning Analysis ===');
-            console.log('[QR Bill] Container top:', containerRect.top.toFixed(2), 'px');
-            console.log('[QR Bill] Max content bottom:', maxContentBottomPx.toFixed(2), 'px =', maxContentBottomMM.toFixed(2), 'mm');
-            console.log('[QR Bill] Max element:', maxElement?.className || maxElement?.tagName || 'unknown');
-            console.log('[QR Bill] Content + margin:', contentWithMarginMM.toFixed(2), 'mm');
-            console.log('[QR Bill] QR Bill zone starts at:', qrBillTopMM, 'mm');
-            console.log('[QR Bill] Would overlap?', wouldOverlap, '(', contentWithMarginMM.toFixed(2), 'mm >', qrBillTopMM, 'mm)');
-            
-            if (wouldOverlap) {
-              // CRITICAL: Content is too long, QR Bill MUST go to page 2
-              console.log('[QR Bill] ⏭️  MOVING TO PAGE 2');
-              
-              // Remove absolute positioning and use page break
-              qrBill.style.setProperty('position', 'relative', 'important');
-              qrBill.style.setProperty('top', 'auto', 'important');
-              qrBill.style.setProperty('left', 'auto', 'important');
-              qrBill.style.setProperty('margin-top', '20mm', 'important');
-              qrBill.style.setProperty('page-break-before', 'always', 'important');
-              qrBill.style.setProperty('z-index', '2000', 'important');
-            } else {
-              // Content fits, position QR Bill at bottom of page 1
-              console.log('[QR Bill] ✅ Fits on page 1 at', qrBillTopMM, 'mm');
-              
-              qrBill.style.setProperty('position', 'absolute', 'important');
-              qrBill.style.setProperty('top', qrBillTopMM + 'mm', 'important');
-              qrBill.style.setProperty('left', '0', 'important');
-              qrBill.style.setProperty('margin-top', '0', 'important');
-              qrBill.style.setProperty('page-break-before', 'avoid', 'important');
-              qrBill.style.setProperty('z-index', '2000', 'important');
-            }
-            console.log('=====================================');
-          }
+          // QR Bill positioning is now handled by calculateContentMetrics in Puppeteer context
+          // No client-side manipulation needed - this prevents conflicts
 
           function init() {
             try {
-              // Step 1: Position totals below table
-              positionTotals();
-              
-              // Step 2: Enforce table breaks
-              enforceTableBreaks();
-              
-              // NOTE: QR Bill positioning is handled by Puppeteer's calculateContentMetrics
-              // before PDF generation, so we don't need to do it here
-              console.log('[Init] Totals positioned, table breaks enforced');
+              markRowsForPageBreaks();
+              console.log('[Init] Layout initialized - QR Bill positioned by server');
             } catch (e) {
               console.error('[Init Error]', e);
             }
           }
 
-          // Run immediately
           init();
         })();
       </script>
@@ -1476,13 +1305,28 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       pointer-events: none;
     }
     
-    .positioned-content {
+    /* Flow content for table and totals (can break across pages) */
+    .flow-content {
       position: relative;
-      width: 210mm;
-      min-height: calc(297mm - 105mm);
       z-index: 10;
-      padding: 0;
-      margin: 0;
+      padding-bottom: 25mm; /* Space to avoid overlapping page numbers */
+    }
+    
+    .flow-table {
+      page-break-inside: auto;
+    }
+    
+    .flow-table thead {
+      display: table-header-group;
+    }
+    
+    .flow-table tbody tr {
+      page-break-inside: avoid;
+    }
+    
+    .flow-totals {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     
     .invoice-content {
@@ -1755,31 +1599,22 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       letter-spacing: 0.5px;
     }
     
-    /* QR Bill page wrapper - used when QR Bill needs to go to page 2 */
-    .qr-bill-page-wrapper {
-      page-break-before: always;
-      page-break-after: avoid !important;
-      page-break-inside: avoid;
-      width: 210mm;
-      height: 297mm;
-      position: relative;
+    /* QR Bill spacer - pushes QR Bill to bottom of page */
+    .qr-bill-spacer {
+      width: 100%;
       margin: 0;
       padding: 0;
-      overflow: hidden;
     }
     
-    /* QR Bill container - Always positioned at the bottom of the page */
+    /* QR Bill container */
     .qr-bill-container {
       position: relative;
       width: 210mm;
       height: 105mm;
       margin: 0;
-      page-break-before: avoid;
-      page-break-after: avoid !important;
-      page-break-inside: avoid;
       padding: 0;
-      z-index: 2000 !important; /* Above all positioned elements */
-      background: white; /* Ensure opaque background */
+      background: white;
+      page-break-inside: avoid;
     }
     
     /* Perforation line */
@@ -1805,21 +1640,13 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       }
       
       .qr-bill-container {
-        page-break-before: avoid;
-        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
       }
       
-      .invoice-content {
-        page-break-after: avoid;
-      }
-      
-      .background-layer {
-        page-break-after: avoid;
-        page-break-inside: avoid;
-      }
-      
-      .invoice-container {
-        page-break-after: avoid;
+      /* Prevent empty page at end */
+      html, body {
+        height: auto !important;
+        overflow: visible !important;
       }
       
       /* Prevent empty page at end */
@@ -1885,19 +1712,9 @@ function generateQRBillHTML(qrBillData: SwissQRBillData, options: ResolvedPDFOpt
     console.log('[generateQRBillHTML] Official Swiss QR Bill SVG generated successfully');
 
     // Return the official Swiss QR Bill SVG wrapped in a container
-    // Use auto instead of always to allow QR Bill on same page if space available
+    // Styles are applied dynamically by calculateContentMetrics
     return `
-      <div class="qr-bill-container" style="
-        width: 210mm;
-        height: 105mm;
-        page-break-inside: avoid;
-        page-break-before: avoid;
-        margin: 0;
-        padding: 0;
-        background: white;
-        z-index: 2000;
-        position: relative;
-      ">
+      <div class="qr-bill-container" id="qr-bill">
         <div class="perforation-line"></div>
         ${svg}
       </div>

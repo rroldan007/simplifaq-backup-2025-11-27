@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Button } from '../ui/Button';
 import { DEFAULT_TVA_RATE } from '../../config/swissTaxRates';
 import { CSVImportModal } from './CSVImportModal';
 import type { CSVInvoiceItem } from './CSVImportModal';
@@ -198,8 +197,9 @@ export function InvoiceItemsTable({
 
   const addItem = () => {
     if (readOnly) return;
+    const newItemId = `item-${Date.now()}`;
     const newItem: InvoiceItem = {
-      id: `item-${Date.now()}`,
+      id: newItemId,
       description: '',
       quantity: 1,
       unitPrice: 0,
@@ -216,6 +216,14 @@ export function InvoiceItemsTable({
     };
     
     onItemsChange([...items, newItem]);
+    
+    // Scroll to the new item after DOM update
+    setTimeout(() => {
+      const newItemElement = document.querySelector(`[data-item-id="${newItemId}"]`);
+      if (newItemElement) {
+        newItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
   };
 
   const removeItem = (index: number) => {

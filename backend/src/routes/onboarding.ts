@@ -22,4 +22,7 @@ router.post('/reset', onboardingController.reset);
 // Mark welcome message as shown
 router.post('/welcome-shown', onboardingController.markWelcomeShown);
 
+// Dismiss onboarding permanently (user chose "Ne plus afficher")
+router.post('/dismiss', onboardingController.dismiss);
+
 export default router;

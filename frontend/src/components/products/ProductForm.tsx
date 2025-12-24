@@ -74,21 +74,30 @@ export function ProductForm({
     return v > 0 ? String(v).replace('.', ',') : '';
   });
 
-  // Common units in French
-  const UNITS = [
+  // Units for physical products
+  const PRODUCT_UNITS = [
     { value: 'piece', label: 'Pièce' },
+    { value: 'kg', label: 'Kilogramme' },
+    { value: 'liter', label: 'Litre' },
+    { value: 'meter', label: 'Mètre' },
+    { value: 'box', label: 'Boîte' },
+    { value: 'pack', label: 'Pack' },
+  ];
+
+  // Units for services (time-based or intangible)
+  const SERVICE_UNITS = [
     { value: 'hour', label: 'Heure' },
     { value: 'day', label: 'Jour' },
     { value: 'month', label: 'Mois' },
     { value: 'year', label: 'Année' },
-    { value: 'kg', label: 'Kilogramme' },
-    { value: 'liter', label: 'Litre' },
-    { value: 'meter', label: 'Mètre' },
-    { value: 'service', label: 'Service' },
-    { value: 'license', label: 'Licence' },
+    { value: 'service', label: 'Forfait' },
     { value: 'consultation', label: 'Consultation' },
-    { value: 'project', label: 'Projet' }
+    { value: 'project', label: 'Projet' },
+    { value: 'license', label: 'Licence' },
   ];
+
+  // Get units based on product type
+  const availableUnits = formData.isService ? SERVICE_UNITS : PRODUCT_UNITS;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-CH', {
@@ -292,7 +301,8 @@ export function ProductForm({
   };
 
   const getUnitLabel = (unit: string) => {
-    const unitObj = UNITS.find(u => u.value === unit);
+    const allUnits = [...PRODUCT_UNITS, ...SERVICE_UNITS];
+    const unitObj = allUnits.find(u => u.value === unit);
     return unitObj ? unitObj.label : unit;
   };
 
@@ -368,7 +378,13 @@ export function ProductForm({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => updateFormData('isService', false)}
+                    onClick={() => {
+                      updateFormData('isService', false);
+                      // Reset to default product unit if current unit is a service unit
+                      if (SERVICE_UNITS.some(u => u.value === formData.unit)) {
+                        updateFormData('unit', 'piece');
+                      }
+                    }}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
                       !formData.isService
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -382,7 +398,13 @@ export function ProductForm({
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateFormData('isService', true)}
+                    onClick={() => {
+                      updateFormData('isService', true);
+                      // Reset to default service unit if current unit is a product unit
+                      if (PRODUCT_UNITS.some(u => u.value === formData.unit)) {
+                        updateFormData('unit', 'hour');
+                      }
+                    }}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
                       formData.isService
                         ? 'border-amber-500 bg-amber-50 text-amber-700'
@@ -594,7 +616,7 @@ export function ProductForm({
                   onChange={(e) => updateFormData('unit', e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  {UNITS.map((unit) => (
+                  {availableUnits.map((unit) => (
                     <option key={unit.value} value={unit.value}>
                       {unit.label}
                     </option>
