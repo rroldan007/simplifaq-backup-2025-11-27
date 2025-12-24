@@ -1635,8 +1635,18 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
     
     /* Ensure proper page breaks for print */
     @media print {
+      .qr-bill-page-wrapper {
+        page-break-after: avoid !important;
+      }
+      
       .qr-bill-container {
         page-break-inside: avoid !important;
+      }
+      
+      /* Prevent empty page at end */
+      html, body {
+        height: auto !important;
+        overflow: visible !important;
       }
       
       /* Prevent empty page at end */
