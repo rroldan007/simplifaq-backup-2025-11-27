@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sparkles, X, ArrowRight, CheckCircle } from 'lucide-react';
 
 interface WelcomeModalProps {
-  onClose: () => void;
+  onClose: (neverShowAgain?: boolean) => void;
   onStartOnboarding: () => void;
   companyName?: string;
 }
 
 export default function WelcomeModal({ onClose, onStartOnboarding, companyName }: WelcomeModalProps) {
+  const [neverShow, setNeverShow] = useState(false);
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
@@ -17,7 +18,7 @@ export default function WelcomeModal({ onClose, onStartOnboarding, companyName }
             <div className="absolute top-0 left-0 w-full h-full bg-pattern"></div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => onClose(neverShow)}
             className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors z-10"
           >
             <X className="h-6 w-6" />
@@ -131,12 +132,25 @@ export default function WelcomeModal({ onClose, onStartOnboarding, companyName }
               <ArrowRight className="h-5 w-5" />
             </button>
             <button
-              onClick={onClose}
+              onClick={() => onClose(neverShow)}
               className="px-4 sm:px-6 py-3 sm:py-4 text-gray-600 hover:text-gray-900 transition-colors font-medium rounded-xl hover:bg-gray-100"
             >
               Plus tard
             </button>
           </div>
+
+          {/* Ne plus afficher checkbox */}
+          <label className="flex items-center justify-center gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={neverShow}
+              onChange={(e) => setNeverShow(e.target.checked)}
+              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            />
+            <span className="text-sm text-gray-500 group-hover:text-gray-700">
+              Ne plus afficher ce message
+            </span>
+          </label>
 
           <p className="text-center text-xs text-gray-500">
             ⏱️ Temps estimé: 5-10 minutes • Vous pouvez passer certaines étapes

@@ -2,9 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { Package, Wrench, Search, X, LayoutGrid, List, ArrowDownAZ, Tag, Clock, Pencil, Copy, Trash2, Plus, Upload, Download, Sparkles } from 'lucide-react';
+import { Package, Wrench, Search, X, LayoutGrid, List, ArrowDownAZ, Tag, Clock, Pencil, Copy, Trash2, Plus, Sparkles } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -42,7 +41,9 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
   onDuplicate,
   onCreateNew,
   currency = 'CHF',
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onOpenImport,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onExport,
   showInsights = true
 }) => {
@@ -129,10 +130,6 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
     return 'Produit';
   };
 
-  const getTvaColor = () => {
-    // Use neutral badge with theme-aware text; intensity differences are removed for consistent theming
-    return 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)]';
-  };
 
   const filterOptions = [
     { value: 'all', label: 'Tout le catalogue', icon: <Package className="w-4 h-4" />, count: products.length },

@@ -338,14 +338,39 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
   let contentHTML = '';
   
   if (useCustomPositioning && advancedConfig.elements) {
-    // Custom positioned elements
-    const positionedElements = advancedConfig.elements
-      .filter((el: any) => el.visible !== false)
+    // HYBRID APPROACH: Header absolute + table/totals flow
+    
+    const headerElementIds = ['logo', 'company_name', 'company_info', 'client_info', 'doc_title', 'doc_number'];
+    
+    // Render header elements with ABSOLUTE positioning
+    const headerElements = advancedConfig.elements
+      .filter((el: any) => el.visible !== false && headerElementIds.includes(el.id))
+      .map((el: any) => renderPositionedElement(el, {
+        invoiceNumber: quoteData.quoteNumber,
+        issueDate: quoteData.issueDate,
+        dueDate: quoteData.validUntil || quoteData.issueDate,
+        company: quoteData.company,
+        client: quoteData.client,
+        items: quoteData.items,
+        subtotal: quoteData.subtotal,
+        tvaAmount: quoteData.tvaAmount,
+        total: quoteData.total,
+        currency: quoteData.currency,
+        logoUrl: quoteData.company.logoUrl
+      } as any, colors, 'DEVIS'))
+      .join('');
+    
+    // Get table config for flow content positioning
+    const tableConfig = advancedConfig.elements.find((el: any) => el.id === 'table' && el.visible !== false);
+    const tableTopMM = tableConfig ? pxToMM(tableConfig.position.y, false) : 80;
+    const tableLeftMM = tableConfig ? pxToMM(tableConfig.position.x, true) : 20;
+    const tableWidthMM = tableConfig ? pxToMM(tableConfig.size.width, true) : 170;
+    
+    // Render ONLY table and totals in flow layout
+    const flowElements = advancedConfig.elements
+      .filter((el: any) => el.visible !== false && (el.id === 'table' || el.id === 'totals'))
       .map((el: any) => {
         if (el.id === 'table') {
-          const leftMM = pxToMM(el.position.x, true);
-          const topMM = pxToMM(el.position.y, false);
-          const widthMM = pxToMM(el.size.width, true);
           
           // Get table style from advanced config (default: classic)
           const tableStyle = (advancedConfig as any)?.tableStyle || 'classic';
@@ -440,10 +465,13 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
             return itemHTML;
           }).join('');
 
+          const widthMM = pxToMM(el.size.width, true);
+          
+          // Table uses FLOW positioning for page break support
           return `
-            <div class="positioned-table" data-element-id="table" data-left-mm="${leftMM}" data-top-mm="${topMM}" data-width-mm="${widthMM}" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; z-index: 10;">
+            <div class="flow-table" data-element-id="table" style="margin-left: ${tableLeftMM}mm; margin-right: ${210 - tableLeftMM - tableWidthMM}mm; width: ${tableWidthMM}mm;">
               <table style="width: 100%; border-collapse: collapse; font-size: 9px; ${tableContainerStyle}">
-                <thead>
+                <thead style="display: table-header-group;">
                   <tr style="${headerRowStyle}">
                     <th style="${headerCellStyle} text-align: left;">Description</th>
                     <th style="${headerCellStyle} text-align: center; width: 60px;">Qté</th>
@@ -459,8 +487,6 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
             </div>
           `;
         } else if (el.id === 'totals') {
-          const leftMM = pxToMM(el.position.x, true);
-          const topMM = pxToMM(el.position.y, false);
           const widthMM = pxToMM(el.size.width, true);
           
           // Get totals style from advanced config (default: filled)
@@ -482,8 +508,9 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
             totalBorderStyle = `border-top: 1px solid ${colors.primary}; color: ${colors.primary};`;
           }
 
+          // Totals uses FLOW positioning, aligned to right of table
           return `
-            <div class="positioned-totals" data-element-id="totals" data-left-mm="${leftMM}" data-top-mm="${topMM}" data-width-mm="${widthMM}" style="position: absolute; left: ${leftMM}mm; top: ${topMM}mm; width: ${widthMM}mm; ${containerStyle} padding: 10px; border-radius: 8px; z-index: 10;">
+            <div class="flow-totals" data-element-id="totals" style="margin-left: auto; margin-right: ${210 - tableLeftMM - tableWidthMM}mm; margin-top: 8mm; margin-bottom: 15mm; width: ${widthMM}mm; ${containerStyle} padding: 10px; border-radius: 8px; page-break-inside: avoid;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 10px;">
                 <span>Sous-total:</span>
                 <span>${formatCurrency(quoteData.subtotal, quoteData.currency)}</span>
@@ -501,27 +528,25 @@ function generateQuoteHTML(quoteData: QuoteData, options: QuotePDFOptions): stri
               </div>
             </div>
           `;
-        } else if (el.id === 'qr_bill_zone') {
-          return '';
-        } else {
-          return renderPositionedElement(el, {
-            invoiceNumber: quoteData.quoteNumber,
-            issueDate: quoteData.issueDate,
-            dueDate: quoteData.validUntil || quoteData.issueDate,
-            company: quoteData.company,
-            client: quoteData.client,
-            items: quoteData.items,
-            subtotal: quoteData.subtotal,
-            tvaAmount: quoteData.tvaAmount,
-            total: quoteData.total,
-            currency: quoteData.currency,
-            logoUrl: quoteData.company.logoUrl
-          } as any, colors, 'DEVIS');
         }
+        return '';
       })
+      .filter((html: string) => html.trim() !== '')
       .join('');
     
-    contentHTML = `<div class="positioned-content">${positionedElements}</div>`;
+    // HEADER CONTAINER APPROACH:
+    // 1. Header container occupies space on Page 1 (height = tableTopMM)
+    // 2. Absolute elements are positioned relative to this container
+    // 3. Flow content follows naturally
+    
+    contentHTML = `
+      <div class="header-container" style="position: relative; width: 100%; height: ${tableTopMM}mm;">
+        ${headerElements}
+      </div>
+      <div class="flow-content" style="position: relative; z-index: 10;">
+        ${flowElements}
+      </div>
+    `;
   } else {
     // Default template
     contentHTML = `

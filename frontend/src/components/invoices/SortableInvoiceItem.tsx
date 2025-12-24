@@ -9,7 +9,34 @@ import { useProducts } from '../../hooks/useProducts';
 import { NotificationContainer } from '../ui/Notification';
 import { useAuth } from '../../hooks/useAuth';
 import { DEFAULT_DISCOUNT_VALUE, DEFAULT_DISCOUNT_TYPE } from '../../constants/discounts';
-import { isKilogramUnit, getQuantityDecimals, getQuantityStep, roundQuantity, normalizeUnit } from '../../utils/unitUtils';
+import { isKilogramUnit, getQuantityStep, roundQuantity } from '../../utils/unitUtils';
+
+// Helper to check if unit is hour-based (for time calculator)
+const isHourUnit = (unit?: string): boolean => {
+  if (!unit) return false;
+  const normalized = unit.toLowerCase().trim();
+  return ['hour', 'heure', 'h', 'hrs', 'hours', 'heures'].includes(normalized);
+};
+
+// Calculate hours between two times (HH:MM format)
+const calculateHours = (startTime: string, endTime: string): number => {
+  if (!startTime || !endTime) return 0;
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
+  
+  const startMinutes = startH * 60 + startM;
+  let endMinutes = endH * 60 + endM;
+  
+  // Handle overnight (e.g., 22:00 to 02:00)
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60;
+  }
+  
+  const diffMinutes = endMinutes - startMinutes;
+  // Round to 2 decimal places (e.g., 1.5 hours, 2.25 hours)
+  return Math.round((diffMinutes / 60) * 100) / 100;
+};
 
 interface InvoiceItem {
   id: string;
@@ -71,6 +98,11 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
   const { createProduct, notifications, removeNotification, products } = useProducts();
   const [lastCreatedProduct, setLastCreatedProduct] = useState<Product | null>(null);
   const { user } = useAuth();
+  
+  // Time calculator state (for hour-based services)
+  const [showTimeCalc, setShowTimeCalc] = useState(false);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
 
   // Determine unit: if not in item, try to get it from the product (for old invoices)
   const itemUnit = useMemo(() => {
@@ -128,6 +160,7 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
     <div
       ref={setNodeRef}
       style={style}
+      data-item-id={item.id}
       className="p-4 border border-slate-200 rounded-lg bg-white overflow-visible"
     >
       {/* Description Row */}
@@ -268,39 +301,125 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
       {/* Fields Row */}
       <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
 
-        {/* Quantity */}
-        <div className="col-span-1 md:col-span-1">
+        {/* Quantity with optional Time Calculator for hour-based services */}
+        <div className="col-span-1 md:col-span-1 relative">
           <label className="block text-sm font-medium text-slate-700 mb-1 md:hidden">
             Quantité
           </label>
-          <Input
-            type="number"
-            min="0"
-            step={quantityStep}
-            inputMode="decimal"
-            value={(function () {
-              const qtyRaw: unknown = item.quantity ?? 0;
-              const qtyStr: string = typeof qtyRaw === 'string' ? qtyRaw : String(qtyRaw);
-              const qtyNum = parseFloat(qtyStr.replace(',', '.'));
-              // Show exact value without rounding for display, let browser handle decimal precision
-              const finalQty = Number.isFinite(qtyNum) ? qtyNum : 0;
-              return finalQty === 0 ? '' : finalQty;
-            })()}
-            onChange={(e) => {
-              if (readOnly) return;
-              const raw = e.target.value;
-              if (raw === '') {
-                onUpdate(index, 'quantity', 0);
-                return;
-              }
-              const normalized = raw.replace(',', '.');
-              const parsed = parseFloat(normalized);
-              onUpdate(index, 'quantity', roundQty(isNaN(parsed) ? 0 : parsed));
-            }}
-            placeholder="Qté"
-            className="w-full text-center"
-            disabled={readOnly}
-          />
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min="0"
+              step={quantityStep}
+              inputMode="decimal"
+              value={(function () {
+                const qtyRaw: unknown = item.quantity ?? 0;
+                const qtyStr: string = typeof qtyRaw === 'string' ? qtyRaw : String(qtyRaw);
+                const qtyNum = parseFloat(qtyStr.replace(',', '.'));
+                const finalQty = Number.isFinite(qtyNum) ? qtyNum : 0;
+                return finalQty === 0 ? '' : finalQty;
+              })()}
+              onChange={(e) => {
+                if (readOnly) return;
+                const raw = e.target.value;
+                if (raw === '') {
+                  onUpdate(index, 'quantity', 0);
+                  return;
+                }
+                const normalized = raw.replace(',', '.');
+                const parsed = parseFloat(normalized);
+                onUpdate(index, 'quantity', roundQty(isNaN(parsed) ? 0 : parsed));
+              }}
+              placeholder="Qté"
+              className="w-full text-center"
+              disabled={readOnly}
+            />
+            {/* Clock button for hour-based services */}
+            {isHourUnit(itemUnit) && !readOnly && (
+              <button
+                type="button"
+                onClick={() => setShowTimeCalc(!showTimeCalc)}
+                className={`p-1.5 rounded-md transition-colors flex-shrink-0 ${
+                  showTimeCalc 
+                    ? 'bg-blue-100 text-blue-600' 
+                    : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50'
+                }`}
+                title="Calculer les heures"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
+          </div>
+          
+          {/* Time Calculator Popover - Minimalist */}
+          {showTimeCalc && isHourUnit(itemUnit) && (
+            <div className="absolute top-full left-0 mt-1 z-20 bg-white rounded-lg shadow-lg border border-slate-200 p-3 min-w-[220px]">
+              {/* Time inputs */}
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  placeholder="Début"
+                />
+                <span className="text-slate-300">→</span>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  placeholder="Fin"
+                />
+              </div>
+              
+              {/* Result + Actions */}
+              <div className="flex items-center gap-2">
+                {startTime && endTime && calculateHours(startTime, endTime) > 0 ? (
+                  <div className="flex-1 text-center py-1.5 bg-blue-50 rounded-lg">
+                    <span className="text-sm font-semibold text-blue-600">
+                      = {calculateHours(startTime, endTime)}h
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex-1 text-center py-1.5 text-slate-400 text-xs">
+                    Sélectionnez les heures
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hours = calculateHours(startTime, endTime);
+                    if (hours > 0) {
+                      onUpdate(index, 'quantity', hours);
+                      setShowTimeCalc(false);
+                      setStartTime('');
+                      setEndTime('');
+                    }
+                  }}
+                  disabled={!startTime || !endTime || calculateHours(startTime, endTime) <= 0}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 rounded-lg transition-colors"
+                >
+                  OK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTimeCalc(false);
+                    setStartTime('');
+                    setEndTime('');
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Unit Price */}

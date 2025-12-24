@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FloatingLabelInput } from '../ui/FloatingLabelInput';
