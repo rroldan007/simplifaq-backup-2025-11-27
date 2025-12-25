@@ -2,9 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { Package, Wrench, Search, X, LayoutGrid, List, ArrowDownAZ, Tag, Clock, Pencil, Copy, Trash2, Plus, Upload, Download, Sparkles } from 'lucide-react';
+import { Package, Wrench, Search, X, LayoutGrid, List, ArrowDownAZ, Tag, Clock, Pencil, Copy, Trash2, Plus, Sparkles } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -13,6 +12,7 @@ interface Product {
   unitPrice: number;
   tvaRate: number;
   unit: string;
+  isService?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -41,7 +41,9 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
   onDuplicate,
   onCreateNew,
   currency = 'CHF',
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onOpenImport,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onExport,
   showInsights = true
 }) => {
@@ -51,14 +53,6 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
     (localStorage.getItem('products_view_mode') as 'grid' | 'list') || 'grid'
   );
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'created'>('name');
-
-  // FAB visual
-  const [fabOpen, setFabOpen] = useState(false);
-  const [highlightFab, setHighlightFab] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setHighlightFab(false), 4000);
-    return () => clearTimeout(t);
-  }, []);
 
   useEffect(() => {
     try { localStorage.setItem('products_view_mode', viewMode); } catch { /* ignore storage errors */ }
@@ -77,16 +71,12 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
         filtered = filtered.filter(product => !product.isActive);
         break;
       case 'products':
-        // Assuming products have physical units like "pcs", "kg", etc.
-        filtered = filtered.filter(product => 
-          !['heure', 'h', 'hour', 'service', 'consultation', 'forfait'].includes(product.unit.toLowerCase())
-        );
+        // Products have isService = false
+        filtered = filtered.filter(product => !product.isService);
         break;
       case 'services':
-        // Assuming services have time-based or service units
-        filtered = filtered.filter(product => 
-          ['heure', 'h', 'hour', 'service', 'consultation', 'forfait'].includes(product.unit.toLowerCase())
-        );
+        // Services have isService = true
+        filtered = filtered.filter(product => product.isService === true);
         break;
     }
 
@@ -140,10 +130,6 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
     return 'Produit';
   };
 
-  const getTvaColor = () => {
-    // Use neutral badge with theme-aware text; intensity differences are removed for consistent theming
-    return 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)]';
-  };
 
   const filterOptions = [
     { value: 'all', label: 'Tout le catalogue', icon: <Package className="w-4 h-4" />, count: products.length },
@@ -250,167 +236,172 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
 
       {/* Search and Filters */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-        <Card className="p-6 card-theme">
-          <div className="space-y-4">
-            {/* Search Bar */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="w-5 h-5 text-[var(--color-text-tertiary)]" />
-              </div>
-              <Input
-                type="text"
-                placeholder="Rechercher par nom, description, unité..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-3 text-lg input-theme"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-5">
+          {/* Search Bar */}
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-violet-500 transition-colors">
+              <Search className="w-5 h-5" />
             </div>
-
-            {/* Filter Tabs */}
-            <div className="flex flex-wrap gap-2">
-              {filterOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSelectedFilter(option.value as 'all' | 'active' | 'inactive' | 'products' | 'services')}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    selectedFilter === option.value
-                      ? 'bg-[var(--color-accent-100)] text-[var(--color-accent-700)] border-2 border-[var(--color-accent-200)]'
-                      : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] border-2 border-transparent'
-                  }`}
-                >
-                  <span className="inline-flex">{option.icon}</span>
-                  <span>{option.label}</span>
-                  <span className={`px-2 py-0.5 text-xs rounded-full ${
-                    selectedFilter === option.value
-                      ? 'bg-[var(--color-accent-200)] text-[var(--color-accent-800)]'
-                      : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]'
-                  }`}>
-                    {option.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* View Mode, Sort and Results Count */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                {/* View Mode */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-[var(--color-text-secondary)]">Affichage :</span>
-                  <div className="flex bg-[var(--color-bg-secondary)] rounded-lg p-1">
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`px-3 py-1 rounded text-sm ${
-                        viewMode === 'grid'
-                          ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] shadow-sm'
-                          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                      }`}
-                    >
-                      <span className="inline-flex items-center space-x-1"><LayoutGrid className="w-4 h-4" /><span>Grille</span></span>
-                    </button>
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`px-3 py-1 rounded text-sm ${
-                        viewMode === 'list'
-                          ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] shadow-sm'
-                          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                      }`}
-                    >
-                      <span className="inline-flex items-center space-x-1"><List className="w-4 h-4" /><span>Liste</span></span>
-                    </button>
-                  </div>
+            <input
+              type="text"
+              placeholder="Rechercher par nom, description, unité..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-12 py-3.5 text-base rounded-xl border-2 border-slate-200 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 bg-slate-50/50 focus:bg-white text-slate-800 placeholder-slate-400 transition-all focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center"
+              >
+                <div className="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors">
+                  <X className="w-3.5 h-3.5" />
                 </div>
+              </button>
+            )}
+          </div>
 
-                {/* Sort Options */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-[var(--color-text-secondary)]">Trier :</span>
-                  <div className="flex space-x-1">
-                    {sortOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => setSortBy(option.value as 'name' | 'price' | 'created')}
-                        className={`flex items-center space-x-1 px-3 py-1 rounded text-sm ${
-                          sortBy === option.value
-                            ? 'bg-[var(--color-accent-100)] text-[var(--color-accent-700)]'
-                            : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]'
-                        }`}
-                      >
-                        <span className="inline-flex">{option.icon}</span>
-                        <span>{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
+          {/* Filter Tabs */}
+          <div className="flex flex-wrap gap-2">
+            {filterOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setSelectedFilter(option.value as 'all' | 'active' | 'inactive' | 'products' | 'services')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  selectedFilter === option.value
+                    ? 'bg-violet-100 text-violet-700 ring-2 ring-violet-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span className="inline-flex">{option.icon}</span>
+                <span>{option.label}</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
+                  selectedFilter === option.value
+                    ? 'bg-violet-200 text-violet-800'
+                    : 'bg-slate-200 text-slate-500'
+                }`}>
+                  {option.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* View Mode, Sort and Results Count */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-4">
+              {/* View Mode */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-500">Affichage :</span>
+                <div className="flex bg-slate-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'grid'
+                        ? 'bg-white text-slate-800 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    <span>Grille</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'list'
+                        ? 'bg-white text-slate-800 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <List className="w-4 h-4" />
+                    <span>Liste</span>
+                  </button>
                 </div>
               </div>
-              
-              <div className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-3 py-1 rounded-full">
-                <span className="font-medium">{filteredProducts.length}</span> produit{filteredProducts.length !== 1 ? 's' : ''}
-                {searchQuery && ' trouvé' + (filteredProducts.length !== 1 ? 's' : '')}
+
+              {/* Sort Options */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-500">Trier :</span>
+                <div className="flex gap-1">
+                  {sortOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setSortBy(option.value as 'name' | 'price' | 'created')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        sortBy === option.value
+                          ? 'bg-violet-100 text-violet-700'
+                          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                      }`}
+                    >
+                      <span className="inline-flex">{option.icon}</span>
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+            
+            <div className="text-sm text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg font-medium">
+              <span className="font-semibold text-slate-700">{filteredProducts.length}</span> produit{filteredProducts.length !== 1 ? 's' : ''}
+              {searchQuery && ' trouvé' + (filteredProducts.length !== 1 ? 's' : '')}
             </div>
           </div>
-        </Card>
+        </div>
       </motion.div>
 
       {/* Product List */}
       {filteredProducts.length === 0 ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="p-12 text-center card-theme">
-            <div className="text-8xl mb-6">
-              {searchQuery || selectedFilter !== 'all' ? <Search className="w-16 h-16 mx-auto" /> : <Package className="w-16 h-16 mx-auto" />}
-            </div>
-          
-          {searchQuery || selectedFilter !== 'all' ? (
-            <>
-              <h3 className="text-2xl font-semibold text-[var(--color-text-primary)] mb-3">
-                Aucun produit trouvé
-              </h3>
-              <p className="text-[var(--color-text-secondary)] mb-8 text-lg">
-                Aucun produit ne correspond à vos critères de recherche.
-              </p>
-              <Button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedFilter('all');
-                }}
-                variant="secondary"
-                className="text-lg px-6 py-3"
-              >
-                <span className="inline-flex items-center space-x-2"><Trash2 className="w-4 h-4" /><span>Effacer les filtres</span></span>
-              </Button>
-            </>
-            ) : (
-              <>
-                <h3 className="text-2xl font-semibold text-slate-900 mb-3">
-                  Votre catalogue est vide
-                </h3>
-                <p className="text-slate-600 mb-8 text-lg">
-                  Commencez par ajouter vos produits et services pour créer votre catalogue.
-                </p>
-                {onCreateNew && (
-                  <Button
-                    onClick={onCreateNew}
-                    variant="primary"
-                    className="text-lg px-8 py-4"
+          <div className="relative overflow-hidden bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center">
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9IiNlMmU4ZjAiLz48L2c+PC9zdmc+')] opacity-50" />
+            <div className="relative">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-100 to-purple-100 mb-6">
+                {searchQuery || selectedFilter !== 'all' ? <Search className="w-10 h-10 text-violet-500" /> : <Package className="w-10 h-10 text-violet-500" />}
+              </div>
+            
+              {searchQuery || selectedFilter !== 'all' ? (
+                <>
+                  <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                    Aucun produit trouvé
+                  </h3>
+                  <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                    Aucun produit ne correspond à vos critères de recherche.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedFilter('all');
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
                   >
-                    <span className="inline-flex items-center space-x-2"><Copy className="w-4 h-4" /><span>Ajouter mon premier produit</span></span>
-                  </Button>
-                )}
-              </>
-            )}
-          </Card>
+                    <X className="w-4 h-4" />
+                    Effacer les filtres
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                    Votre catalogue est vide
+                  </h3>
+                  <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                    Commencez par ajouter vos produits et services pour créer votre catalogue.
+                  </p>
+                  {onCreateNew && (
+                    <button
+                      onClick={onCreateNew}
+                      className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 rounded-xl shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:-translate-y-0.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Ajouter mon premier produit
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </motion.div>
       ) : (
         viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             <AnimatePresence>
               {filteredProducts.map((product, index) => (
                 <motion.div
@@ -421,37 +412,49 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.25, delay: index * 0.03 }}
                 >
-                  <Card
-                    className={`p-6 card-theme hover:shadow-xl transition-all duration-200 ${!product.isActive ? 'opacity-75' : 'hover:-translate-y-1'}`}
+                  <div
+                    className={`group bg-white rounded-2xl border border-slate-200/60 p-5 hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 ${!product.isActive ? 'opacity-60' : 'hover:-translate-y-1 hover:border-violet-200'}`}
                   >
                     <div className="space-y-4">
-                      <div className="w-16 h-16 mx-auto bg-[var(--color-bg-secondary)] rounded-full flex items-center justify-center text-[var(--color-text-secondary)]">
+                      <div className="w-14 h-14 mx-auto bg-gradient-to-br from-violet-100 to-purple-100 rounded-xl flex items-center justify-center text-violet-600 group-hover:scale-110 transition-transform">
                         {getProductIcon(product)}
                       </div>
                       <div className="text-center">
-                        <div className="flex items-center justify-center space-x-2 mb-1">
-                          <h3 className="text-lg font-semibold text-[var(--color-text-primary)] truncate">{product.name}</h3>
-                          {!product.isActive && (<span className="px-2 py-1 bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] text-xs rounded-full">Inactif</span>)}
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <h3 className="text-base font-semibold text-slate-800 truncate">{product.name}</h3>
+                          {!product.isActive && (<span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded-full font-medium">Inactif</span>)}
                         </div>
-                        <div className="flex items-center justify-center space-x-2 text-sm text-[var(--color-text-secondary)] mb-2">
-                          <span>{getProductType(product)}</span><span>•</span>
-                          <span className={`px-2 py-1 rounded-full text-xs ${getTvaColor()}`}>TVA {product.tvaRate}%</span>
+                        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 mb-2">
+                          <span className="px-2 py-0.5 bg-slate-100 rounded-full">{getProductType(product)}</span>
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full">TVA {product.tvaRate}%</span>
                         </div>
                         {product.description && (
-                          <p className="text-sm text-[var(--color-text-secondary)] mb-2 line-clamp-2">{product.description}</p>
+                          <p className="text-sm text-slate-500 mb-2 line-clamp-2">{product.description}</p>
                         )}
-                        <div className="flex items-center justify-center space-x-1">
-                          <span className="text-2xl font-bold text-[var(--color-text-primary)]">{formatPrice(product.unitPrice)}</span>
-                          <span className="text-[var(--color-text-secondary)]">/ {product.unit}</span>
+                        <div className="flex items-center justify-center gap-1 mt-3">
+                          <span className="text-xl font-bold text-slate-800">{formatPrice(product.unitPrice)}</span>
+                          <span className="text-slate-400 text-sm">/ {product.unit}</span>
                         </div>
                       </div>
-                      <div className="flex justify-center space-x-2 pt-4 border-t border-[var(--color-border-primary)]">
-                        {onEdit && (<Button onClick={() => onEdit(product.id)} variant="secondary" size="sm" className="text-xs"><span className="inline-flex items-center space-x-1"><Pencil className="w-4 h-4" /><span>Modifier</span></span></Button>)}
-                        {onDuplicate && (<Button onClick={() => onDuplicate(product.id)} variant="secondary" size="sm" className="text-xs"><span className="inline-flex items-center space-x-1"><Copy className="w-4 h-4" /><span>Dupliquer</span></span></Button>)}
-                        {onDelete && (<Button onClick={() => onDelete(product.id)} variant="danger" size="sm" className="text-xs"><Trash2 className="w-4 h-4" /></Button>)}
+                      <div className="flex justify-center gap-2 pt-4 border-t border-slate-100">
+                        {onEdit && (
+                          <button onClick={() => onEdit(product.id)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Modifier">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {onDuplicate && (
+                          <button onClick={() => onDuplicate(product.id)} className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors" title="Dupliquer">
+                            <Copy className="w-4 h-4" />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button onClick={() => onDelete(product.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -546,76 +549,7 @@ export const EnhancedProductList: React.FC<EnhancedProductListProps> = ({
         )
       )}
 
-      {/* Speed-dial Floating Action Button */}
-      {(onCreateNew || onOpenImport || onExport) && (
-        <>
-          {fabOpen && (
-            <div className="fixed inset-0 z-30 bg-black/10" onClick={() => setFabOpen(false)} />
-          )}
-
-          <div className="fixed bottom-6 right-3 sm:right-4 md:right-5 z-40 flex flex-col items-end gap-3">
-            {/* Exporter */}
-            {onExport && (
-              <button
-                onClick={() => { onExport(); setFabOpen(false); }}
-                className={`h-10 px-3 rounded-full shadow-md flex items-center gap-2 transition-all origin-bottom-right
-                           ${fabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}
-                           btn-theme-primary`}
-                aria-label="Exporter le catalogue"
-                title="Exporter le catalogue"
-              >
-                <Download className="w-4 h-4 hidden sm:inline-block" />
-                <span className="text-sm">Exporter</span>
-              </button>
-            )}
-
-            {/* Importer CSV */}
-            {onOpenImport && (
-              <button
-                onClick={() => { onOpenImport(); setFabOpen(false); }}
-                className={`h-10 px-3 rounded-full shadow-md flex items-center gap-2 transition-all origin-bottom-right
-                           ${fabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}
-                           btn-theme-primary`}
-                aria-label="Importer CSV"
-                title="Importer CSV"
-              >
-                <Upload className="w-4 h-4 hidden sm:inline-block" />
-                <span className="text-sm">Importer CSV</span>
-              </button>
-            )}
-
-            {/* Nouveau produit */}
-            {onCreateNew && (
-              <button
-                onClick={() => { onCreateNew(); setFabOpen(false); }}
-                className={`h-10 px-3 rounded-full shadow-md flex items-center gap-2 transition-all origin-bottom-right
-                           ${fabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}
-                           btn-theme-primary`}
-                aria-label="Nouveau produit"
-                title="Nouveau produit"
-              >
-                <Plus className="w-4 h-4 hidden sm:inline-block" />
-                <span className="text-sm">Nouveau</span>
-              </button>
-            )}
-
-            {/* Main FAB */}
-            <button
-              onClick={() => setFabOpen(v => !v)}
-              className={`h-12 w-12 rounded-full shadow-lg flex items-center justify-center transition-all relative
-                         btn-theme-primary hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2
-                         ${highlightFab && !fabOpen ? 'animate-bounce ring-4 ring-blue-300/60 shadow-blue-400/40' : ''}`}
-              aria-label="Actions"
-              title="Actions"
-            >
-              {highlightFab && !fabOpen && (
-                <span className="absolute inline-flex h-full w-full rounded-full bg-current opacity-30 animate-ping" />
-              )}
-              <Plus className={`w-5 h-5 transition-transform ${fabOpen ? 'rotate-45' : ''}`} />
-            </button>
-          </div>
-        </>
-      )}
+      {/* FAB removed - use header buttons instead */}
     </div>
   );
 };

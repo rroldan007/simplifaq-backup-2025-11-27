@@ -9,6 +9,34 @@ import { useProducts } from '../../hooks/useProducts';
 import { NotificationContainer } from '../ui/Notification';
 import { useAuth } from '../../hooks/useAuth';
 import { DEFAULT_DISCOUNT_VALUE, DEFAULT_DISCOUNT_TYPE } from '../../constants/discounts';
+import { isKilogramUnit, getQuantityStep, roundQuantity } from '../../utils/unitUtils';
+
+// Helper to check if unit is hour-based (for time calculator)
+const isHourUnit = (unit?: string): boolean => {
+  if (!unit) return false;
+  const normalized = unit.toLowerCase().trim();
+  return ['hour', 'heure', 'h', 'hrs', 'hours', 'heures'].includes(normalized);
+};
+
+// Calculate hours between two times (HH:MM format)
+const calculateHours = (startTime: string, endTime: string): number => {
+  if (!startTime || !endTime) return 0;
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
+  
+  const startMinutes = startH * 60 + startM;
+  let endMinutes = endH * 60 + endM;
+  
+  // Handle overnight (e.g., 22:00 to 02:00)
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60;
+  }
+  
+  const diffMinutes = endMinutes - startMinutes;
+  // Round to 2 decimal places (e.g., 1.5 hours, 2.25 hours)
+  return Math.round((diffMinutes / 60) * 100) / 100;
+};
 
 interface InvoiceItem {
   id: string;
@@ -70,6 +98,11 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
   const { createProduct, notifications, removeNotification, products } = useProducts();
   const [lastCreatedProduct, setLastCreatedProduct] = useState<Product | null>(null);
   const { user } = useAuth();
+  
+  // Time calculator state (for hour-based services)
+  const [showTimeCalc, setShowTimeCalc] = useState(false);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
 
   // Determine unit: if not in item, try to get it from the product (for old invoices)
   const itemUnit = useMemo(() => {
@@ -94,14 +127,11 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
   }, [item.unit, item.productId, products, item.description]);
 
   // Determine decimals based on unit: 3 decimals for kg/Kilogramme, 2 for others
-  const isKilogramUnit = itemUnit?.toLowerCase().includes('kg') || itemUnit?.toLowerCase().includes('kilogramme');
+  const isKgUnit = isKilogramUnit(itemUnit);
   const userDecimals = ((user as { quantityDecimals?: number } | null | undefined)?.quantityDecimals === 3) ? 3 : 2;
-  const quantityDecimals: 2 | 3 = isKilogramUnit ? 3 : userDecimals;
-  const quantityStep = quantityDecimals === 3 ? '0.001' : '0.01';
-  const roundQty = (val: number) => {
-    const factor = Math.pow(10, quantityDecimals);
-    return Math.round((Number.isFinite(val) ? val : 0) * factor) / factor;
-  };
+  const quantityDecimals: 2 | 3 = isKgUnit ? 3 : userDecimals;
+  const quantityStep = getQuantityStep(itemUnit);
+  const roundQty = (val: number) => roundQuantity(Number.isFinite(val) ? val : 0, itemUnit);
 
   // Log for debugging
   useEffect(() => {
@@ -130,6 +160,7 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
     <div
       ref={setNodeRef}
       style={style}
+      data-item-id={item.id}
       className="p-4 border border-slate-200 rounded-lg bg-white overflow-visible"
     >
       {/* Description Row */}
@@ -209,7 +240,7 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
                 setLastCreatedProduct(null); // clear any hint once user selects
               }}
               createdProduct={lastCreatedProduct}
-              onAddNew={async (name: string) => {
+              onAddNew={async (name: string, unit: string, isService: boolean) => {
                 const description = name.trim();
                 const unitPrice = Number(item.unitPrice) || 0;
                 const hasDescription = description.length >= 2;
@@ -227,13 +258,14 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
                   const tvaToUse = Number.isFinite(currentTva) && validRates.includes(currentTva)
                     ? currentTva
                     : validRates[0];
-                  try { console.debug('[QuickCreate] creating product', { description, unitPrice, tvaToUse }); } catch { /* noop */ }
+                  try { console.debug('[QuickCreate] creating product', { description, unitPrice, tvaToUse, unit, isService }); } catch { /* noop */ }
                   const created = await createProduct({
                     name: description,
                     description: description,
                     unitPrice: unitPrice,
                     tvaRate: tvaToUse,
-                    unit: 'unité',
+                    unit: unit || 'piece',
+                    isService: isService,
                     isActive: true,
                     discountActive: false,
                   });
@@ -269,39 +301,125 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
       {/* Fields Row */}
       <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
 
-        {/* Quantity */}
-        <div className="col-span-1 md:col-span-1">
+        {/* Quantity with optional Time Calculator for hour-based services */}
+        <div className="col-span-1 md:col-span-1 relative">
           <label className="block text-sm font-medium text-slate-700 mb-1 md:hidden">
             Quantité
           </label>
-          <Input
-            type="number"
-            min="0"
-            step={quantityStep}
-            inputMode="decimal"
-            value={(function () {
-              const qtyRaw: unknown = item.quantity ?? 0;
-              const qtyStr: string = typeof qtyRaw === 'string' ? qtyRaw : String(qtyRaw);
-              const qtyNum = parseFloat(qtyStr.replace(',', '.'));
-              // Show exact value without rounding for display, let browser handle decimal precision
-              const finalQty = Number.isFinite(qtyNum) ? qtyNum : 0;
-              return finalQty === 0 ? '' : finalQty;
-            })()}
-            onChange={(e) => {
-              if (readOnly) return;
-              const raw = e.target.value;
-              if (raw === '') {
-                onUpdate(index, 'quantity', 0);
-                return;
-              }
-              const normalized = raw.replace(',', '.');
-              const parsed = parseFloat(normalized);
-              onUpdate(index, 'quantity', roundQty(isNaN(parsed) ? 0 : parsed));
-            }}
-            placeholder="Qté"
-            className="w-full text-center"
-            disabled={readOnly}
-          />
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min="0"
+              step={quantityStep}
+              inputMode="decimal"
+              value={(function () {
+                const qtyRaw: unknown = item.quantity ?? 0;
+                const qtyStr: string = typeof qtyRaw === 'string' ? qtyRaw : String(qtyRaw);
+                const qtyNum = parseFloat(qtyStr.replace(',', '.'));
+                const finalQty = Number.isFinite(qtyNum) ? qtyNum : 0;
+                return finalQty === 0 ? '' : finalQty;
+              })()}
+              onChange={(e) => {
+                if (readOnly) return;
+                const raw = e.target.value;
+                if (raw === '') {
+                  onUpdate(index, 'quantity', 0);
+                  return;
+                }
+                const normalized = raw.replace(',', '.');
+                const parsed = parseFloat(normalized);
+                onUpdate(index, 'quantity', roundQty(isNaN(parsed) ? 0 : parsed));
+              }}
+              placeholder="Qté"
+              className="w-full text-center"
+              disabled={readOnly}
+            />
+            {/* Clock button for hour-based services */}
+            {isHourUnit(itemUnit) && !readOnly && (
+              <button
+                type="button"
+                onClick={() => setShowTimeCalc(!showTimeCalc)}
+                className={`p-1.5 rounded-md transition-colors flex-shrink-0 ${
+                  showTimeCalc 
+                    ? 'bg-blue-100 text-blue-600' 
+                    : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50'
+                }`}
+                title="Calculer les heures"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
+          </div>
+          
+          {/* Time Calculator Popover - Minimalist */}
+          {showTimeCalc && isHourUnit(itemUnit) && (
+            <div className="absolute top-full left-0 mt-1 z-20 bg-white rounded-lg shadow-lg border border-slate-200 p-3 min-w-[220px]">
+              {/* Time inputs */}
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  placeholder="Début"
+                />
+                <span className="text-slate-300">→</span>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  placeholder="Fin"
+                />
+              </div>
+              
+              {/* Result + Actions */}
+              <div className="flex items-center gap-2">
+                {startTime && endTime && calculateHours(startTime, endTime) > 0 ? (
+                  <div className="flex-1 text-center py-1.5 bg-blue-50 rounded-lg">
+                    <span className="text-sm font-semibold text-blue-600">
+                      = {calculateHours(startTime, endTime)}h
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex-1 text-center py-1.5 text-slate-400 text-xs">
+                    Sélectionnez les heures
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hours = calculateHours(startTime, endTime);
+                    if (hours > 0) {
+                      onUpdate(index, 'quantity', hours);
+                      setShowTimeCalc(false);
+                      setStartTime('');
+                      setEndTime('');
+                    }
+                  }}
+                  disabled={!startTime || !endTime || calculateHours(startTime, endTime) <= 0}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 rounded-lg transition-colors"
+                >
+                  OK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTimeCalc(false);
+                    setStartTime('');
+                    setEndTime('');
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Unit Price */}
@@ -354,8 +472,22 @@ export const SortableInvoiceItem: React.FC<SortableInvoiceItemProps> = ({
           <label className="block text-sm font-medium text-slate-700 mb-1 md:hidden">
             Total
           </label>
-          <div className="px-3 py-2 bg-slate-50 rounded-md text-right font-medium">
-            {formatCurrency(item.total)}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3 py-2 bg-slate-50 rounded-md text-right font-medium">
+              {formatCurrency(item.total)}
+            </div>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Supprimer cet article"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

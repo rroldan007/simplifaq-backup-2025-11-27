@@ -215,10 +215,10 @@ export function useAutoFormPreservation(
   options: UseFormDataPreservationOptions = {}
 ) {
   const optionsKey = JSON.stringify(options);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const memoizedOptions = useMemo(() => ({
     autoPreserve: true,
     ...options,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [optionsKey]);
 
   const preservation = useFormDataPreservation(formId, memoizedOptions);

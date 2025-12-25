@@ -258,11 +258,16 @@ export function DashboardPage() {
   const handleViewInvoice = (invoiceId: string) => navigate(`/invoices/${invoiceId}`);
   const handleCreateInvoice = () => navigate('/invoices/new');
   
-  const handleCloseWelcome = async () => {
+  const handleCloseWelcome = async (neverShowAgain?: boolean) => {
     setShowWelcome(false);
     try {
       // Mark welcome message as shown in the database
       await api.post('/onboarding/welcome-shown');
+      
+      // If user checked "Ne plus afficher", mark onboarding as dismissed permanently
+      if (neverShowAgain) {
+        await api.post('/onboarding/dismiss');
+      }
     } catch (err) {
       console.error('Error marking welcome as shown:', err);
     }

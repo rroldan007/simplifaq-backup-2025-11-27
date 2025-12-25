@@ -7,6 +7,7 @@ import React, { useRef, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { CURRENT_SWISS_TVA_RATES } from '../../config/swissTaxRates';
+import { normalizeUnit } from '../../utils/unitUtils';
 
 export interface CSVImportedProduct {
   name: string;
@@ -216,7 +217,8 @@ export const CSVImportProductsModal: React.FC<CSVImportProductsModalProps> = ({ 
       description: r.description || undefined,
       unitPrice: Number(String(r.unitPrice).replace(',', '.')),
       tvaRate: Number(r.tva),
-      unit: r.unit || defaultUnit,
+      // Normalize unit: "Kilogramme" -> "kg", "Litre" -> "liter", etc.
+      unit: normalizeUnit(r.unit || defaultUnit),
       isActive: r.isActive.toString().toLowerCase() === 'true',
     }));
     onImport(products);

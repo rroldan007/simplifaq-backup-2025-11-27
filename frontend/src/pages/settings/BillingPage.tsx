@@ -4,7 +4,7 @@
  * User billing management with subscription plans and payment methods
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '../../hooks/useAuth';
 import { api } from '../../services/api';
@@ -122,11 +122,7 @@ export function BillingPage() {
     window.setTimeout(() => setToast(null), 3000);
   };
 
-  useEffect(() => {
-    loadBillingData();
-  }, []);
-
-  const loadBillingData = async () => {
+  const loadBillingData = useCallback(async () => {
     console.log('[BillingPage] Loading billing data...');
     setLoading(true);
     try {
@@ -177,7 +173,11 @@ export function BillingPage() {
       console.log('[BillingPage] Setting loading to false');
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadBillingData();
+  }, [loadBillingData]);
 
   const handleUpgrade = async (planId: string) => {
     if (planId === 'enterprise') {

@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Package, Info } from 'lucide-react';
+import { FileText, Package, Info, Grid } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { FloatingLabelInput } from '../ui/FloatingLabelInput';
+import { SwissAddressAutocomplete } from '../clients/SwissAddressAutocomplete';
 import { ClientSelector } from './ClientSelector';
 import { InvoiceItemsTable } from './InvoiceItemsTable';
 import { EnhancedInvoiceDetails } from './EnhancedInvoiceDetails';
 import { WizardProgress } from './WizardProgress';
 import { EnhancedProductSearch } from './EnhancedProductSearch';
+import { ProductCatalogModal } from './ProductCatalogModal';
 import { useClients } from '../../hooks/useClients';
 import { useAutoFormPreservation } from '../../hooks/useFormDataPreservation';
 import { useProducts } from '../../hooks/useProducts';
@@ -17,6 +20,7 @@ import { api } from '../../services/api';
 import { quotesApi } from '../../services/quotesApi';
 import { useCurrentUser } from '../../hooks/useAuth';
 import { DEFAULT_DISCOUNT_VALUE, DEFAULT_DISCOUNT_TYPE } from '../../constants/discounts';
+import { formatQuantity } from '../../utils/unitUtils';
 
 // Common stopwords set (fr/en) for token filtering — module scoped to avoid hook deps
 const STOPWORDS_FR_EN = new Set([
@@ -46,6 +50,8 @@ type Suggestion = {
   name: string;
   unitPrice: number;
   tvaRate: number;
+  sku?: string;
+  unit?: string;
   score: number;
   exactMatches: number;
 };
@@ -266,6 +272,7 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [productQuery, setProductQuery] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [showCatalogModal, setShowCatalogModal] = useState<boolean>(false);
 
   // Autosave minimal (enhancements planned)
   const hasId = (obj: unknown): obj is { id?: string } => {
@@ -543,10 +550,10 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
     };
   }, [data.items, data.globalDiscountValue, data.globalDiscountType]);
 
-  const update = (field: keyof InvoiceFormData, value: InvoiceFormData[keyof InvoiceFormData]) => {
+  const update = useCallback((field: keyof InvoiceFormData, value: InvoiceFormData[keyof InvoiceFormData]) => {
     setData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
-  };
+    setErrors(prev => prev[field] ? { ...prev, [field]: '' } : prev);
+  }, []);
 
   // Search normalization: lower, strip diacritics, tokenize
   const normalize = (s: string) =>
@@ -602,29 +609,44 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
 
   const suggestions = useMemo((): Suggestion[] => {
     if (!productQuery) return [] as Suggestion[];
+    const queryLower = productQuery.toLowerCase().trim();
     const qTokens = applySynonyms(tokenize(productQuery));
-    if (qTokens.length === 0) return [] as Suggestion[];
+    
     return products
       .map(p => {
-        const hay = `${p.name} ${p.description || ''}`;
+        // Check for exact SKU match first (for barcode scanner)
+        const productSku = (p.sku || '').toLowerCase();
+        if (productSku && productSku === queryLower) {
+          // Exact SKU match gets highest priority
+          return { id: p.id, name: p.name, unitPrice: p.unitPrice, tvaRate: p.tvaRate, sku: p.sku, unit: p.unit, score: 2, exactMatches: 99 } as Suggestion;
+        }
+        
+        // Partial SKU match
+        if (productSku && productSku.includes(queryLower)) {
+          return { id: p.id, name: p.name, unitPrice: p.unitPrice, tvaRate: p.tvaRate, sku: p.sku, unit: p.unit, score: 1.5, exactMatches: 50 } as Suggestion;
+        }
+        
+        // Fuzzy name/description matching
+        if (qTokens.length === 0) return null;
+        const hay = `${p.name} ${p.description || ''} ${p.sku || ''}`;
         const hTokens = applySynonyms(tokenize(hay));
         const exactMatches = qTokens.filter(t => hTokens.includes(t)).length;
         // Fuzzy: for each query token, take best similarity against any hay token
         const sims = qTokens.map(qt => (hTokens.length ? Math.max(...hTokens.map(ht => tokenSimilarity(qt, ht))) : 0));
         const avgSim = sims.reduce((s, v) => s + v, 0) / (sims.length || 1);
         const score = avgSim + exactMatches * 0.25; // small boost for exact matches
-        return { id: p.id, name: p.name, unitPrice: p.unitPrice, tvaRate: p.tvaRate, score, exactMatches } as Suggestion;
+        return { id: p.id, name: p.name, unitPrice: p.unitPrice, tvaRate: p.tvaRate, sku: p.sku, unit: p.unit, score, exactMatches } as Suggestion;
       })
-      // Require at least a minimal similarity across tokens
-      .filter((s: Suggestion) => s.score >= 0.5) // avg ~0.5 threshold with possible exact boost
+      .filter((s): s is Suggestion => s !== null && s.score >= 0.5)
       .sort((a: Suggestion, b: Suggestion) => b.score - a.score || b.exactMatches - a.exactMatches || a.name.localeCompare(b.name))
       .slice(0, 8);
   }, [productQuery, products, tokenize, tokenSimilarity]);
 
-  const addProductAsItem = (sugg: { id: string; name: string; unitPrice: number; tvaRate: number }) => {
+  const addProductAsItem = (sugg: { id: string; name: string; unitPrice: number; tvaRate: number; unit?: string }) => {
     const nextOrder = (data.items?.length || 0);
+    const newItemId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newItem: InvoiceItem = {
-      id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: newItemId,
       description: sugg.name,
       quantity: 1,
       unitPrice: Number.isFinite(sugg.unitPrice) ? sugg.unitPrice : 0,
@@ -632,12 +654,166 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
       total: (1 * (Number.isFinite(sugg.unitPrice) ? sugg.unitPrice : 0)),
       order: nextOrder,
       productId: sugg.id,
+      unit: sugg.unit,
     };
     const next = [...(data.items || []), newItem];
     update('items', next);
     setProductQuery('');
     setShowSuggestions(false);
+    
+    // Scroll to the new item after DOM update
+    setTimeout(() => {
+      const newItemElement = document.querySelector(`[data-item-id="${newItemId}"]`);
+      if (newItemElement) {
+        newItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
   };
+
+  // Add multiple products from catalog modal
+  const addProductsFromCatalog = (selectedProducts: { id: string; name: string; unitPrice: number; tvaRate: number; sku?: string; unit?: string }[]) => {
+    const currentItems = data.items || [];
+    const timestamp = Date.now();
+    const newItems: InvoiceItem[] = selectedProducts.map((prod, idx) => ({
+      id: `tmp-${timestamp}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      description: prod.name,
+      quantity: 1,
+      unitPrice: Number.isFinite(prod.unitPrice) ? prod.unitPrice : 0,
+      tvaRate: Number.isFinite(prod.tvaRate) ? prod.tvaRate : 0,
+      total: Number.isFinite(prod.unitPrice) ? prod.unitPrice : 0,
+      order: currentItems.length + idx,
+      productId: prod.id,
+      unit: prod.unit,
+    }));
+    update('items', [...currentItems, ...newItems]);
+    
+    // Scroll to the last added item after DOM update
+    if (newItems.length > 0) {
+      const lastItemId = newItems[newItems.length - 1].id;
+      setTimeout(() => {
+        const lastItemElement = document.querySelector(`[data-item-id="${lastItemId}"]`);
+        if (lastItemElement) {
+          lastItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  };
+
+  // ============================================
+  // 🔄 DUPLICATE PRODUCT DETECTION & COMBINE
+  // ============================================
+  const [showDuplicatesBanner, setShowDuplicatesBanner] = useState(true);
+  const [lastItemCount, setLastItemCount] = useState(0);
+  
+  // Re-show banner when new items are added
+  useEffect(() => {
+    const currentCount = data.items?.length || 0;
+    if (currentCount > lastItemCount && currentCount > 1) {
+      setShowDuplicatesBanner(true);
+    }
+    setLastItemCount(currentCount);
+  }, [data.items?.length, lastItemCount]);
+  
+  // Detect duplicate products (same productId OR same description with same unitPrice)
+  const duplicateGroups = useMemo(() => {
+    const items = data.items || [];
+    if (items.length < 2) return [];
+    
+    const groups: Map<string, InvoiceItem[]> = new Map();
+    
+    items.forEach(item => {
+      // Create a key based on productId or description+unitPrice
+      const key = item.productId 
+        ? `pid:${item.productId}`
+        : `desc:${item.description?.toLowerCase().trim()}:${item.unitPrice}`;
+      
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(item);
+    });
+    
+    // Filter to only groups with 2+ items (duplicates)
+    return Array.from(groups.entries())
+      .filter(([, items]) => items.length > 1)
+      .map(([key, items]) => ({
+        key,
+        items,
+        description: items[0].description,
+        totalQuantity: items.reduce((sum, it) => sum + it.quantity, 0),
+        unitPrice: items[0].unitPrice,
+        count: items.length
+      }));
+  }, [data.items]);
+
+  const hasDuplicates = duplicateGroups.length > 0;
+
+  // Combine all duplicate products into single lines
+  const combineAllDuplicates = useCallback(() => {
+    const items = data.items || [];
+    const seen = new Map<string, InvoiceItem>();
+    const result: InvoiceItem[] = [];
+    
+    items.forEach(item => {
+      const key = item.productId 
+        ? `pid:${item.productId}`
+        : `desc:${item.description?.toLowerCase().trim()}:${item.unitPrice}`;
+      
+      if (seen.has(key)) {
+        // Add quantity to existing item
+        const existing = seen.get(key)!;
+        existing.quantity += item.quantity;
+        existing.total = existing.quantity * existing.unitPrice;
+      } else {
+        // Clone and add to result
+        const newItem = { ...item };
+        seen.set(key, newItem);
+        result.push(newItem);
+      }
+    });
+    
+    // Re-order items
+    result.forEach((item, idx) => {
+      item.order = idx;
+    });
+    
+    update('items', result);
+    setShowDuplicatesBanner(false);
+  }, [data.items, update]);
+
+  // Combine a specific duplicate group
+  const combineGroup = useCallback((groupKey: string) => {
+    const items = data.items || [];
+    const toMerge: InvoiceItem[] = [];
+    const rest: InvoiceItem[] = [];
+    
+    items.forEach(item => {
+      const key = item.productId 
+        ? `pid:${item.productId}`
+        : `desc:${item.description?.toLowerCase().trim()}:${item.unitPrice}`;
+      
+      if (key === groupKey) {
+        toMerge.push(item);
+      } else {
+        rest.push(item);
+      }
+    });
+    
+    if (toMerge.length > 1) {
+      // Merge into first item
+      const merged = { ...toMerge[0] };
+      merged.quantity = toMerge.reduce((sum, it) => sum + it.quantity, 0);
+      merged.total = merged.quantity * merged.unitPrice;
+      rest.push(merged);
+    }
+    
+    // Re-order
+    rest.forEach((item, idx) => {
+      item.order = idx;
+    });
+    
+    update('items', rest);
+  }, [data.items, update]);
 
   const validateStep = (targetStep = step): boolean => {
     const err: Record<string, string> = {};
@@ -713,11 +889,23 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
       )}
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">
-          {mode === 'create' ? t.newDoc : t.editDoc}
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">
+            {mode === 'create' ? t.newDoc : t.editDoc}
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {documentType === 'quote' ? 'Créez un devis professionnel' : 'Créez une facture conforme'}
+          </p>
+        </div>
         {onCancel && (
-          <button type="button" onClick={onCancel} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">
+          <button 
+            type="button" 
+            onClick={onCancel} 
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
             Annuler
           </button>
         )}
@@ -786,9 +974,19 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
               exit={useAnimations ? { opacity: 0, x: -20 } : undefined}
               transition={{ duration: 0.3 }}
             >
-              <Card className="p-6 space-y-4">
-                <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">Client</h2>
-                {errors.client && <div className="text-sm text-error-theme mb-2">{errors.client}</div>}
+              <Card className="p-6 space-y-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm">
+                {/* Client Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <h2 className="text-base font-semibold text-slate-800">Client</h2>
+                  </div>
+                  {errors.client && <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{errors.client}</div>}
+                </div>
                 <ClientSelector
                   clients={clients}
                   selectedClient={data.client}
@@ -804,43 +1002,69 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
                         <h3 className="text-lg font-semibold">Nouveau client</h3>
                         <button type="button" onClick={() => setShowCreateClient(false)} className="text-slate-500 hover:text-slate-700">✕</button>
                       </div>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1">Société</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.companyName || ''} onChange={(e) => setNewClient(prev => ({ ...prev, companyName: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1">TVA (optionnel)</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.vatNumber || ''} onChange={(e) => setNewClient(prev => ({ ...prev, vatNumber: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1">Prénom</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.firstName || ''} onChange={(e) => setNewClient(prev => ({ ...prev, firstName: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1">Nom</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.lastName || ''} onChange={(e) => setNewClient(prev => ({ ...prev, lastName: e.target.value }))} />
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <FloatingLabelInput
+                            label="Société"
+                            value={newClient.companyName || ''}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, companyName: e.target.value }))}
+                          />
+                          <FloatingLabelInput
+                            label="TVA (optionnel)"
+                            value={newClient.vatNumber || ''}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, vatNumber: e.target.value }))}
+                          />
+                          <FloatingLabelInput
+                            label="Prénom"
+                            value={newClient.firstName || ''}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, firstName: e.target.value }))}
+                          />
+                          <FloatingLabelInput
+                            label="Nom"
+                            value={newClient.lastName || ''}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, lastName: e.target.value }))}
+                          />
+                          <div className="col-span-2">
+                            <FloatingLabelInput
+                              label="Email"
+                              type="email"
+                              value={newClient.email}
+                              onChange={(e) => setNewClient(prev => ({ ...prev, email: e.target.value }))}
+                            />
                           </div>
                           <div className="col-span-2">
-                            <label className="block text-xs text-slate-600 mb-1">Email</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.email} onChange={(e) => setNewClient(prev => ({ ...prev, email: e.target.value }))} />
+                            <SwissAddressAutocomplete
+                              label="Rue et numéro"
+                              value={newClient.street}
+                              onChange={(v) => setNewClient(prev => ({ ...prev, street: v }))}
+                              onAddressSelected={(addr) => {
+                                setNewClient(prev => ({
+                                  ...prev,
+                                  street: addr.street || prev.street,
+                                  postalCode: addr.postalCode || prev.postalCode,
+                                  city: addr.city || prev.city,
+                                  country: addr.country || prev.country,
+                                }));
+                              }}
+                              floatingLabel
+                            />
                           </div>
+                          <FloatingLabelInput
+                            label="Code postal"
+                            value={newClient.postalCode}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, postalCode: e.target.value }))}
+                          />
+                          <FloatingLabelInput
+                            label="Ville"
+                            value={newClient.city}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, city: e.target.value }))}
+                          />
                           <div className="col-span-2">
-                            <label className="block text-xs text-slate-600 mb-1">Rue</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.street} onChange={(e) => setNewClient(prev => ({ ...prev, street: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1">Code postal</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.postalCode} onChange={(e) => setNewClient(prev => ({ ...prev, postalCode: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1">Ville</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.city} onChange={(e) => setNewClient(prev => ({ ...prev, city: e.target.value }))} />
-                          </div>
-                          <div className="col-span-2">
-                            <label className="block text-xs text-slate-600 mb-1">Pays</label>
-                            <input className="w-full border rounded px-2 py-1" value={newClient.country} onChange={(e) => setNewClient(prev => ({ ...prev, country: e.target.value }))} />
+                            <FloatingLabelInput
+                              label="Pays"
+                              value={newClient.country}
+                              onChange={(e) => setNewClient(prev => ({ ...prev, country: e.target.value }))}
+                            />
                           </div>
                         </div>
                         <div className="flex items-center justify-end gap-2 pt-2">
@@ -898,9 +1122,27 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
                   </div>
                 )}
                 {/* Articles (fused into Step 1) */}
-                <div className="mt-6 h-px bg-[var(--color-border-primary)]" />
-                <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">Articles</h2>
-                {errors.items && <div className="text-sm text-error-theme mb-2">{errors.items}</div>}
+                <div className="pt-6 mt-6 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                      <h2 className="text-base font-semibold text-slate-800">Articles</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCatalogModal(true)}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors"
+                    >
+                      <Grid className="w-3.5 h-3.5" />
+                      Catalogue
+                    </button>
+                  </div>
+                  {errors.items && <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-3">{errors.items}</div>}
+                </div>
                 {/* Product search / autocomplete */}
                 {useSmartSearch ? (
                   <EnhancedProductSearch
@@ -949,6 +1191,122 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
                     )}
                   </div>
                 )}
+                
+                {/* 🔄 Duplicate Products Detection Banner */}
+                <AnimatePresence>
+                  {hasDuplicates && showDuplicatesBanner && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="relative overflow-hidden rounded-2xl border-2 border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50">
+                        {/* Background pattern */}
+                        <div className="absolute inset-0 opacity-30" style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23f59e0b' fill-opacity='0.1'%3E%3Ccircle cx='3' cy='3' r='1'/%3E%3C/g%3E%3C/svg%3E")`
+                        }} />
+                        
+                        <div className="relative p-4">
+                          <div className="flex items-start gap-4">
+                            {/* Icon */}
+                            <div className="flex-shrink-0">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                            </div>
+                            
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="text-sm font-bold text-amber-900">
+                                  Produits en double détectés
+                                </h4>
+                                <span className="px-2 py-0.5 text-xs font-bold bg-amber-200 text-amber-800 rounded-full">
+                                  {duplicateGroups.reduce((sum, g) => sum + g.count, 0)} → {duplicateGroups.length + (data.items?.length || 0) - duplicateGroups.reduce((sum, g) => sum + g.count, 0)} lignes
+                                </span>
+                              </div>
+                              <p className="text-xs text-amber-700 mb-3">
+                                Vous avez ajouté le même produit plusieurs fois. Voulez-vous combiner les quantités ?
+                              </p>
+                              
+                              {/* Duplicate groups preview */}
+                              <div className="flex flex-wrap gap-2 mb-3">
+                                {duplicateGroups.slice(0, 3).map((group) => (
+                                  <div 
+                                    key={group.key}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 rounded-lg border border-amber-200 text-xs"
+                                  >
+                                    <span className="font-medium text-slate-700 truncate max-w-[150px]">
+                                      {group.description}
+                                    </span>
+                                    <span className="text-amber-600 font-bold">
+                                      ×{group.count}
+                                    </span>
+                                    <span className="text-slate-400">→</span>
+                                    <span className="text-emerald-600 font-bold">
+                                      {group.totalQuantity} unités
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => combineGroup(group.key)}
+                                      className="ml-1 p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded transition-colors"
+                                      title="Combiner ce produit"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                ))}
+                                {duplicateGroups.length > 3 && (
+                                  <span className="inline-flex items-center px-2 py-1 text-xs text-amber-600">
+                                    +{duplicateGroups.length - 3} autres...
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Actions */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={combineAllDuplicates}
+                                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-xl shadow-lg shadow-amber-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h8m-8 5h16" />
+                                  </svg>
+                                  Combiner tout ({duplicateGroups.length} groupe{duplicateGroups.length > 1 ? 's' : ''})
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowDuplicatesBanner(false)}
+                                  className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded-lg transition-colors"
+                                >
+                                  Ignorer
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* Close button */}
+                            <button
+                              type="button"
+                              onClick={() => setShowDuplicatesBanner(false)}
+                              className="flex-shrink-0 p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-100 rounded-lg transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
                 <InvoiceItemsTable
                   items={data.items}
                   onItemsChange={(items) => update('items', items)}
@@ -1336,7 +1694,7 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
                                   </div>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-right">{it.quantity}</td>
+                              <td className="px-3 py-2 text-right">{formatQuantity(it.quantity, it.unit)}</td>
                               <td className="px-3 py-2 text-right">{new Intl.NumberFormat('fr-CH', { style: 'currency', currency: data.currency }).format(it.unitPrice)}</td>
                               <td className="px-3 py-2 text-right">{it.tvaRate}%</td>
                               <td className="px-3 py-2 text-right">{new Intl.NumberFormat('fr-CH', { style: 'currency', currency: data.currency }).format(itemSubtotalAfter)}</td>
@@ -1404,31 +1762,73 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
       </div>
 
       {/* Footer nav */}
-      <div className="sticky bottom-0 left-0 right-0 py-3 bg-[color:var(--color-bg-primary)/0.85] backdrop-blur border-t card-theme">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-2 px-2">
+      <div className="sticky bottom-0 left-0 right-0 py-4 bg-white/80 backdrop-blur-lg border-t border-slate-200/60">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-4 px-4">
           <div>
             {step > 1 ? (
-              <Button type="button" variant="secondary" onClick={goPrev}>
+              <button 
+                type="button" 
+                onClick={goPrev}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
                 Précédent
-              </Button>
+              </button>
             ) : (
               <span />
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {step < 3 && (
-              <Button type="button" variant="primary" onClick={goNext}>
+              <button 
+                type="button" 
+                onClick={goNext}
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5"
+              >
                 Suivant
-              </Button>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             )}
             {step === 3 && (
-              <Button type="submit" variant="primary" isLoading={loading}>
-                {mode === 'create' ? t.finish : 'Enregistrer'}
-              </Button>
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Création...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {mode === 'create' ? t.finish : 'Enregistrer'}
+                  </>
+                )}
+              </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* Product Catalog Modal */}
+      <ProductCatalogModal
+        isOpen={showCatalogModal}
+        onClose={() => setShowCatalogModal(false)}
+        products={products}
+        onAddProducts={addProductsFromCatalog}
+        currency={data.currency}
+      />
     </form>
   );
 };

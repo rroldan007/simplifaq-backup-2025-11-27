@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { FloatingLabelInput } from '../ui/FloatingLabelInput';
 import { SwissAddressAutocomplete } from './SwissAddressAutocomplete';
 
 interface ClientFormData {
@@ -345,77 +345,51 @@ export function ClientForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {clientType === 'company' ? (
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                    Nom de l'entreprise *
-                  </label>
-                  <Input
+                  <FloatingLabelInput
+                    label="Nom de l'entreprise *"
                     value={formData.companyName || ''}
                     onChange={(e) => updateFormData('companyName', e.target.value)}
-                    placeholder="Entreprise SA"
                     error={errors.companyName}
                   />
                 </div>
               ) : (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                      Prénom *
-                    </label>
-                    <Input
-                      value={formData.firstName || ''}
-                      onChange={(e) => updateFormData('firstName', e.target.value)}
-                      placeholder="Jean"
-                      error={errors.firstName}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                      Nom *
-                    </label>
-                    <Input
-                      value={formData.lastName || ''}
-                      onChange={(e) => updateFormData('lastName', e.target.value)}
-                      placeholder="Dupont"
-                      error={errors.lastName}
-                    />
-                  </div>
+                  <FloatingLabelInput
+                    label="Prénom *"
+                    value={formData.firstName || ''}
+                    onChange={(e) => updateFormData('firstName', e.target.value)}
+                    error={errors.firstName}
+                  />
+                  <FloatingLabelInput
+                    label="Nom *"
+                    value={formData.lastName || ''}
+                    onChange={(e) => updateFormData('lastName', e.target.value)}
+                    error={errors.lastName}
+                  />
                 </>
               )}
               
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                  Email *
-                </label>
-                <Input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => updateFormData('email', e.target.value)}
-                  placeholder="contact@entreprise.ch"
-                  error={errors.email}
-                />
-              </div>
+              <FloatingLabelInput
+                label="Email *"
+                type="email"
+                value={formData.email}
+                onChange={(e) => updateFormData('email', e.target.value)}
+                error={errors.email}
+              />
               
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                  Téléphone
-                </label>
-                <Input
-                  type="tel"
-                  value={formData.phone || ''}
-                  onChange={(e) => updateFormData('phone', e.target.value)}
-                  placeholder="+41 22 123 45 67"
-                />
-              </div>
+              <FloatingLabelInput
+                label="Téléphone"
+                type="tel"
+                value={formData.phone || ''}
+                onChange={(e) => updateFormData('phone', e.target.value)}
+              />
               
               {clientType === 'company' && (
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                    Numéro TVA
-                  </label>
-                  <Input
+                  <FloatingLabelInput
+                    label="Numéro TVA"
                     value={formData.vatNumber || ''}
                     onChange={(e) => updateFormData('vatNumber', e.target.value)}
-                    placeholder="CHE-123.456.789"
                     error={errors.vatNumber}
                   />
                   <p className="text-xs text-[var(--color-text-tertiary)] mt-1">
@@ -435,6 +409,7 @@ export function ClientForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <SwissAddressAutocomplete
+                  label="Rue et numéro *"
                   value={formData.address.street}
                   error={errors['address.street']}
                   onChange={(v) => updateFormData('address.street', v)}
@@ -444,30 +419,24 @@ export function ClientForm({
                     if (addr.postalCode) updateFormData('address.postalCode', addr.postalCode);
                     if (addr.canton) updateFormData('address.canton', addr.canton);
                   }}
+                  floatingLabel
                 />
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                  Code postal *
-                </label>
-                <Input
-                  value={formData.address.postalCode}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
-                    updateFormData('address.postalCode', v);
-                    fetchCitiesForPostalCode(v);
-                  }}
-                  placeholder="1200"
-                  error={errors['address.postalCode']}
-                />
-              </div>
+              <FloatingLabelInput
+                label="Code postal *"
+                value={formData.address.postalCode}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                  updateFormData('address.postalCode', v);
+                  fetchCitiesForPostalCode(v);
+                }}
+                error={errors['address.postalCode']}
+              />
               
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                  Ville *
-                </label>
-                <Input
+                <FloatingLabelInput
+                  label="Ville *"
                   list="cityOptions"
                   value={formData.address.city}
                   onChange={(e) => {
@@ -477,7 +446,6 @@ export function ClientForm({
                     const match = cityOptions.find(o => o.city.toLowerCase() === city.toLowerCase());
                     if (match?.canton) updateFormData('address.canton', match.canton);
                   }}
-                  placeholder="Genève"
                   error={errors['address.city']}
                 />
                 {/* datalist for city suggestions */}
@@ -553,19 +521,15 @@ export function ClientForm({
                 </select>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">
-                  Conditions de paiement (jours)
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="365"
-                  value={formData.paymentTerms}
-                  onChange={(e) => updateFormData('paymentTerms', parseInt(e.target.value) || 0)}
-                  error={errors.paymentTerms}
-                />
-              </div>
+              <FloatingLabelInput
+                label="Conditions de paiement (jours)"
+                type="number"
+                min={0}
+                max={365}
+                value={formData.paymentTerms}
+                onChange={(e) => updateFormData('paymentTerms', parseInt(e.target.value) || 0)}
+                error={errors.paymentTerms}
+              />
             </div>
             
             <div className="mt-4">

@@ -218,3 +218,41 @@ export async function markWelcomeShown(req: Request, res: Response): Promise<voi
     } as ApiResponse);
   }
 }
+
+/**
+ * Dismiss onboarding permanently (user chose "Ne plus afficher")
+ */
+export async function dismiss(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User not authenticated'
+        }
+      } as ApiResponse);
+      return;
+    }
+
+    const { dismissOnboarding } = await import('../services/onboardingService');
+    const status = await dismissOnboarding(userId);
+
+    res.json({
+      success: true,
+      data: status,
+      timestamp: new Date().toISOString()
+    } as ApiResponse);
+  } catch (error) {
+    console.error('[Onboarding] Error dismissing onboarding:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to dismiss onboarding'
+      }
+    } as ApiResponse);
+  }
+}

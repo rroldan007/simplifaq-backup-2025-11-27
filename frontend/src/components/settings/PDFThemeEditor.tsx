@@ -160,6 +160,10 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
   const [saving, setSaving] = useState(false);
   const [totalsStyle, setTotalsStyle] = useState<'filled' | 'outlined' | 'minimal'>('filled');
   const [tableStyle, setTableStyle] = useState<'classic' | 'modern' | 'bordered' | 'minimal' | 'bold'>('classic');
+  // Page numbering options
+  const [showPageNumbers, setShowPageNumbers] = useState(false);
+  const [pageNumberPosition, setPageNumberPosition] = useState<'bottom-center' | 'bottom-right' | 'top-right'>('bottom-center');
+  const [pageNumberFormat, setPageNumberFormat] = useState<'simple' | 'full'>('full');
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -246,6 +250,17 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
         // Restaurar estilo de tabla
         if (parsedConfig.tableStyle) {
           setTableStyle(parsedConfig.tableStyle);
+        }
+        
+        // Restaurar opciones de numeración de página
+        if (parsedConfig.showPageNumbers !== undefined) {
+          setShowPageNumbers(parsedConfig.showPageNumbers);
+        }
+        if (parsedConfig.pageNumberPosition) {
+          setPageNumberPosition(parsedConfig.pageNumberPosition);
+        }
+        if (parsedConfig.pageNumberFormat) {
+          setPageNumberFormat(parsedConfig.pageNumberFormat);
         }
       } catch (error) {
         console.error('[PDFThemeEditor] Error loading advanced config:', error);
@@ -536,7 +551,11 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
           key: selectedTheme
         },
         totalsStyle: totalsStyle,
-        tableStyle: tableStyle
+        tableStyle: tableStyle,
+        // Page numbering options
+        showPageNumbers: showPageNumbers,
+        pageNumberPosition: pageNumberPosition,
+        pageNumberFormat: pageNumberFormat
       };
 
       // Detectar si hay personalizaciones reales
@@ -544,7 +563,8 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
         selectedTheme === 'custom' || // Usuario explícitamente seleccionó custom
         backgroundImages.length > 0 || // Tiene imágenes de fondo personalizadas
         elements.some(el => el.visible === false) || // Tiene elementos ocultos
-        elements.some(el => el.locked); // Tiene elementos bloqueados
+        elements.some(el => el.locked) || // Tiene elementos bloqueados
+        showPageNumbers; // Tiene numeración de página activada
       
       // Si es un tema estándar sin personalizaciones, limpiar advancedConfig
       const config = {
@@ -1533,6 +1553,102 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
             </div>
           </div>
         )}
+
+        {/* NUMÉROTATION DES PAGES */}
+        <div className="p-5 border-b border-gray-200/50">
+          <h3 className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wide flex items-center gap-2">
+            📄 Numérotation des Pages
+          </h3>
+          
+          {/* Toggle */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-gray-600">Afficher numéros</span>
+            <button
+              onClick={() => setShowPageNumbers(!showPageNumbers)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                showPageNumbers ? 'bg-blue-500' : 'bg-gray-300'
+              }`}
+            >
+              <span 
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform shadow ${
+                  showPageNumbers ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          
+          {showPageNumbers && (
+            <div className="space-y-3 mt-3">
+              {/* Position */}
+              <div>
+                <span className="text-xs text-gray-500 mb-1.5 block">Position</span>
+                <div className="grid grid-cols-3 gap-1">
+                  <button
+                    onClick={() => setPageNumberPosition('bottom-center')}
+                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
+                      pageNumberPosition === 'bottom-center'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    ↓ Centre
+                  </button>
+                  <button
+                    onClick={() => setPageNumberPosition('bottom-right')}
+                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
+                      pageNumberPosition === 'bottom-right'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    ↘ Droite
+                  </button>
+                  <button
+                    onClick={() => setPageNumberPosition('top-right')}
+                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
+                      pageNumberPosition === 'top-right'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    ↗ Haut
+                  </button>
+                </div>
+              </div>
+              
+              {/* Format */}
+              <div>
+                <span className="text-xs text-gray-500 mb-1.5 block">Format</span>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    onClick={() => setPageNumberFormat('full')}
+                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
+                      pageNumberFormat === 'full'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    Page 1 / 3
+                  </button>
+                  <button
+                    onClick={() => setPageNumberFormat('simple')}
+                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
+                      pageNumberFormat === 'simple'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    1
+                  </button>
+                </div>
+              </div>
+              
+              <div className="text-[10px] text-blue-600 bg-blue-50 p-2 rounded">
+                ℹ️ Les numéros apparaissent en marge du document (ne chevauchent pas le contenu ni le QR Bill)
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ACCIONES */}
         <div className="p-5 space-y-2">
