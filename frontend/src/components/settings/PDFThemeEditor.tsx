@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Save, RotateCcw, Code, Palette, Move, Lock, Unlock, Maximize2, Sparkles, Upload, Trash2, ChevronUp, ChevronDown, X, Eye, EyeOff } from 'lucide-react';
+import { Save, RotateCcw, Code, Palette, Move, Lock, Unlock, Maximize2, Sparkles, Upload, Trash2, ChevronUp, ChevronDown, X, Eye, EyeOff } from 'lucide-react';
 import { api } from '../../services/api';
 import type { User } from '../../contexts/authTypes';
 
@@ -93,10 +93,104 @@ const THEME_REGISTRY = {
   }
 };
 
+type ThemeDefinition = (typeof THEME_REGISTRY)[keyof typeof THEME_REGISTRY];
+type ThemeKey = keyof typeof THEME_REGISTRY;
+type AlignOption = 'left' | 'center' | 'right';
+type ElementType = 'logo' | 'text' | 'group' | 'table' | 'totals' | 'qr_bill';
+
+interface DraggableElement {
+  id: string;
+  type: ElementType;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  locked: boolean;
+  visible: boolean;
+  resizable?: boolean;
+  fontSize?: number;
+  fontWeight?: string;
+  align?: AlignOption;
+}
+
+interface BackgroundImageElement {
+  id: string;
+  type: 'background_image';
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  visible: boolean;
+  locked: boolean;
+  resizable: boolean;
+  src: string;
+}
+
+type CanvasElement = DraggableElement | BackgroundImageElement;
+
+interface DragState {
+  id: string;
+  isImage: boolean;
+  offsetX: number;
+  offsetY: number;
+}
+
+interface ResizeState {
+  id: string;
+  isImage: boolean;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+}
+
+interface StoredElementConfig {
+  id: string;
+  type: ElementType;
+  label?: string;
+  position?: { x?: number; y?: number };
+  size?: { width?: number; height?: number };
+  locked?: boolean;
+  visible?: boolean;
+  resizable?: boolean;
+  fontSize?: number;
+  fontWeight?: string;
+  align?: AlignOption;
+}
+
+interface StoredBackgroundImageConfig {
+  id?: string;
+  position?: { x?: number; y?: number };
+  size?: { width?: number; height?: number };
+  opacity?: number;
+  visible?: boolean;
+  src?: string;
+}
+
+type AdvancedConfigPayload = {
+  elements?: StoredElementConfig[];
+  backgroundImages?: StoredBackgroundImageConfig[];
+  colors?: {
+    primary?: string;
+    tableHeader?: string;
+    headerBg?: string;
+    textHeader?: string;
+    textBody?: string;
+  };
+  totalsStyle?: 'filled' | 'outlined' | 'minimal';
+  tableStyle?: 'classic' | 'modern' | 'bordered' | 'minimal' | 'bold';
+  showPageNumbers?: boolean;
+  pageNumberPosition?: 'bottom-center' | 'bottom-right' | 'top-right';
+  pageNumberFormat?: 'simple' | 'full';
+};
+
 // ============================================
 // 🧱 ELEMENTOS ARRASTRABLES POR DEFECTO
 // ============================================
-const DEFAULT_ELEMENTS = [
+const DEFAULT_ELEMENTS: DraggableElement[] = [
   { id: 'logo', type: 'logo', label: 'Logo', x: 40, y: 40, width: 120, height: 50, locked: false, resizable: true, visible: true },
   { id: 'company_name', type: 'text', label: 'Nom Entreprise', x: 170, y: 50, width: 200, height: 30, locked: false, fontSize: 18, fontWeight: 'bold', visible: true },
   { id: 'doc_title', type: 'text', label: 'Titre Document', x: 400, y: 40, width: 150, height: 40, locked: false, fontSize: 24, fontWeight: 'bold', align: 'right', visible: true },
@@ -121,7 +215,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
   const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
   
   // Normalizar el template key para que coincida con THEME_REGISTRY
-  const normalizeTemplateKey = (template?: string): keyof typeof THEME_REGISTRY => {
+  const normalizeTemplateKey = (template?: string): ThemeKey => {
     if (!template) return 'swiss_minimal';
     
     // Mapeo de templates legacy a nuevos
@@ -145,14 +239,14 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
 
   // Detectar si el usuario tiene configuración personalizada
   const hasAdvancedConfig = user.pdfAdvancedConfig && user.pdfAdvancedConfig !== '';
-  const initialThemeKey = hasAdvancedConfig || user.pdfTemplate === 'custom' ? 'custom' : normalizeTemplateKey(user.pdfTemplate);
-  const [selectedTheme, setSelectedTheme] = useState(initialThemeKey);
-  const [theme, setTheme] = useState(THEME_REGISTRY[initialThemeKey]);
-  const [elements, setElements] = useState(DEFAULT_ELEMENTS);
-  const [backgroundImages, setBackgroundImages] = useState<any[]>([]);
+  const initialThemeKey: ThemeKey = hasAdvancedConfig || user.pdfTemplate === 'custom' ? 'custom' : normalizeTemplateKey(user.pdfTemplate);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeKey>(initialThemeKey);
+  const [theme, setTheme] = useState<ThemeDefinition>(THEME_REGISTRY[initialThemeKey]);
+  const [elements, setElements] = useState<DraggableElement[]>(DEFAULT_ELEMENTS);
+  const [backgroundImages, setBackgroundImages] = useState<BackgroundImageElement[]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<any>(null);
-  const [resizing, setResizing] = useState<any>(null);
+  const [dragging, setDragging] = useState<DragState | null>(null);
+  const [resizing, setResizing] = useState<ResizeState | null>(null);
   const [zoom, setZoom] = useState(1.0);
   const [showGrid, setShowGrid] = useState(true);
   const [showCode, setShowCode] = useState(false);
@@ -174,7 +268,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
   useEffect(() => {
     if (hasAdvancedConfig) {
       try {
-        const parsedConfig = typeof user.pdfAdvancedConfig === 'string' 
+        const parsedConfig: AdvancedConfigPayload = typeof user.pdfAdvancedConfig === 'string' 
           ? JSON.parse(user.pdfAdvancedConfig) 
           : user.pdfAdvancedConfig;
         
@@ -182,17 +276,17 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
         
         // Restaurar elementos
         if (parsedConfig.elements && Array.isArray(parsedConfig.elements)) {
-          const loadedElements = parsedConfig.elements.map((el: any) => ({
+          const loadedElements: DraggableElement[] = parsedConfig.elements.map((el: StoredElementConfig) => ({
             id: el.id,
             type: el.type,
             label: DEFAULT_ELEMENTS.find(d => d.id === el.id)?.label || el.id,
-            x: el.position.x,
-            y: el.position.y,
-            width: el.size.width,
-            height: el.size.height,
-            locked: el.locked || false,
+            x: el.position?.x ?? 0,
+            y: el.position?.y ?? 0,
+            width: el.size?.width ?? 100,
+            height: el.size?.height ?? 30,
+            locked: el.locked ?? false,
             visible: el.visible !== false,
-            resizable: el.resizable || false,
+            resizable: el.resizable ?? false,
             fontSize: el.fontSize,
             fontWeight: el.fontWeight,
             align: el.align
@@ -203,7 +297,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
         // Restaurar imágenes de fondo
         if (parsedConfig.backgroundImages && Array.isArray(parsedConfig.backgroundImages)) {
           console.log('[PDFThemeEditor] Loading background images:', parsedConfig.backgroundImages);
-          const loadedImages = parsedConfig.backgroundImages.map((img: any, index: number) => ({
+          const loadedImages: BackgroundImageElement[] = parsedConfig.backgroundImages.map((img: StoredBackgroundImageConfig, index: number) => ({
             id: img.id || `bg_restored_${index}`,
             type: 'background_image', // CRITICAL: type is required for rendering
             label: `Image ${index + 1}`,
@@ -223,20 +317,21 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
         
         // Restaurar colores del tema
         if (parsedConfig.colors) {
+          const colors = parsedConfig.colors;
           setTheme(prev => ({
             ...prev,
             colors: {
               ...prev.colors,
-              primary: parsedConfig.colors.primary || prev.colors.primary,
+              primary: colors.primary || prev.colors.primary,
               background: {
                 ...prev.colors.background,
-                tableHeader: parsedConfig.colors.tableHeader || prev.colors.background.tableHeader,
-                header: parsedConfig.colors.headerBg || prev.colors.background.header
+                tableHeader: colors.tableHeader || prev.colors.background.tableHeader,
+                header: colors.headerBg || prev.colors.background.header
               },
               text: {
                 ...prev.colors.text,
-                header: parsedConfig.colors.textHeader || prev.colors.text.header,
-                body: parsedConfig.colors.textBody || prev.colors.text.body
+                header: colors.textHeader || prev.colors.text.header,
+                body: colors.textBody || prev.colors.text.body
               }
             }
           }));
@@ -314,7 +409,14 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
       console.log('📥 Réponse upload image:', response);
       
       // Extraer URL correctamente según la estructura de respuesta
-      const resp = response as any;
+      type UploadResponse = {
+        data?: {
+          data?: { url?: string };
+          url?: string;
+        };
+        url?: string;
+      };
+      const resp = response as UploadResponse;
       let imageUrl = '';
       if (resp?.data?.data?.url) {
         imageUrl = resp.data.data.url;
@@ -337,7 +439,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
       const img = new Image();
       img.onload = () => {
         console.log('✅ Image chargée:', img.width, 'x', img.height);
-        const newImage = {
+        const newImage: BackgroundImageElement = {
           id: `bg_${Date.now()}`,
           type: 'background_image',
           label: 'Image de fond',
@@ -395,7 +497,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
   // ============================================
   // 🖱️ DRAG & RESIZE
   // ============================================
-  const handleMouseDown = (e: React.MouseEvent, element: any) => {
+  const handleMouseDown = (e: React.MouseEvent, element: CanvasElement) => {
     if (element.locked) return;
     e.stopPropagation();
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -409,7 +511,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
     setSelectedElement(element.id);
   };
 
-  const handleResizeStart = (e: React.MouseEvent, element: any) => {
+  const handleResizeStart = (e: React.MouseEvent, element: CanvasElement) => {
     if (element.locked || !element.resizable) return;
     e.stopPropagation();
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -475,11 +577,16 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
   // ============================================
   const updateColor = (path: string, value: string) => {
     setTheme(prev => {
-      const newTheme = { ...prev };
+      const newTheme: ThemeDefinition = JSON.parse(JSON.stringify(prev));
       const keys = path.split('.');
-      let current: any = newTheme;
+      let current: Record<string, unknown> = newTheme as unknown as Record<string, unknown>;
       for (let i = 0; i < keys.length - 1; i++) {
-        current = current[keys[i]];
+        const key = keys[i];
+        const next = current[key];
+        if (typeof next !== 'object' || next === null) {
+          current[key] = {};
+        }
+        current = current[key] as Record<string, unknown>;
       }
       current[keys[keys.length - 1]] = value;
       return newTheme;
@@ -579,7 +686,11 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
       
       // Extract user from response - api.put retorna { data: ApiResponse }
       let updatedUser = null;
-      const resp = result as any;
+      type UpdateResponse = {
+        data?: { data?: { user?: User }; user?: User };
+        user?: User;
+      };
+      const resp = result as UpdateResponse;
       
       if (resp?.data?.data?.user) {
         updatedUser = resp.data.data.user as User;
@@ -671,10 +782,22 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
     return `${BACKEND_URL}/${src}`;
   };
 
+  const getThemeColor = (path: string): string | undefined => {
+    const keys = path.split('.');
+    let current: unknown = theme;
+    for (const key of keys) {
+      if (typeof current !== 'object' || current === null) {
+        return undefined;
+      }
+      current = (current as Record<string, unknown>)[key];
+    }
+    return typeof current === 'string' ? current : undefined;
+  };
+
   // ============================================
   // 🎨 RENDER ELEMENT
   // ============================================
-  const renderElement = (element: any) => {
+  const renderElement = (element: CanvasElement) => {
     const isSelected = selectedElement === element.id;
     const isImage = element.type === 'background_image';
     
@@ -763,7 +886,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
       return element.label;
     };
 
-    const content: Record<string, React.JSX.Element> = {
+    const content: Record<ElementType, React.JSX.Element> = {
       logo: (
         <div className="flex items-center justify-center h-full text-xs text-gray-500 bg-white/50 rounded">
           {user.logoUrl ? (
@@ -783,7 +906,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
       text: (
         <div className="p-2 h-full flex items-center" style={{ 
           fontSize: element.fontSize ? `${element.fontSize}px` : '12px',
-          textAlign: (element.align || 'left') as any,
+          textAlign: (element.align || 'left') as React.CSSProperties['textAlign'],
           fontWeight: element.fontWeight || 'normal',
           color: (element.id === 'company_name' || element.id === 'doc_title') 
             ? theme.colors.primary 
@@ -1169,39 +1292,20 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
               { label: 'En-tête Tableau', path: 'colors.background.tableHeader' },
               { label: 'Fond En-tête', path: 'colors.background.header' }
             ].map(({ label, path }) => {
-              const keys = path.split('.');
-              let value: any = theme;
-              
-              // Validación defensiva: asegurar que theme existe
-              if (!value) return null;
-              
-              try {
-                for (const k of keys) {
-                  value = value[k];
-                  if (value === undefined) {
-                    console.warn(`Missing theme property: ${path}`);
-                    value = '#000000'; // fallback color
-                    break;
-                  }
-                }
-              } catch (error) {
-                console.error(`Error accessing theme path: ${path}`, error);
-                value = '#000000'; // fallback color
-              }
-              
+              const resolvedValue = getThemeColor(path) || '#000000';
+
               return (
                 <div key={path} className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-xl border border-gray-200/50">
                   <label className="block text-xs font-medium text-gray-600 mb-2">{label}</label>
                   <div className="flex gap-2">
                     <input 
                       type="color" 
-                      value={value}
+                      value={resolvedValue}
                       onChange={(e) => updateColor(path, e.target.value)}
-                      className="w-12 h-12 rounded-lg cursor-pointer border-2 border-gray-200 hover:border-blue-400 transition-all"
                     />
                     <input 
                       type="text" 
-                      value={value}
+                      value={resolvedValue}
                       onChange={(e) => updateColor(path, e.target.value)}
                       className="flex-1 p-3 border-2 border-gray-200 rounded-lg text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none"
                     />

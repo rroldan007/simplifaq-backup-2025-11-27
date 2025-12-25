@@ -58,6 +58,26 @@ interface PDFPreviewProps {
   };
 }
 
+type UserWithPdfSettings = User & {
+  pdfTemplate?: string;
+  pdfShowCompanyNameWithLogo?: boolean;
+  pdfShowVAT?: boolean;
+  pdfShowPhone?: boolean;
+  pdfShowEmail?: boolean;
+  pdfShowWebsite?: boolean;
+  pdfShowIBAN?: boolean;
+  pdfLogoPosition?: 'left' | 'center' | 'right';
+  pdfLogoSize?: 'small' | 'medium' | 'large';
+  pdfFontColorHeader?: string;
+  pdfFontColorBody?: string;
+  pdfTableHeadColor?: string;
+  email?: string;
+  iban?: string;
+  quantityDecimals?: 2 | 3;
+  firstName?: string;
+  lastName?: string;
+};
+
 // Map of template keys to components
 const TEMPLATE_COMPONENTS: Record<string, React.ComponentType<{ 
   data: InvoicePreviewData; 
@@ -93,7 +113,6 @@ const TEMPLATE_COMPONENTS: Record<string, React.ComponentType<{
  * Preview component that respects PDF configuration settings
  */
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => {
-  type UserWithPdfSettings = { pdfTemplate?: string; pdfShowCompanyNameWithLogo?: boolean; firstName?: string; lastName?: string };
   const userPdf = user as UserWithPdfSettings;
   const template = userPdf.pdfTemplate || 'swiss_classic';
   const logoUrl = getLogoUrl(user.logoUrl);
@@ -134,22 +153,20 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
       companyData.country,
     ].filter(Boolean);
 
-    type UserPdfOptions = { pdfShowVAT?: boolean; pdfShowPhone?: boolean; pdfShowEmail?: boolean; pdfShowWebsite?: boolean; pdfShowIBAN?: boolean; email?: string; iban?: string; quantityDecimals?: number };
-    const userOpts = user as UserPdfOptions;
-    if (userOpts.pdfShowVAT !== false && companyData.vatNumber) {
+    if (userPdf.pdfShowVAT !== false && companyData.vatNumber) {
       companyLines.push(`TVA: ${companyData.vatNumber}`);
     }
-    if (userOpts.pdfShowPhone !== false && companyData.phone) {
+    if (userPdf.pdfShowPhone !== false && companyData.phone) {
       companyLines.push(`Tél: ${companyData.phone}`);
     }
-    if (userOpts.pdfShowEmail !== false && userOpts.email) {
-      companyLines.push(`Email: ${userOpts.email}`);
+    if (userPdf.pdfShowEmail !== false && userPdf.email) {
+      companyLines.push(`Email: ${userPdf.email}`);
     }
-    if (userOpts.pdfShowWebsite !== false && companyData.website) {
+    if (userPdf.pdfShowWebsite !== false && companyData.website) {
       companyLines.push(`Web: ${companyData.website}`);
     }
-    if (userOpts.pdfShowIBAN === true && userOpts.iban) {
-      companyLines.push(`IBAN: ${userOpts.iban}`);
+    if (userPdf.pdfShowIBAN === true && userPdf.iban) {
+      companyLines.push(`IBAN: ${userPdf.iban}`);
     }
 
     const subtotal = 320;
@@ -174,7 +191,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
       tax,
       total: roundToCHF05(total, currency),
       logoUrl: logoUrl || undefined,
-      quantityDecimals: (userOpts.quantityDecimals === 3 ? 3 : 2) as 2 | 3,
+      quantityDecimals: userPdf.quantityDecimals === 3 ? 3 : 2,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyData, logoUrl, user]);
@@ -185,11 +202,11 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ user, companyData }) => 
         data={previewData} 
         accentColor={accentColor}
         showHeader={showHeader}
-        logoPosition={(user as any).pdfLogoPosition || 'left'}
-        logoSize={(user as any).pdfLogoSize || 'medium'}
-        fontColorHeader={(user as any).pdfFontColorHeader || themeColors.headerText}
-        fontColorBody={(user as any).pdfFontColorBody || themeColors.bodyText}
-        tableHeadColor={(user as any).pdfTableHeadColor || tableHeaderBgColor}
+        logoPosition={userPdf.pdfLogoPosition || 'left'}
+        logoSize={userPdf.pdfLogoSize || 'medium'}
+        fontColorHeader={userPdf.pdfFontColorHeader || themeColors.headerText}
+        fontColorBody={userPdf.pdfFontColorBody || themeColors.bodyText}
+        tableHeadColor={userPdf.pdfTableHeadColor || tableHeaderBgColor}
         headerBgColor={headerBgColor}
         altRowColor={themeColors.altRow}
       />
