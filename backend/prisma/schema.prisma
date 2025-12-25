@@ -47,14 +47,22 @@ model User {
   qrReferencePrefix String?  // Optional prefix for QR references
 
   // Invoice numbering preferences
-  invoicePrefix     String   @default("FAC")
-  nextInvoiceNumber Int      @default(1)
-  invoicePadding    Int      @default(3)
+  invoicePrefix       String   @default("FAC")
+  nextInvoiceNumber   Int      @default(1)
+  invoicePadding      Int      @default(3)
+  invoiceYearInPrefix Boolean  @default(false) // Include year in invoice number
+  invoiceYearFormat   String   @default("YYYY") // YYYY (2025), YY (25), or empty
+  invoiceAutoReset    Boolean  @default(true)   // Auto-reset counter on Jan 1
+  lastInvoiceYear     Int?                      // Last fiscal year used for invoices
 
   // Quote numbering preferences
-  quotePrefix       String   @default("DEV")
-  nextQuoteNumber   Int      @default(1)
-  quotePadding      Int      @default(3)
+  quotePrefix         String   @default("DEV")
+  nextQuoteNumber     Int      @default(1)
+  quotePadding        Int      @default(3)
+  quoteYearInPrefix   Boolean  @default(false) // Include year in quote number
+  quoteYearFormat     String   @default("YYYY") // YYYY (2025), YY (25), or empty
+  quoteAutoReset      Boolean  @default(true)   // Auto-reset counter on Jan 1
+  lastQuoteYear       Int?                      // Last fiscal year used for quotes
 
   quantityDecimals  Int      @default(2)
 

@@ -3,7 +3,7 @@ import { prisma } from '../services/database';
 import { ApiResponse, AppError } from '../types';
 
 // PATCH /api/settings/invoicing-numbering
-// Body: { prefix: string, nextNumber: number, padding: number }
+// Body: { prefix, nextNumber, padding, yearInPrefix, yearFormat, autoReset }
 export const updateInvoicingNumbering = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).userId;
@@ -11,7 +11,7 @@ export const updateInvoicingNumbering = async (req: Request, res: Response): Pro
       throw new AppError('Utilisateur non authentifié', 401, 'UNAUTHORIZED');
     }
 
-    const { prefix, nextNumber, padding } = req.body || {};
+    const { prefix, nextNumber, padding, yearInPrefix, yearFormat, autoReset } = req.body || {};
 
     // Basic validations (French messages)
     const sanitizedPrefix = typeof prefix === 'string' ? prefix.trim() : undefined;
@@ -38,10 +38,19 @@ export const updateInvoicingNumbering = async (req: Request, res: Response): Pro
       }
     }
 
+    // Validate year format if provided
+    const sanitizedYearFormat = typeof yearFormat === 'string' ? yearFormat : undefined;
+    if (sanitizedYearFormat !== undefined && !['YYYY', 'YY', ''].includes(sanitizedYearFormat)) {
+      throw new AppError('Le format d\'année doit être YYYY, YY ou vide.', 400, 'INVALID_YEAR_FORMAT');
+    }
+
     const data: any = {};
     if (sanitizedPrefix !== undefined) data.invoicePrefix = sanitizedPrefix;
     if (sanitizedNext !== undefined) data.nextInvoiceNumber = sanitizedNext;
     if (sanitizedPad !== undefined) data.invoicePadding = sanitizedPad;
+    if (typeof yearInPrefix === 'boolean') data.invoiceYearInPrefix = yearInPrefix;
+    if (sanitizedYearFormat !== undefined) data.invoiceYearFormat = sanitizedYearFormat;
+    if (typeof autoReset === 'boolean') data.invoiceAutoReset = autoReset;
 
     if (Object.keys(data).length === 0) {
       throw new AppError('Aucune donnée à mettre à jour.', 400, 'NO_UPDATE');
@@ -55,6 +64,10 @@ export const updateInvoicingNumbering = async (req: Request, res: Response): Pro
         invoicePrefix: true,
         nextInvoiceNumber: true,
         invoicePadding: true,
+        invoiceYearInPrefix: true,
+        invoiceYearFormat: true,
+        invoiceAutoReset: true,
+        lastInvoiceYear: true,
       },
     });
 

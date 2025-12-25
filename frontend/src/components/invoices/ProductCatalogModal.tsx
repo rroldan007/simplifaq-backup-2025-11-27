@@ -19,6 +19,8 @@ interface ProductCatalogModalProps {
   products: Product[];
   onAddProducts: (products: Product[]) => void;
   currency?: string;
+  loading?: boolean;
+  onRefresh?: () => void;
 }
 
 export function ProductCatalogModal({
@@ -26,7 +28,9 @@ export function ProductCatalogModal({
   onClose,
   products,
   onAddProducts,
-  currency = 'CHF'
+  currency = 'CHF',
+  loading = false,
+  onRefresh
 }: ProductCatalogModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -274,13 +278,26 @@ export function ProductCatalogModal({
           {/* Product List */}
           {!barcodeMode && (
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              {filteredProducts.length === 0 ? (
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                  <p className="text-slate-500 font-medium">Chargement des produits...</p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                   <p className="text-slate-500 font-medium">Aucun produit trouvé</p>
                   <p className="text-sm text-slate-400 mt-1">
                     Essayez une autre recherche
                   </p>
+                  {onRefresh && (
+                    <button
+                      onClick={onRefresh}
+                      className="mt-4 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      Actualiser la liste
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid gap-2">

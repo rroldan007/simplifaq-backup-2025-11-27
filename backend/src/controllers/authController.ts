@@ -396,9 +396,15 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
       invoicePrefix,
       nextInvoiceNumber,
       invoicePadding,
+      invoiceYearInPrefix,
+      invoiceYearFormat,
+      invoiceAutoReset,
       quotePrefix,
       nextQuoteNumber,
       quotePadding,
+      quoteYearInPrefix,
+      quoteYearFormat,
+      quoteAutoReset,
       quantityDecimals,
     } = req.body;
 
@@ -688,13 +694,21 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
       dataToUpdate.pdfAdvancedConfig = typeof pdfAdvancedConfig === 'string' ? pdfAdvancedConfig : JSON.stringify(pdfAdvancedConfig);
     }
 
-    // Numbering settings
+    // Numbering settings - Invoice
     if (invoicePrefix !== undefined) dataToUpdate.invoicePrefix = invoicePrefix;
     if (nextInvoiceNumber !== undefined) dataToUpdate.nextInvoiceNumber = nextInvoiceNumber;
     if (invoicePadding !== undefined) dataToUpdate.invoicePadding = invoicePadding;
+    if (invoiceYearInPrefix !== undefined) dataToUpdate.invoiceYearInPrefix = invoiceYearInPrefix;
+    if (invoiceYearFormat !== undefined) dataToUpdate.invoiceYearFormat = invoiceYearFormat;
+    if (invoiceAutoReset !== undefined) dataToUpdate.invoiceAutoReset = invoiceAutoReset;
+    // Numbering settings - Quote
     if (quotePrefix !== undefined) dataToUpdate.quotePrefix = quotePrefix;
     if (nextQuoteNumber !== undefined) dataToUpdate.nextQuoteNumber = nextQuoteNumber;
     if (quotePadding !== undefined) dataToUpdate.quotePadding = quotePadding;
+    if (quoteYearInPrefix !== undefined) dataToUpdate.quoteYearInPrefix = quoteYearInPrefix;
+    if (quoteYearFormat !== undefined) dataToUpdate.quoteYearFormat = quoteYearFormat;
+    if (quoteAutoReset !== undefined) dataToUpdate.quoteAutoReset = quoteAutoReset;
+    // Other settings
     if (quantityDecimals !== undefined) dataToUpdate.quantityDecimals = quantityDecimals;
 
     // Only proceed if there is something to update

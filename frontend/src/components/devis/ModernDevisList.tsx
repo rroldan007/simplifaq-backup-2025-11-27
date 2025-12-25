@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { InvoiceCard } from '../invoices/InvoiceCard';
 import { CompactDevisRow } from './CompactDevisRow';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { formatAmount } from '../../utils/formatters';
 
 type DevisStatus = 'all' | 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
 
@@ -293,7 +294,7 @@ export function ModernDevisList({
               </div>
               <p className="text-sm text-[var(--color-text-secondary)] font-medium">Total</p>
               <p className="text-2xl font-bold text-[var(--color-text-primary)]">
-                {stats.totalAmount.toLocaleString('fr-CH')} CHF
+                {formatAmount(stats.totalAmount)} CHF
               </p>
             </motion.div>
 

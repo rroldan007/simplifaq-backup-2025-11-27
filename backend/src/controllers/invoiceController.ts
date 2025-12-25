@@ -638,27 +638,87 @@ export const createInvoice = async (req: Request, res: Response): Promise<void> 
 
     // Créer la facture avec numérotation configurable de l'utilisateur
     // - Utilise User.invoicePrefix, User.invoicePadding, User.nextInvoiceNumber
+    // - Supporte année dans le numéro et auto-reset au 1er janvier
     // - Incrémente le compteur de façon atomique
     const invoice = await prisma.$transaction(async (tx) => {
       const userCfg = await tx.user.findUnique({
         where: { id: userId },
-      });
+      }) as any; // Cast to any to access new fiscal year fields
       if (!userCfg) {
         throw new AppError('Utilisateur introuvable', 404, 'USER_NOT_FOUND');
       }
 
-      const makeNumber = (prefix: string | null | undefined, next: number, padding: number): string => {
+      const currentYear = new Date().getFullYear();
+      
+      // Check if we need to reset the counter for a new fiscal year
+      const lastYear = userCfg.lastInvoiceYear ?? null;
+      const autoReset = userCfg.invoiceAutoReset ?? true;
+      let nextNumber = userCfg.nextInvoiceNumber;
+      
+      if (autoReset && lastYear !== null && lastYear !== currentYear) {
+        // New fiscal year detected - reset counter to 1
+        console.log(`[Invoice] Fiscal year change detected: ${lastYear} -> ${currentYear}. Resetting counter.`);
+        nextNumber = 1;
+        await tx.user.update({
+          where: { id: userId },
+          data: { 
+            nextInvoiceNumber: 1,
+            lastInvoiceYear: currentYear 
+          },
+        });
+        userCfg.nextInvoiceNumber = 1;
+        userCfg.lastInvoiceYear = currentYear;
+      } else if (lastYear === null) {
+        // First invoice or no year set - initialize lastInvoiceYear
+        await tx.user.update({
+          where: { id: userId },
+          data: { lastInvoiceYear: currentYear },
+        });
+        userCfg.lastInvoiceYear = currentYear;
+      }
+
+      // Generate invoice number with optional year
+      const makeNumber = (
+        prefix: string | null | undefined, 
+        next: number, 
+        padding: number,
+        yearInPrefix: boolean,
+        yearFormat: string
+      ): string => {
         const pad = Math.max(0, Number(padding || 0));
         const numeric = String(next);
         const padded = pad > 0 ? numeric.padStart(pad, '0') : numeric;
         const pref = (prefix || '').trim();
-        return pref ? `${pref}-${padded}` : padded;
+        
+        // Format year if enabled
+        let yearPart = '';
+        if (yearInPrefix && yearFormat) {
+          if (yearFormat === 'YYYY') {
+            yearPart = String(currentYear);
+          } else if (yearFormat === 'YY') {
+            yearPart = String(currentYear).slice(-2);
+          }
+        }
+        
+        // Build final number: PREFIX-YEAR-NUMBER or PREFIX-NUMBER or just NUMBER
+        const parts: string[] = [];
+        if (pref) parts.push(pref);
+        if (yearPart) parts.push(yearPart);
+        parts.push(padded);
+        
+        return parts.join('-');
       };
 
       let attempts = 0;
       while (attempts < 3) {
         attempts++;
-        const numberStr = makeNumber(userCfg.invoicePrefix, userCfg.nextInvoiceNumber, userCfg.invoicePadding);
+        const numberStr = makeNumber(
+          userCfg.invoicePrefix, 
+          userCfg.nextInvoiceNumber, 
+          userCfg.invoicePadding,
+          userCfg.invoiceYearInPrefix ?? false,
+          userCfg.invoiceYearFormat ?? 'YYYY'
+        );
         const qr = computeQRReference({
           mode: ((userCfg as any)?.qrReferenceMode ?? 'auto') as string,
           prefix: ((userCfg as any)?.qrReferencePrefix ?? undefined) as string | undefined,

@@ -119,6 +119,7 @@ export function useProducts(params: UseProductsParams = {}) {
   }, []);
 
   const fetchProducts = useCallback(async (showLoading = true) => {
+    console.log('[useProducts] fetchProducts called. showLoading:', showLoading);
     try {
       if (showLoading) {
         setState(prev => ({ ...prev, loading: true, error: null }));

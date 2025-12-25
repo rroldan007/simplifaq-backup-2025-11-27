@@ -255,8 +255,9 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
   const [totalsStyle, setTotalsStyle] = useState<'filled' | 'outlined' | 'minimal'>('filled');
   const [tableStyle, setTableStyle] = useState<'classic' | 'modern' | 'bordered' | 'minimal' | 'bold'>('classic');
   // Page numbering options
+  // Default to 'top-right' to avoid conflicts with table content and QR Bill at bottom
   const [showPageNumbers, setShowPageNumbers] = useState(false);
-  const [pageNumberPosition, setPageNumberPosition] = useState<'bottom-center' | 'bottom-right' | 'top-right'>('bottom-center');
+  const [pageNumberPosition, setPageNumberPosition] = useState<'bottom-center' | 'bottom-right' | 'top-right'>('top-right');
   const [pageNumberFormat, setPageNumberFormat] = useState<'simple' | 'full'>('full');
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

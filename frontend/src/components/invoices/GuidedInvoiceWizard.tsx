@@ -144,8 +144,12 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
 
   const [step, setStep] = useState<number>(1); // 1..3
   const { clients, loading: clientsLoading } = useClients({});
-  const { products } = useProducts({ autoRefresh: false });
+  const { products, loading: productsLoading, refreshProducts } = useProducts({ autoRefresh: false });
   const user = useCurrentUser();
+
+  useEffect(() => {
+    console.log('[GuidedInvoiceWizard] Products loaded:', products.length, 'Loading:', productsLoading, 'DocType:', documentType);
+  }, [products.length, productsLoading, documentType]);
 
   const [data, setData] = useState<InvoiceFormData>({
     invoiceNumber: '',
@@ -273,6 +277,13 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
   const [productQuery, setProductQuery] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [showCatalogModal, setShowCatalogModal] = useState<boolean>(false);
+
+  // Auto-refresh products when opening catalog if empty
+  useEffect(() => {
+    if (showCatalogModal && products.length === 0) {
+      refreshProducts();
+    }
+  }, [showCatalogModal, products.length, refreshProducts]);
 
   // Autosave minimal (enhancements planned)
   const hasId = (obj: unknown): obj is { id?: string } => {
@@ -1762,7 +1773,7 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
       </div>
 
       {/* Footer nav */}
-      <div className="sticky bottom-0 left-0 right-0 py-4 bg-white/80 backdrop-blur-lg border-t border-slate-200/60">
+      <div className="sticky bottom-0 left-0 right-0 py-4 bg-white/80 backdrop-blur-lg border-t border-slate-200/60 z-50">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-4 px-4">
           <div>
             {step > 1 ? (
@@ -1828,6 +1839,8 @@ export const GuidedInvoiceWizard: React.FC<GuidedInvoiceWizardProps> = ({
         products={products}
         onAddProducts={addProductsFromCatalog}
         currency={data.currency}
+        loading={productsLoading}
+        onRefresh={refreshProducts}
       />
     </form>
   );

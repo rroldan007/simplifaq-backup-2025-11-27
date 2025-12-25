@@ -113,9 +113,17 @@ export function SettingsPage() {
     invoicePrefix?: string;
     nextInvoiceNumber?: number;
     invoicePadding?: number;
+    invoiceYearInPrefix?: boolean;
+    invoiceYearFormat?: 'YYYY' | 'YY' | '';
+    invoiceAutoReset?: boolean;
+    lastInvoiceYear?: number;
     quotePrefix?: string;
     nextQuoteNumber?: number;
     quotePadding?: number;
+    quoteYearInPrefix?: boolean;
+    quoteYearFormat?: 'YYYY' | 'YY' | '';
+    quoteAutoReset?: boolean;
+    lastQuoteYear?: number;
   };
 
   // Sync form when user context updates (e.g., after logo upload or profile save)
@@ -152,12 +160,18 @@ export function SettingsPage() {
       prefix: extUser.invoicePrefix || '',
       nextNumber: extUser.nextInvoiceNumber || 1,
       padding: extUser.invoicePadding || 0,
+      yearInPrefix: extUser.invoiceYearInPrefix ?? false,
+      yearFormat: extUser.invoiceYearFormat || 'YYYY',
+      autoReset: extUser.invoiceAutoReset ?? true,
     });
 
     setQuoteNumbering({
       prefix: extUser.quotePrefix || '',
       nextNumber: extUser.nextQuoteNumber || 1,
       padding: extUser.quotePadding || 0,
+      yearInPrefix: extUser.quoteYearInPrefix ?? false,
+      yearFormat: extUser.quoteYearFormat || 'YYYY',
+      autoReset: extUser.quoteAutoReset ?? true,
     });
   }, [user]);
 
@@ -183,6 +197,9 @@ export function SettingsPage() {
     prefix: '',
     nextNumber: 1,
     padding: 0,
+    yearInPrefix: false,
+    yearFormat: 'YYYY' as 'YYYY' | 'YY' | '',
+    autoReset: true,
   });
 
   // Numérotation (Devis) - Initialize empty, will sync via useEffect
@@ -190,6 +207,9 @@ export function SettingsPage() {
     prefix: '',
     nextNumber: 1,
     padding: 0,
+    yearInPrefix: false,
+    yearFormat: 'YYYY' as 'YYYY' | 'YY' | '',
+    autoReset: true,
   });
 
   const [savingNumbering, setSavingNumbering] = useState(false);
@@ -309,12 +329,18 @@ export function SettingsPage() {
         prefix: invoiceNumbering.prefix.trim(),
         nextNumber: Number(invoiceNumbering.nextNumber),
         padding: Number(invoiceNumbering.padding),
+        yearInPrefix: invoiceNumbering.yearInPrefix,
+        yearFormat: invoiceNumbering.yearFormat,
+        autoReset: invoiceNumbering.autoReset,
       };
       
       await api.put('/auth/me', {
         invoicePrefix: payload.prefix,
         nextInvoiceNumber: payload.nextNumber,
         invoicePadding: payload.padding,
+        invoiceYearInPrefix: payload.yearInPrefix,
+        invoiceYearFormat: payload.yearFormat,
+        invoiceAutoReset: payload.autoReset,
       });
       
       showToast('Numérotation des factures mise à jour avec succès', 'success');
@@ -326,6 +352,9 @@ export function SettingsPage() {
           invoicePrefix: payload.prefix,
           nextInvoiceNumber: payload.nextNumber,
           invoicePadding: payload.padding,
+          invoiceYearInPrefix: payload.yearInPrefix,
+          invoiceYearFormat: payload.yearFormat,
+          invoiceAutoReset: payload.autoReset,
         } as User);
       }
     } catch (e) {
@@ -343,12 +372,18 @@ export function SettingsPage() {
         prefix: quoteNumbering.prefix.trim(),
         nextNumber: Number(quoteNumbering.nextNumber),
         padding: Number(quoteNumbering.padding),
+        yearInPrefix: quoteNumbering.yearInPrefix,
+        yearFormat: quoteNumbering.yearFormat,
+        autoReset: quoteNumbering.autoReset,
       };
       
       await api.put('/auth/me', {
         quotePrefix: payload.prefix,
         nextQuoteNumber: payload.nextNumber,
         quotePadding: payload.padding,
+        quoteYearInPrefix: payload.yearInPrefix,
+        quoteYearFormat: payload.yearFormat,
+        quoteAutoReset: payload.autoReset,
       });
       
       showToast('Numérotation des devis mise à jour avec succès', 'success');
@@ -360,6 +395,9 @@ export function SettingsPage() {
           quotePrefix: payload.prefix,
           nextQuoteNumber: payload.nextNumber,
           quotePadding: payload.padding,
+          quoteYearInPrefix: payload.yearInPrefix,
+          quoteYearFormat: payload.yearFormat,
+          quoteAutoReset: payload.autoReset,
         } as User);
       }
     } catch (e) {
@@ -369,12 +407,36 @@ export function SettingsPage() {
     }
   };
 
-  const generateNumberExample = (prefix: string, nextNumber: number, padding: number): string => {
+  const generateNumberExample = (
+    prefix: string, 
+    nextNumber: number, 
+    padding: number,
+    yearInPrefix: boolean = false,
+    yearFormat: 'YYYY' | 'YY' | '' = 'YYYY'
+  ): string => {
     const pad = Math.max(0, Number(padding || 0));
     const numeric = String(nextNumber);
     const padded = pad > 0 ? numeric.padStart(pad, '0') : numeric;
     const pref = (prefix || '').trim();
-    return pref ? `${pref}-${padded}` : padded;
+    
+    // Format year if enabled
+    let yearPart = '';
+    if (yearInPrefix && yearFormat) {
+      const currentYear = new Date().getFullYear();
+      if (yearFormat === 'YYYY') {
+        yearPart = String(currentYear);
+      } else if (yearFormat === 'YY') {
+        yearPart = String(currentYear).slice(-2);
+      }
+    }
+    
+    // Build final number: PREFIX-YEAR-NUMBER or PREFIX-NUMBER or just NUMBER
+    const parts: string[] = [];
+    if (pref) parts.push(pref);
+    if (yearPart) parts.push(yearPart);
+    parts.push(padded);
+    
+    return parts.join('-');
   };
 
   // Wait for user to load before rendering
@@ -1079,6 +1141,61 @@ export function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Year Options for Invoices */}
+                  <div className="border-t border-slate-200 pt-4 mt-4">
+                    <h5 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                      <span>📅</span> Options d'année fiscale
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="invoiceYearInPrefix"
+                          checked={invoiceNumbering.yearInPrefix}
+                          onChange={(e) => setInvoiceNumbering({...invoiceNumbering, yearInPrefix: e.target.checked})}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                        />
+                        <label htmlFor="invoiceYearInPrefix" className="ml-2 text-sm text-slate-700">
+                          Inclure l'année dans le numéro
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Format de l'année
+                        </label>
+                        <select
+                          value={invoiceNumbering.yearFormat}
+                          onChange={(e) => setInvoiceNumbering({...invoiceNumbering, yearFormat: e.target.value as 'YYYY' | 'YY' | ''})}
+                          disabled={!invoiceNumbering.yearInPrefix}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        >
+                          <option value="YYYY">2025 (YYYY)</option>
+                          <option value="YY">25 (YY)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="invoiceAutoReset"
+                          checked={invoiceNumbering.autoReset}
+                          onChange={(e) => setInvoiceNumbering({...invoiceNumbering, autoReset: e.target.checked})}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                        />
+                        <label htmlFor="invoiceAutoReset" className="ml-2 text-sm text-slate-700">
+                          Réinitialiser au 1er janvier
+                        </label>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      {invoiceNumbering.autoReset 
+                        ? "Le compteur sera automatiquement remis à 1 au début de chaque année fiscale."
+                        : "Le compteur continuera sa séquence sans interruption."
+                      }
+                    </p>
+                  </div>
+
                   <div className="bg-white border border-slate-200 rounded-md p-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1087,10 +1204,10 @@ export function SettingsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-2xl font-bold text-blue-600 font-mono">
-                          {generateNumberExample(invoiceNumbering.prefix, invoiceNumbering.nextNumber, invoiceNumbering.padding)}
+                          {generateNumberExample(invoiceNumbering.prefix, invoiceNumbering.nextNumber, invoiceNumbering.padding, invoiceNumbering.yearInPrefix, invoiceNumbering.yearFormat)}
                         </p>
                         <p className="text-xs text-slate-500 mt-1">
-                          Suivante: {generateNumberExample(invoiceNumbering.prefix, invoiceNumbering.nextNumber + 1, invoiceNumbering.padding)}
+                          Suivante: {generateNumberExample(invoiceNumbering.prefix, invoiceNumbering.nextNumber + 1, invoiceNumbering.padding, invoiceNumbering.yearInPrefix, invoiceNumbering.yearFormat)}
                         </p>
                       </div>
                     </div>
@@ -1161,6 +1278,61 @@ export function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Year Options for Quotes */}
+                  <div className="border-t border-slate-200 pt-4 mt-4">
+                    <h5 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                      <span>📅</span> Options d'année fiscale
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="quoteYearInPrefix"
+                          checked={quoteNumbering.yearInPrefix}
+                          onChange={(e) => setQuoteNumbering({...quoteNumbering, yearInPrefix: e.target.checked})}
+                          className="h-4 w-4 text-green-600 focus:ring-green-500 border-slate-300 rounded"
+                        />
+                        <label htmlFor="quoteYearInPrefix" className="ml-2 text-sm text-slate-700">
+                          Inclure l'année dans le numéro
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Format de l'année
+                        </label>
+                        <select
+                          value={quoteNumbering.yearFormat}
+                          onChange={(e) => setQuoteNumbering({...quoteNumbering, yearFormat: e.target.value as 'YYYY' | 'YY' | ''})}
+                          disabled={!quoteNumbering.yearInPrefix}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        >
+                          <option value="YYYY">2025 (YYYY)</option>
+                          <option value="YY">25 (YY)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="quoteAutoReset"
+                          checked={quoteNumbering.autoReset}
+                          onChange={(e) => setQuoteNumbering({...quoteNumbering, autoReset: e.target.checked})}
+                          className="h-4 w-4 text-green-600 focus:ring-green-500 border-slate-300 rounded"
+                        />
+                        <label htmlFor="quoteAutoReset" className="ml-2 text-sm text-slate-700">
+                          Réinitialiser au 1er janvier
+                        </label>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      {quoteNumbering.autoReset 
+                        ? "Le compteur sera automatiquement remis à 1 au début de chaque année fiscale."
+                        : "Le compteur continuera sa séquence sans interruption."
+                      }
+                    </p>
+                  </div>
+
                   <div className="bg-white border border-slate-200 rounded-md p-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1169,10 +1341,10 @@ export function SettingsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-2xl font-bold text-green-600 font-mono">
-                          {generateNumberExample(quoteNumbering.prefix, quoteNumbering.nextNumber, quoteNumbering.padding)}
+                          {generateNumberExample(quoteNumbering.prefix, quoteNumbering.nextNumber, quoteNumbering.padding, quoteNumbering.yearInPrefix, quoteNumbering.yearFormat)}
                         </p>
                         <p className="text-xs text-slate-500 mt-1">
-                          Suivant: {generateNumberExample(quoteNumbering.prefix, quoteNumbering.nextNumber + 1, quoteNumbering.padding)}
+                          Suivant: {generateNumberExample(quoteNumbering.prefix, quoteNumbering.nextNumber + 1, quoteNumbering.padding, quoteNumbering.yearInPrefix, quoteNumbering.yearFormat)}
                         </p>
                       </div>
                     </div>
@@ -1197,9 +1369,9 @@ export function SettingsPage() {
                     <h5 className="text-sm font-semibold text-blue-900 mb-1">Conseils de numérotation</h5>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• <strong>Préfixe:</strong> Utilisez un préfixe unique pour différencier facilement vos documents (ex: FAC pour factures, DEV pour devis)</li>
-                      <li>• <strong>Année:</strong> Vous pouvez inclure l'année dans le préfixe (ex: FAC-2025) et le réinitialiser chaque année</li>
+                      <li>• <strong>Année:</strong> Activez "Inclure l'année" pour générer FAC-2025-001, puis FAC-2026-001 automatiquement</li>
+                      <li>• <strong>Reset automatique:</strong> Active par défaut, le compteur repart à 1 chaque 1er janvier</li>
                       <li>• <strong>Padding:</strong> Utilisez au moins 3 zéros de remplissage pour un aspect professionnel (001, 002, 003...)</li>
-                      <li>• <strong>Numéro suivant:</strong> Vous pouvez modifier ce nombre à tout moment, mais évitez de créer des doublons</li>
                     </ul>
                   </div>
                 </div>

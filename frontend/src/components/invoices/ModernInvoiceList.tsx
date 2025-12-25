@@ -22,6 +22,7 @@ import { InvoiceCard } from './InvoiceCard';
 import { CompactInvoiceRow } from './CompactInvoiceRow';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { type Invoice } from '../../hooks/useInvoices';
+import { formatAmount } from '../../utils/formatters';
 
 type InvoiceStatus = 'all' | 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'partially_paid' | 'unpaid';
 
@@ -267,7 +268,7 @@ export function ModernInvoiceList({
               </div>
               <p className="text-sm text-[var(--color-text-secondary)] font-medium">Total</p>
               <p className="text-2xl font-bold text-[var(--color-text-primary)]">
-                {stats.totalAmount.toLocaleString('fr-CH')} CHF
+                {formatAmount(stats.totalAmount)} CHF
               </p>
             </motion.div>
 

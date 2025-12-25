@@ -207,51 +207,84 @@ export const createQuote = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Get user settings for quote prefix and numbering
-    let user = await prisma.user.findUnique({
+    const userCfg = await prisma.user.findUnique({
       where: { id: userId },
-      select: { quotePrefix: true, nextQuoteNumber: true, quotePadding: true }
-    });
+    }) as any; // Cast to any to access fiscal year fields
 
-    if (!user) {
+    if (!userCfg) {
       throw new AppError('Utilisateur non trouvé', 404, 'USER_NOT_FOUND');
     }
 
-    // Sync nextQuoteNumber if needed (check for existing quotes with this prefix)
-    const prefix = user.quotePrefix || 'DEV';
-    const separator = prefix.includes('-') ? '' : '-';
-    const prefixPattern = `${prefix}${separator}`;
-    
-    const lastQuote = await prisma.invoice.findFirst({
-      where: { 
-        userId, 
-        isQuote: true,
-        invoiceNumber: { startsWith: prefixPattern }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (lastQuote) {
-      // Extract number from last quote
-      const regex = new RegExp(`${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${separator}(\\d+)`);
-      const match = lastQuote.invoiceNumber.match(regex);
-      if (match) {
-        const lastNumber = parseInt(match[1], 10);
-        // If user counter is behind, sync it
-        if (user.nextQuoteNumber <= lastNumber) {
-          user.nextQuoteNumber = lastNumber + 1;
-          await prisma.user.update({
-            where: { id: userId },
-            data: { nextQuoteNumber: lastNumber + 1 }
-          });
-        }
-      }
-    }
-
-    // Create quote (isQuote = true) and update user counter
+    // Create quote (isQuote = true) and update user counter with fiscal year support
     const quote = await prisma.$transaction(async (tx) => {
-      const nextNumber = user.nextQuoteNumber || 1;
-      const padding = user.quotePadding || 3;
-      const quoteNumber = `${prefixPattern}${String(nextNumber).padStart(padding, '0')}`;
+      const currentYear = new Date().getFullYear();
+      
+      // Check if we need to reset the counter for a new fiscal year
+      const lastYear = userCfg.lastQuoteYear ?? null;
+      const autoReset = userCfg.quoteAutoReset ?? true;
+      let nextNumber = userCfg.nextQuoteNumber || 1;
+      
+      if (autoReset && lastYear !== null && lastYear !== currentYear) {
+        // New fiscal year detected - reset counter to 1
+        console.log(`[Quote] Fiscal year change detected: ${lastYear} -> ${currentYear}. Resetting counter.`);
+        nextNumber = 1;
+        await tx.user.update({
+          where: { id: userId },
+          data: { 
+            nextQuoteNumber: 1,
+            lastQuoteYear: currentYear 
+          } as any,
+        });
+        userCfg.nextQuoteNumber = 1;
+        userCfg.lastQuoteYear = currentYear;
+      } else if (lastYear === null) {
+        // First quote or no year set - initialize lastQuoteYear
+        await tx.user.update({
+          where: { id: userId },
+          data: { lastQuoteYear: currentYear } as any,
+        });
+        userCfg.lastQuoteYear = currentYear;
+      }
+
+      // Generate quote number with optional year
+      const makeQuoteNumber = (
+        prefix: string | null | undefined, 
+        next: number, 
+        padding: number,
+        yearInPrefix: boolean,
+        yearFormat: string
+      ): string => {
+        const pad = Math.max(0, Number(padding || 0));
+        const numeric = String(next);
+        const padded = pad > 0 ? numeric.padStart(pad, '0') : numeric;
+        const pref = (prefix || '').trim();
+        
+        // Format year if enabled
+        let yearPart = '';
+        if (yearInPrefix && yearFormat) {
+          if (yearFormat === 'YYYY') {
+            yearPart = String(currentYear);
+          } else if (yearFormat === 'YY') {
+            yearPart = String(currentYear).slice(-2);
+          }
+        }
+        
+        // Build final number: PREFIX-YEAR-NUMBER or PREFIX-NUMBER or just NUMBER
+        const parts: string[] = [];
+        if (pref) parts.push(pref);
+        if (yearPart) parts.push(yearPart);
+        parts.push(padded);
+        
+        return parts.join('-');
+      };
+
+      const quoteNumber = makeQuoteNumber(
+        userCfg.quotePrefix || 'DEV', 
+        nextNumber, 
+        userCfg.quotePadding || 3,
+        userCfg.quoteYearInPrefix ?? false,
+        userCfg.quoteYearFormat ?? 'YYYY'
+      );
 
       // Update user's next quote number
       await tx.user.update({
@@ -866,44 +899,55 @@ export const getNextQuoteNumber = async (req: Request, res: Response): Promise<v
   try {
     const userId = (req as any).userId;
     
-    // Get user settings
-    let user = await prisma.user.findUnique({
+    // Get user settings with fiscal year fields
+    const userCfg = await prisma.user.findUnique({
       where: { id: userId },
-      select: { quotePrefix: true, nextQuoteNumber: true, quotePadding: true }
-    });
+    }) as any;
 
-    if (!user) {
+    if (!userCfg) {
       throw new AppError('Utilisateur non trouvé', 404, 'USER_NOT_FOUND');
     }
 
-    // Sync with existing quotes
-    const prefix = user.quotePrefix || 'DEV';
-    const separator = prefix.includes('-') ? '' : '-';
-    const prefixPattern = `${prefix}${separator}`;
+    const currentYear = new Date().getFullYear();
+    const prefix = userCfg.quotePrefix || 'DEV';
+    const padding = userCfg.quotePadding || 3;
+    const yearInPrefix = userCfg.quoteYearInPrefix ?? false;
+    const yearFormat = userCfg.quoteYearFormat ?? 'YYYY';
+    const autoReset = userCfg.quoteAutoReset ?? true;
+    const lastYear = userCfg.lastQuoteYear ?? null;
     
-    const lastQuote = await prisma.invoice.findFirst({
-      where: { 
-        userId, 
-        isQuote: true,
-        invoiceNumber: { startsWith: prefixPattern }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (lastQuote) {
-      const regex = new RegExp(`${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${separator}(\\d+)`);
-      const match = lastQuote.invoiceNumber.match(regex);
-      if (match) {
-        const lastNumber = parseInt(match[1], 10);
-        if (user.nextQuoteNumber <= lastNumber) {
-          user.nextQuoteNumber = lastNumber + 1;
-        }
-      }
+    // Determine next number considering fiscal year
+    let nextNumber = userCfg.nextQuoteNumber || 1;
+    
+    // If auto-reset is enabled and year changed, preview would start at 1
+    if (autoReset && lastYear !== null && lastYear !== currentYear) {
+      nextNumber = 1;
     }
 
-    const nextNumber = user.nextQuoteNumber || 1;
-    const padding = user.quotePadding || 3;
-    const quoteNumber = `${prefixPattern}${String(nextNumber).padStart(padding, '0')}`;
+    // Generate quote number with optional year
+    const makeQuoteNumber = (next: number): string => {
+      const numeric = String(next);
+      const padded = padding > 0 ? numeric.padStart(padding, '0') : numeric;
+      const pref = (prefix || '').trim();
+      
+      let yearPart = '';
+      if (yearInPrefix && yearFormat) {
+        if (yearFormat === 'YYYY') {
+          yearPart = String(currentYear);
+        } else if (yearFormat === 'YY') {
+          yearPart = String(currentYear).slice(-2);
+        }
+      }
+      
+      const parts: string[] = [];
+      if (pref) parts.push(pref);
+      if (yearPart) parts.push(yearPart);
+      parts.push(padded);
+      
+      return parts.join('-');
+    };
+
+    const quoteNumber = makeQuoteNumber(nextNumber);
 
     res.json({ 
       success: true, 

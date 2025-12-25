@@ -224,12 +224,18 @@ export async function generateInvoicePDFWithQRBill(
     
     console.log('[PDF Generation] Page loaded and ready');
 
-    // Calculate content height and determine if QR Bill fits on last page
-    const contentMetrics = await calculateContentMetrics(page);
-    
-    // Page numbering configuration
+    // Page numbering configuration - needed BEFORE calculateContentMetrics
+    // Default to 'top-right' to avoid conflicts with table content and QR Bill at bottom
     const showPageNumbers = opts.advancedConfig?.showPageNumbers ?? false;
-    const pageNumberPosition = opts.advancedConfig?.pageNumberPosition ?? 'bottom-center';
+    const pageNumberPosition = opts.advancedConfig?.pageNumberPosition ?? 'top-right';
+    
+    // Calculate actual PDF margins for Puppeteer and @page (must match!)
+    // Using 10mm for top margin to allow more content per page
+    const pdfTopMarginMM = showPageNumbers && pageNumberPosition === 'top-right' ? 10 : opts.margins.top;
+    const pdfBottomMarginMM = showPageNumbers && pageNumberPosition !== 'top-right' ? 20 : opts.margins.bottom;
+    
+    // Calculate content height and determine if QR Bill fits on last page
+    const contentMetrics = await calculateContentMetrics(page, pdfTopMarginMM, pdfBottomMarginMM);
     const pageNumberFormat = opts.advancedConfig?.pageNumberFormat ?? 'full';
     
     // Build header/footer templates for page numbers
@@ -286,18 +292,26 @@ export async function generateInvoicePDFWithQRBill(
  * Calculates content metrics and positions QR Bill appropriately
  * This runs in Puppeteer context BEFORE PDF generation
  */
-async function calculateContentMetrics(page: puppeteer.Page): Promise<{
+async function calculateContentMetrics(
+  page: puppeteer.Page,
+  pdfTopMarginMM: number = 20,
+  pdfBottomMarginMM: number = 0
+): Promise<{
   contentHeight: number;
   availableHeight: number;
   needsNewPageForQRBill: boolean;
 }> {
-  const metrics = await page.evaluate(() => {
+  const metrics = await page.evaluate((topMargin: number, bottomMargin: number) => {
     const doc = (globalThis as any).document;
     const MM_TO_PX = 96 / 25.4;
     const PAGE_HEIGHT_MM = 297;
     const QR_BILL_HEIGHT_MM = 105;
     const QR_BILL_TOP_MM = PAGE_HEIGHT_MM - QR_BILL_HEIGHT_MM; // 192mm
-    const SAFETY_MARGIN_MM = 10;
+    const SAFETY_MARGIN_MM = 5; // Reduced from 10 to allow more content per page
+    
+    // Use actual margins passed from caller
+    const PDF_TOP_MARGIN_MM = topMargin;
+    const PDF_BOTTOM_MARGIN_MM = bottomMargin;
     
     const container = doc.querySelector('.invoice-container');
     const qrBill = doc.querySelector('.qr-bill-container');
@@ -307,79 +321,65 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
       return { contentHeight: 0, availableHeight: PAGE_HEIGHT_MM - 40, needsNewPageForQRBill: false };
     }
 
-    const containerRect = container.getBoundingClientRect();
-    
-    // Find the maximum bottom position of ALL content elements
+    // Measure content height by summing individual element heights
+    // This is more reliable than scrollHeight which can be affected by pagination
     let maxContentBottomPx = 0;
     let maxElementInfo = 'none';
     
-    // Check header container height (absolute elements sit inside it)
-    const headerContainer = doc.querySelector('.header-container');
-    if (headerContainer) {
-      const headerRect = headerContainer.getBoundingClientRect();
-      const bottomPx = headerRect.bottom - containerRect.top;
-      if (bottomPx > maxContentBottomPx) {
-        maxContentBottomPx = bottomPx;
-        maxElementInfo = 'header-container';
-      }
-    }
-
-    // Check flow content (table + totals)
-    const flowContent = doc.querySelector('.flow-content');
-    if (flowContent) {
-      const flowChildren = flowContent.querySelectorAll('*');
-      flowChildren.forEach((el: any) => {
-        if (el.classList.contains('qr-bill-container')) return;
-        if (el.classList?.contains('qr-bill-spacer')) return;
-        if (el.tagName === 'SCRIPT') return;
-        const rect = el.getBoundingClientRect();
-        if (rect.height > 0 && rect.width > 0) {
-          const bottomPx = rect.bottom - containerRect.top;
-          if (bottomPx > maxContentBottomPx) {
-            maxContentBottomPx = bottomPx;
-            maxElementInfo = el.className || el.tagName;
-          }
+    // For advanced theme: header-container + flow-content
+    const headerContainer = doc.querySelector('.header-container') as any;
+    const flowContent = doc.querySelector('.flow-content') as any;
+    
+    // For standard theme: invoice-content
+    const invoiceContent = doc.querySelector('.invoice-content') as any;
+    
+    if (headerContainer && flowContent) {
+      // Advanced theme - DON'T try to measure, let CSS handle page breaks
+      // Just ensure QR Bill has page-break-before: avoid applied
+      maxContentBottomPx = 0; // Will trigger "fits on page" logic
+      maxElementInfo = 'css-only';
+      console.log('[Metrics] Using CSS-only approach for advanced theme');
+    } else if (invoiceContent) {
+      // Standard theme - measure children (excluding QR Bill)
+      let contentHeight = 0;
+      const children = invoiceContent.children;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i] as any;
+        if (!child.classList?.contains('qr-bill-container')) {
+          contentHeight += child.offsetHeight || 0;
         }
-      });
-    }
-
-    // Check table rows explicitly (flow-table)
-    const tableRows = doc.querySelectorAll('.flow-table tr, .items-table tr');
-    tableRows.forEach((row: any) => {
-      const rect = row.getBoundingClientRect();
-      const bottomPx = rect.bottom - containerRect.top;
-      if (bottomPx > maxContentBottomPx) {
-        maxContentBottomPx = bottomPx;
-        maxElementInfo = 'table-row';
       }
-    });
-
-    // Check totals block (flow-totals)
-    const totals = doc.querySelector('.flow-totals');
-    if (totals) {
-      const rect = totals.getBoundingClientRect();
-      const bottomPx = rect.bottom - containerRect.top;
-      if (bottomPx > maxContentBottomPx) {
-        maxContentBottomPx = bottomPx;
-        maxElementInfo = 'totals';
-      }
+      maxContentBottomPx = contentHeight;
+      maxElementInfo = 'invoice-content-children';
+      console.log('[Metrics] Invoice content children:', contentHeight, 'px');
     }
+    
+    console.log('[Metrics] Total content height:', maxContentBottomPx, 'px');
     
     // Convert to mm and calculate remaining space on last page
-    // Account for PDF margins when calculating page breaks
-    const PDF_TOP_MARGIN_MM = 20;
-    const PDF_BOTTOM_MARGIN_MM = 20;
-    const EFFECTIVE_PAGE_HEIGHT_MM = PAGE_HEIGHT_MM - PDF_TOP_MARGIN_MM - PDF_BOTTOM_MARGIN_MM; // ~257mm
+    // @page margin affects where HTML breaks pages
+    // PDF_TOP_MARGIN_MM reflects the @page margin-top (15mm for top-right numbering)
+    const HTML_PAGE_HEIGHT_MM = PAGE_HEIGHT_MM; // 297mm - full A4 height
+    const CSS_PAGE_HEIGHT_MM = PAGE_HEIGHT_MM - PDF_TOP_MARGIN_MM; // 282mm with top numbering, 297mm without
     
     const maxContentBottomMM = maxContentBottomPx / MM_TO_PX;
-    let usedInLastPageMM = maxContentBottomMM % EFFECTIVE_PAGE_HEIGHT_MM;
-    if (usedInLastPageMM === 0 && maxContentBottomMM > 0) {
-      usedInLastPageMM = EFFECTIVE_PAGE_HEIGHT_MM;
-    }
-    const spaceRemainingMM = EFFECTIVE_PAGE_HEIGHT_MM - usedInLastPageMM;
-    const fitsOnLastPage = spaceRemainingMM >= (QR_BILL_HEIGHT_MM + SAFETY_MARGIN_MM);
     
-    console.log('[Metrics] Effective page height (with margins):', EFFECTIVE_PAGE_HEIGHT_MM, 'mm');
+    // Simple calculation: does content + QR Bill fit on a single page?
+    // If content is on first page and there's room for QR, keep it together
+    const totalWithQRMM = maxContentBottomMM + QR_BILL_HEIGHT_MM + SAFETY_MARGIN_MM;
+    const fitsOnSinglePage = totalWithQRMM <= CSS_PAGE_HEIGHT_MM;
+    
+    // For multi-page invoices, calculate remaining space on last page
+    let usedInLastPageMM = maxContentBottomMM % CSS_PAGE_HEIGHT_MM;
+    if (usedInLastPageMM === 0 && maxContentBottomMM > 0) {
+      usedInLastPageMM = CSS_PAGE_HEIGHT_MM;
+    }
+    const spaceRemainingMM = CSS_PAGE_HEIGHT_MM - usedInLastPageMM;
+    const fitsOnLastPage = fitsOnSinglePage || (spaceRemainingMM >= (QR_BILL_HEIGHT_MM + SAFETY_MARGIN_MM));
+    
+    console.log('[Metrics] CSS page height:', CSS_PAGE_HEIGHT_MM, 'mm');
+    
+    console.log('[Metrics] HTML page height:', HTML_PAGE_HEIGHT_MM, 'mm');
     const needsNewPageForQRBill = !fitsOnLastPage;
     
     console.log('=== PDF Content Metrics ===');
@@ -396,9 +396,8 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
       console.log('[Metrics] ⏭️  MOVING QR BILL TO NEW PAGE (at bottom)');
       
       // Calculate spacer to push QR Bill to bottom of new page
-      // Effective page height = 257mm (297 - 20 top - 20 bottom)
-      // Spacer = effective height - QR Bill height = 257 - 105 = 152mm
-      const spacerHeightMM = EFFECTIVE_PAGE_HEIGHT_MM - QR_BILL_HEIGHT_MM;
+      // CSS page height = 277mm, QR Bill = 105mm, so spacer = 172mm
+      const spacerHeightMM = CSS_PAGE_HEIGHT_MM - QR_BILL_HEIGHT_MM;
       const spacerHeightPx = spacerHeightMM * MM_TO_PX;
       console.log('[Metrics] Creating spacer: height =', spacerHeightMM, 'mm =', spacerHeightPx.toFixed(0), 'px');
       
@@ -419,42 +418,27 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
         console.log('[Metrics] ERROR: qrBill has no parentNode');
       }
       
-      // Style QR Bill
+      // Style QR Bill - keep CSS margin-bottom for @page compensation
       qrBill.style.position = 'relative';
       qrBill.style.width = '210mm';
       qrBill.style.height = '105mm';
-      qrBill.style.margin = '0';
+      qrBill.style.marginTop = '0';
+      qrBill.style.marginLeft = '0';
+      qrBill.style.marginRight = '0';
+      // margin-bottom is set in CSS to compensate for @page margin
       qrBill.style.pageBreakBefore = 'avoid';
       qrBill.style.pageBreakInside = 'avoid';
       qrBill.style.background = 'white';
     } else {
-      console.log('[Metrics] ✅ QR BILL FITS ON LAST PAGE, aligning to bottom');
-      // Calculate spacer to push QR Bill to bottom of current page
-      // spacerMM = remaining space - QR Bill height
-      const spacerMM = Math.max(0, spaceRemainingMM - QR_BILL_HEIGHT_MM);
-      const spacerPx = spacerMM * MM_TO_PX;
+      console.log('[Metrics] ✅ QR BILL FITS ON LAST PAGE - no spacer needed, flow naturally');
       
-      console.log('[Metrics] Spacer for same page:', spacerMM.toFixed(2), 'mm =', spacerPx.toFixed(0), 'px');
-      
-      if (spacerMM > 0 && qrBill.parentNode) {
-        const spacer = doc.createElement('div');
-        spacer.className = 'qr-bill-spacer';
-        spacer.style.height = spacerPx + 'px';
-        spacer.style.width = '100%';
-        spacer.style.margin = '0';
-        spacer.style.padding = '0';
-        spacer.style.pageBreakAfter = 'avoid';
-        qrBill.parentNode.insertBefore(spacer, qrBill);
-        console.log('[Metrics] ✅ Spacer inserted before QR Bill');
-      } else if (spacerMM > 0) {
-        console.log('[Metrics] ⚠️ Could not insert spacer - qrBill has no parentNode');
-      }
-      
-      // Style QR Bill
+      // Don't add spacers - just let QR Bill flow naturally after content
+      // This ensures it stays on the same page as the content
       qrBill.style.position = 'relative';
       qrBill.style.width = '210mm';
       qrBill.style.height = '105mm';
       qrBill.style.margin = '0';
+      qrBill.style.marginTop = '10mm'; // Small gap after totals
       qrBill.style.pageBreakBefore = 'avoid';
       qrBill.style.pageBreakInside = 'avoid';
       qrBill.style.background = 'white';
@@ -466,7 +450,7 @@ async function calculateContentMetrics(page: puppeteer.Page): Promise<{
       availableHeight: QR_BILL_TOP_MM,
       needsNewPageForQRBill,
     };
-  });
+  }, pdfTopMarginMM, pdfBottomMarginMM) as { contentHeight: number; availableHeight: number; needsNewPageForQRBill: boolean };
 
   console.log('[PDF Generation] Content metrics:', metrics);
   return metrics;
@@ -616,6 +600,17 @@ function generateInvoiceHTML(
   // For totals section, background is white, so use green directly
   const discountTotalsColor = '#059669'; // Green on white background
 
+  // Calculate margins for CSS
+  // Bottom margin is 0 to let QR flow naturally
+  const pageBottomMarginMM = 0;
+  
+  const showPageNumbers = advancedConfig?.showPageNumbers ?? false;
+  const pageNumberPosition = advancedConfig?.pageNumberPosition ?? 'top-right';
+  
+  // Top margin needs to be set if we have top page numbers, otherwise 0 (handled by padding in first page)
+  // Using 10mm instead of 15mm to allow more content per page
+  const pageTopMarginMM = (showPageNumbers && pageNumberPosition === 'top-right') ? 10 : 0;
+
   // Generate QR Bill HTML
   const qrBillHTML = generateQRBillHTML(qrBillData, options);
 
@@ -668,17 +663,23 @@ function generateInvoiceHTML(
 
   // Generate invoice items HTML with page break awareness
   const itemsHTML = invoiceData.items.map((item, index) => {
+    // Check if this item has a discount to determine which amount to display
+    const hasLineDiscount = (item.lineDiscountValue ?? 0) > 0 || (item.discountAmount ?? 0) > 0;
+    // Show subtotalBeforeDiscount (100%) in the line if there's a discount, otherwise show total
+    const lineDisplayTotal = hasLineDiscount 
+      ? (item.subtotalBeforeDiscount ?? (item.quantity * item.unitPrice))
+      : item.total;
+    
     let itemHTML = `
     <tr class="invoice-item ${index > 0 && index % 15 === 0 ? 'page-break-before' : ''}">
       <td class="item-description">${item.description}</td>
       <td class="item-quantity">${formatQuantity(item.quantity, item.unit)}</td>
       <td class="item-price">${formatCurrency(item.unitPrice, invoiceData.currency)}</td>
       <td class="item-tva">${item.tvaRate.toFixed(2)}%</td>
-      <td class="item-total">${formatCurrency(item.total, invoiceData.currency)}</td>
+      <td class="item-total">${formatCurrency(lineDisplayTotal, invoiceData.currency)}</td>
     </tr>`;
     
     // Add discount row if item has discount
-    const hasLineDiscount = (item.lineDiscountValue ?? 0) > 0 || (item.discountAmount ?? 0) > 0;
     if (hasLineDiscount) {
       const baseSubtotal = item.subtotalBeforeDiscount ?? (item.quantity * item.unitPrice);
 
@@ -926,18 +927,24 @@ function generateInvoiceHTML(
             const cellBorder = tableStyle === 'bordered' ? `border-right: 1px solid ${colors.primary};` : '';
             const cellPadding = tableStyle === 'bold' ? 'padding: 8px;' : 'padding: 6px;';
             
+            // Check if this item has a discount to determine which amount to display
+            const hasLineDiscount = (item.lineDiscountValue ?? 0) > 0 || (item.discountAmount ?? 0) > 0;
+            // Show subtotalBeforeDiscount (100%) in the line if there's a discount, otherwise show total
+            const lineDisplayTotal = hasLineDiscount 
+              ? (item.subtotalBeforeDiscount ?? (item.quantity * item.unitPrice))
+              : item.total;
+            
             let itemHTML = `
               <tr style="${rowStyle}">
                 <td style="${cellPadding} text-align: left; ${cellBorder}">${item.description}</td>
                 <td style="${cellPadding} text-align: center; ${cellBorder} width: 60px;">${formatQuantity(item.quantity, item.unit)}</td>
                 <td style="${cellPadding} text-align: right; ${cellBorder} width: 70px;">${formatCurrency(item.unitPrice, invoiceData.currency)}</td>
                 <td style="${cellPadding} text-align: right; ${cellBorder} width: 50px;">${item.tvaRate.toFixed(2)}%</td>
-                <td style="${cellPadding} text-align: right; width: 70px; ${tableStyle === 'bold' ? 'font-weight: bold;' : ''}">${formatCurrency(item.total, invoiceData.currency)}</td>
+                <td style="${cellPadding} text-align: right; width: 70px; ${tableStyle === 'bold' ? 'font-weight: bold;' : ''}">${formatCurrency(lineDisplayTotal, invoiceData.currency)}</td>
               </tr>
             `;
             
-            // Add discount row if item has discount
-            const hasLineDiscount = (item.lineDiscountValue ?? 0) > 0 || (item.discountAmount ?? 0) > 0;
+            // Add discount row if item has discount (already determined above)
             if (hasLineDiscount) {
               const baseSubtotal = item.subtotalBeforeDiscount ?? (item.quantity * item.unitPrice);
 
@@ -1059,10 +1066,10 @@ function generateInvoiceHTML(
     // 3. Flow content follows naturally
     
     contentHTML = `
-      <div class="header-container" style="position: relative; width: 100%; height: ${tableTopMM}mm;">
+      <div class="header-container" style="position: relative; width: 100%; min-height: ${tableTopMM}mm;">
         ${headerElements}
       </div>
-      <div class="flow-content" style="position: relative; z-index: 10; padding-bottom: 40mm;">
+      <div class="flow-content" style="position: relative; z-index: 10; padding-bottom: 5mm;">
         ${flowElements}
       </div>
     `;
@@ -1177,7 +1184,7 @@ function generateInvoiceHTML(
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Facture ${invoiceData.invoiceNumber}</title>
       <style>
-        ${getInvoiceCSS(colors)}
+        ${getInvoiceCSS(colors, pageBottomMarginMM, pageTopMarginMM)}
       </style>
     </head>
     <body>
@@ -1250,14 +1257,14 @@ function generateInvoiceHTML(
 /**
  * Generates CSS styles for the invoice PDF
  */
-export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; headerBg: string; textHeader: string; textBody: string }): string {
+export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; headerBg: string; textHeader: string; textBody: string }, pageBottomMarginMM: number = 0, pageTopMarginMM: number = 0): string {
   const primaryColor = colors?.primary || '#000000';
   const tableHeaderColor = colors?.tableHeader || '#000000';
   const textBodyColor = colors?.textBody || '#374151';
   return `
     @page {
       size: A4;
-      margin: 0;
+      margin: ${pageTopMarginMM}mm 0 ${pageBottomMarginMM}mm 0;
     }
     
     * {
@@ -1309,11 +1316,13 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
     .flow-content {
       position: relative;
       z-index: 10;
-      padding-bottom: 25mm; /* Space to avoid overlapping page numbers */
+      padding-bottom: 5mm;
     }
     
     .flow-table {
       page-break-inside: auto;
+      page-break-before: avoid;
+      break-before: avoid;
     }
     
     .flow-table thead {
@@ -1325,8 +1334,11 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
     }
     
     .flow-totals {
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      /* Keep totals together and with preceding content */
+      page-break-inside: avoid;
+      break-inside: avoid;
+      page-break-before: avoid;
+      break-before: avoid;
     }
     
     .invoice-content {
@@ -1608,6 +1620,7 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
     
     /* QR Bill container */
     .qr-bill-container {
+      display: block;
       position: relative;
       width: 210mm;
       height: 105mm;
@@ -1615,6 +1628,8 @@ export function getInvoiceCSS(colors?: { primary: string; tableHeader: string; h
       padding: 0;
       background: white;
       page-break-inside: avoid;
+      page-break-before: avoid;
+      break-before: avoid;
     }
     
     /* Perforation line */

@@ -570,8 +570,9 @@ export class UnifiedPDFGenerator {
       this.doc.text(formatNumber(item.unitPrice), currentX, qtyY, { width: cols[2].width - padding, align: 'right' });
       currentX += cols[2].width;
 
-      // Total
-      this.doc.text(formatNumber(item.total), currentX, qtyY, { width: cols[3].width - padding, align: 'right' });
+      // Total - show subtotalBefore (100%) when there's a discount, otherwise show item.total
+      const displayTotal = hasDiscount ? subtotalBefore : item.total;
+      this.doc.text(formatNumber(displayTotal), currentX, qtyY, { width: cols[3].width - padding, align: 'right' });
 
       // Update currentY using the actual measured heights
       currentY += descHeight + (detailsHeight > 0 ? detailsHeight + 4 : 0) + 5; // +5 for row spacing

@@ -27,13 +27,22 @@ export interface User {
   city?: string;
   canton?: string;
   country?: string;
-  // Invoice/Quote numbering
+  // Invoice numbering
   invoicePrefix?: string;
   nextInvoiceNumber?: number;
   invoicePadding?: number;
+  invoiceYearInPrefix?: boolean;
+  invoiceYearFormat?: 'YYYY' | 'YY' | '';
+  invoiceAutoReset?: boolean;
+  lastInvoiceYear?: number;
+  // Quote numbering
   quotePrefix?: string;
   nextQuoteNumber?: number;
   quotePadding?: number;
+  quoteYearInPrefix?: boolean;
+  quoteYearFormat?: 'YYYY' | 'YY' | '';
+  quoteAutoReset?: boolean;
+  lastQuoteYear?: number;
   // PDF Appearance Settings
   pdfShowCompanyNameWithLogo?: boolean;
   pdfPrimaryColor?: string;
