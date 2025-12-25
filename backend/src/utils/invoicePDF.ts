@@ -259,6 +259,32 @@ export async function generateInvoicePDFWithQRBill(
       }
     }
     
+    // Page numbering configuration
+    const showPageNumbers = opts.advancedConfig?.showPageNumbers ?? false;
+    const pageNumberPosition = opts.advancedConfig?.pageNumberPosition ?? 'bottom-center';
+    const pageNumberFormat = opts.advancedConfig?.pageNumberFormat ?? 'full';
+    
+    // Build header/footer templates for page numbers
+    let headerTemplate = '<span></span>';
+    let footerTemplate = '<span></span>';
+    
+    if (showPageNumbers) {
+      const pageNumText = pageNumberFormat === 'full' 
+        ? 'Page <span class="pageNumber"></span> / <span class="totalPages"></span>'
+        : '<span class="pageNumber"></span>';
+      
+      // Style based on position - minimal styling to avoid blank pages
+      const baseStyle = 'font-size: 9px; font-family: Arial, sans-serif; color: #666; width: 100%; margin: 0; padding: 0;';
+      
+      if (pageNumberPosition === 'bottom-center') {
+        footerTemplate = `<div style="${baseStyle} text-align: center; margin-top: 5px;">${pageNumText}</div>`;
+      } else if (pageNumberPosition === 'bottom-right') {
+        footerTemplate = `<div style="${baseStyle} text-align: right; padding-right: 15mm; margin-top: 5px;">${pageNumText}</div>`;
+      } else if (pageNumberPosition === 'top-right') {
+        headerTemplate = `<div style="${baseStyle} text-align: right; padding-right: 15mm; margin-bottom: 5px;">${pageNumText}</div>`;
+      }
+    }
+    
     // Generate PDF with proper page breaks
     // Note: displayHeaderFooter requires at least some margin to render header/footer
     const pdfBuffer = await page.pdf({
