@@ -4,7 +4,7 @@ import { PlanCard } from '../components/billing/PlanCard';
 import { PlanComparison } from '../components/billing/PlanComparison';
 import type { Plan } from '../components/billing/PlanCard';
 import { getPublicPlans } from '../services/plansApi';
-import { ChevronDown, Sparkles, Check } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 
 export function PublicPlansPage() {
   const navigate = useNavigate();

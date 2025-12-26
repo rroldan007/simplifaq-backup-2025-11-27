@@ -869,7 +869,7 @@ export function SettingsPage() {
                       onChange={async (e) => {
                         try {
                           setSaving(true);
-                          const updateData: any = { pdfTemplate: e.target.value };
+                          const updateData: { pdfTemplate: string; pdfAdvancedConfig?: null } = { pdfTemplate: e.target.value };
                           
                           // Si se selecciona un tema estándar, limpiar la configuración avanzada
                           if (e.target.value !== 'custom') {

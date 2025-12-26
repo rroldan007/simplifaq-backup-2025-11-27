@@ -6,7 +6,6 @@ import { ProductForm } from '../components/products/ProductForm';
 import { CSVImportProductsModal } from '../components/products/CSVImportProductsModal';
 import type { CSVImportedProduct } from '../components/products/CSVImportProductsModal';
 import { NotificationContainer } from '../components/ui/Notification';
-import { Button } from '../components/ui/Button';
 
 interface ProductFormData {
   name: string;

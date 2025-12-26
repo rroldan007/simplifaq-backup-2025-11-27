@@ -99,7 +99,7 @@ const QuoteDetailPage: React.FC = () => {
     });
   };
 
-  const handleViewEmailHistory = () => {
+  const _handleViewEmailHistory = () => {
     if (!quote || !id) return;
     setEmailHistoryModal({
       isOpen: true,

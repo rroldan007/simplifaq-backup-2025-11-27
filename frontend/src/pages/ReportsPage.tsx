@@ -10,12 +10,9 @@ import {
   PieChart, 
   FileSpreadsheet, 
   ReceiptText,
-  Download,
   Calendar,
   RefreshCw,
-  CheckCircle,
-  XCircle,
-  Clock
+  XCircle
 } from 'lucide-react';
 import { reportsApi, type KpisResponse, type RevenueSeriesResponse, type StatusBreakdownResponse } from '../services/reportsApi';
 import { Card } from '../components/ui/Card';
@@ -81,7 +78,7 @@ export function ReportsPage() {
     navigate('/reports/export?format=csv');
   };
 
-  const handleExportPDF = () => {
+  const _handleExportPDF = () => {
     // TODO: Implement PDF export
     navigate('/reports/export?format=pdf');
   };
@@ -104,10 +101,11 @@ export function ReportsPage() {
         from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         to = new Date(now.getFullYear(), now.getMonth(), 0);
         break;
-      case 'thisQuarter':
+      case 'thisQuarter': {
         const quarter = Math.floor(now.getMonth() / 3);
         from = new Date(now.getFullYear(), quarter * 3, 1);
         break;
+      }
       case 'thisYear':
         from = new Date(now.getFullYear(), 0, 1);
         break;
@@ -351,7 +349,7 @@ export function ReportsPage() {
                 <div className="h-64 bg-[var(--color-bg-secondary)] rounded-lg animate-pulse"></div>
               ) : revenueSeries && revenueSeries.series.length > 0 ? (
                 <div className="space-y-3">
-                  {revenueSeries.series.map((point, index) => {
+                  {revenueSeries.series.map((point) => {
                     const maxValue = Math.max(...revenueSeries.series.map(p => p.caPaid), 1);
                     const barWidth = (point.caPaid / maxValue) * 100;
                     return (
