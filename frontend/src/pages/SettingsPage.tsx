@@ -882,7 +882,7 @@ export function SettingsPage() {
                             updateUser(updated);
                             showToast('Modèle mis à jour avec succès', 'success');
                           }
-                        } catch (error) {
+                        } catch {
                           showToast('Erreur lors de la mise à jour', 'error');
                         } finally {
                           setSaving(false);
@@ -918,7 +918,7 @@ export function SettingsPage() {
                             updateUser(updated);
                             showToast('Couleur mise à jour', 'success');
                           }
-                        } catch (error) {
+                        } catch {
                           showToast('Erreur lors de la mise à jour', 'error');
                         }
                       }}

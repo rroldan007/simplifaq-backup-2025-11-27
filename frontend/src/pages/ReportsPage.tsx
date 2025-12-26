@@ -78,11 +78,6 @@ export function ReportsPage() {
     navigate('/reports/export?format=csv');
   };
 
-  const _handleExportPDF = () => {
-    // TODO: Implement PDF export
-    navigate('/reports/export?format=pdf');
-  };
-
   const handleBack = () => {
     navigate('/dashboard');
   };

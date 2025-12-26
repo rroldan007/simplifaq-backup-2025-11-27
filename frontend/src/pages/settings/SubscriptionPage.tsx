@@ -6,7 +6,6 @@ import { SubscriptionUsage } from '../../components/billing/SubscriptionUsage';
 import type { Plan } from '../../components/billing/PlanCard';
 import { getPublicPlans } from '../../services/plansApi';
 import { 
-  CreditCard, 
   Calendar, 
   AlertCircle, 
   CheckCircle,
@@ -16,7 +15,7 @@ import { cn } from '../../utils/cn';
 
 export function SubscriptionPage() {
   const location = useLocation();
-  const { subscription, usage, isLoading, error, changePlan, cancelSubscription, reactivateSubscription } = useSubscription();
+  const { subscription, isLoading, error, changePlan, cancelSubscription, reactivateSubscription } = useSubscription();
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);

@@ -99,15 +99,6 @@ const QuoteDetailPage: React.FC = () => {
     });
   };
 
-  const _handleViewEmailHistory = () => {
-    if (!quote || !id) return;
-    setEmailHistoryModal({
-      isOpen: true,
-      quoteId: id,
-      quoteNumber: quote.quoteNumber,
-    });
-  };
-
   const handleEmailSent = () => {
     setTimeout(() => {
       fetchQuote();

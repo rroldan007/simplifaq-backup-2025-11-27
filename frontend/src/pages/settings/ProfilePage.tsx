@@ -55,9 +55,10 @@ export function ProfilePage() {
         localStorage.removeItem('token');
         window.location.href = '/login';
       }, 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
       showToast(
-        err.response?.data?.error?.message || 'Erreur lors de la suppression du compte',
+        axiosErr.response?.data?.error?.message || 'Erreur lors de la suppression du compte',
         'error'
       );
       setDeleting(false);

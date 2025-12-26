@@ -908,16 +908,14 @@ export const api = {
     apiRequest<Invoice>(`/invoices/${id}`).then((inv) => {
       const rawItems = inv?.items?.slice(0, 2);
       console.log('[api.getInvoice] Raw response items:', JSON.stringify(rawItems, null, 2));
-      // @ts-expect-error - globalDiscount fields exist at runtime but not in type definition
-      const invAny = inv as any;
+      const invAny = inv as unknown as Record<string, unknown>;
       console.log('[api.getInvoice] Global discount fields:', {
         globalDiscountValue: invAny?.globalDiscountValue,
         globalDiscountType: invAny?.globalDiscountType,
         globalDiscountNote: invAny?.globalDiscountNote,
       });
       const normalized = api._normalizeInvoice(inv);
-      // @ts-expect-error - globalDiscount fields exist at runtime but not in type definition
-      const normAny = normalized as any;
+      const normAny = normalized as unknown as Record<string, unknown>;
       console.log('[api.getInvoice] Normalized items:', JSON.stringify(normalized?.items?.slice(0, 2), null, 2));
       console.log('[api.getInvoice] Normalized global discount:', {
         globalDiscountValue: normAny?.globalDiscountValue,
@@ -1144,10 +1142,12 @@ export const api = {
     const storedAccentRaw = opts?.accentColor || '';
 
     const storedAccent = normalizeHexColor(storedAccentRaw) || storedAccentRaw;
-    const defaultAccent = selectedTemplate === 'clean_creative' ? '#0B1F3A'
-      : selectedTemplate === 'bold_statement' ? '#000000'
-      : selectedTemplate === 'swiss_classic' ? '#DC143C'
-      : selectedTemplate === 'swiss_blue' ? '#0369A1'
+    // Legacy template names for backward compatibility
+    const templateStr = selectedTemplate as string | undefined;
+    const defaultAccent = templateStr === 'clean_creative' ? '#0B1F3A'
+      : templateStr === 'bold_statement' ? '#000000'
+      : templateStr === 'swiss_classic' ? '#DC143C'
+      : templateStr === 'swiss_blue' ? '#0369A1'
       : '';
     const accentColor = storedAccent || defaultAccent;
 
