@@ -121,9 +121,10 @@ export function useSubscription() {
       }
 
       return false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error changing plan:', err);
-      setError(err.response?.data?.error?.message || 'Erreur lors du changement de plan');
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(axiosErr.response?.data?.error?.message || 'Erreur lors du changement de plan');
       return false;
     } finally {
       setIsLoading(false);
@@ -154,9 +155,10 @@ export function useSubscription() {
       }
 
       return false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error cancelling subscription:', err);
-      setError(err.response?.data?.error?.message || 'Erreur lors de l\'annulation');
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(axiosErr.response?.data?.error?.message || 'Erreur lors de l\'annulation');
       return false;
     } finally {
       setIsLoading(false);
@@ -187,9 +189,10 @@ export function useSubscription() {
       }
 
       return false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error reactivating subscription:', err);
-      setError(err.response?.data?.error?.message || 'Erreur lors de la réactivation');
+      const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(axiosErr.response?.data?.error?.message || 'Erreur lors de la réactivation');
       return false;
     } finally {
       setIsLoading(false);

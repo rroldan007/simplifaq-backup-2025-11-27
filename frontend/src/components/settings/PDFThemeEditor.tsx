@@ -1856,7 +1856,7 @@ export const PDFThemeEditor: React.FC<PDFThemeEditorProps> = ({ user, onUpdate, 
                     JSON.parse(editableCode);
                     navigator.clipboard.writeText(editableCode);
                     onShowToast('✅ Code copié dans le presse-papier!', 'success');
-                  } catch (e) {
+                  } catch {
                     onShowToast('❌ JSON invalide!', 'error');
                   }
                 }}

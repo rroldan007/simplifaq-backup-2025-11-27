@@ -7,14 +7,12 @@ import {
   AlertTriangle, 
   ArrowRight, 
   Plus,
-  Send,
   RefreshCw,
   TrendingUp,
   Calendar,
   DollarSign,
   Mail,
-  CheckCircle,
-  XCircle
+  CheckCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -77,40 +75,40 @@ export function BillingHubPage() {
       
       // Fetch invoices (includes quotes with isQuote=true)
       const invoicesRes = await api.getInvoices({ limit: 100 });
-      const allData = (invoicesRes.invoices || []) as any[];
+      const allData = (invoicesRes.invoices || []) as Invoice[];
       
       // Separate invoices and quotes
-      const allInvoices = allData.filter((inv: any) => !inv.isQuote);
-      const allQuotes = allData.filter((inv: any) => inv.isQuote);
+      const allInvoices = allData.filter((inv: Invoice) => !inv.isQuote);
+      const allQuotes = allData.filter((inv: Invoice) => inv.isQuote);
       
       const now = new Date();
       const oneWeekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
       // Filter overdue invoices
-      const overdue = allInvoices.filter((inv: any) => 
+      const overdue = allInvoices.filter((inv: Invoice) => 
         inv.status?.toUpperCase() === 'OVERDUE' || 
         (inv.status?.toUpperCase() === 'SENT' && new Date(inv.dueDate) < now)
       );
       
       // Filter invoices due within a week
-      const dueSoon = allInvoices.filter((inv: any) => {
+      const dueSoon = allInvoices.filter((inv: Invoice) => {
         if (inv.status?.toUpperCase() !== 'SENT') return false;
         const dueDate = new Date(inv.dueDate);
         return dueDate >= now && dueDate <= oneWeekLater;
       });
       
       // Filter pending quotes (SENT or DRAFT status)
-      const pendingQ = allQuotes.filter((q: any) => 
+      const pendingQ = allQuotes.filter((q: Invoice) => 
         q.status?.toUpperCase() === 'SENT' || q.status?.toUpperCase() === 'DRAFT'
       );
       
       // Calculate paid this month
-      const paidThisMonth = allInvoices.filter((inv: any) => {
+      const paidThisMonth = allInvoices.filter((inv: Invoice) => {
         if (inv.status?.toUpperCase() !== 'PAID') return false;
         const issueDate = new Date(inv.issueDate);
         return issueDate >= startOfMonth;
-      }).reduce((sum: number, inv: any) => sum + (inv.total || 0), 0);
+      }).reduce((sum: number, inv: Invoice) => sum + (inv.total || 0), 0);
       
       setOverdueInvoices(overdue.slice(0, 5));
       setDueSoonInvoices(dueSoon.slice(0, 5));
@@ -118,12 +116,12 @@ export function BillingHubPage() {
       
       setStats({
         overdueCount: overdue.length,
-        overdueAmount: overdue.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0),
-        pendingCount: allInvoices.filter((inv: any) => inv.status?.toUpperCase() === 'SENT').length,
-        pendingAmount: allInvoices.filter((inv: any) => inv.status?.toUpperCase() === 'SENT')
-          .reduce((sum: number, inv: any) => sum + (inv.total || 0), 0),
+        overdueAmount: overdue.reduce((sum: number, inv: Invoice) => sum + (inv.total || 0), 0),
+        pendingCount: allInvoices.filter((inv: Invoice) => inv.status?.toUpperCase() === 'SENT').length,
+        pendingAmount: allInvoices.filter((inv: Invoice) => inv.status?.toUpperCase() === 'SENT')
+          .reduce((sum: number, inv: Invoice) => sum + (inv.total || 0), 0),
         quotesToConvert: pendingQ.length,
-        quotesAmount: pendingQ.reduce((sum: number, q: any) => sum + (q.total || 0), 0),
+        quotesAmount: pendingQ.reduce((sum: number, q: Invoice) => sum + (q.total || 0), 0),
         paidThisMonth,
         dueThisWeek: dueSoon.length
       });
