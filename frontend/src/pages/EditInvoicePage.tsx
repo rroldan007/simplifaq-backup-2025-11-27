@@ -17,6 +17,13 @@ interface InvoiceItemLite {
   order?: number;
   productId?: string;
   unit?: string;
+  // Line discount fields
+  lineDiscountValue?: number;
+  lineDiscountType?: 'PERCENT' | 'AMOUNT';
+  lineDiscountSource?: 'NONE' | 'MANUAL' | 'FROM_PRODUCT';
+  subtotalBeforeDiscount?: number;
+  discountAmount?: number;
+  subtotalAfterDiscount?: number;
 }
 
 interface InvoiceLite {
@@ -31,6 +38,10 @@ interface InvoiceLite {
   notes?: string;
   terms?: string;
   status?: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  // Global discount fields
+  globalDiscountValue?: number;
+  globalDiscountType?: 'PERCENT' | 'AMOUNT';
+  globalDiscountNote?: string;
 }
 
 const EditInvoicePage: React.FC = () => {
@@ -230,12 +241,12 @@ const EditInvoicePage: React.FC = () => {
       productId: it.productId,
       unit: it.unit,
       // Line discount fields
-      lineDiscountValue: (it as any).lineDiscountValue,
-      lineDiscountType: (it as any).lineDiscountType,
-      lineDiscountSource: (it as any).lineDiscountSource || 'NONE',
-      subtotalBeforeDiscount: (it as any).subtotalBeforeDiscount,
-      discountAmount: (it as any).discountAmount,
-      subtotalAfterDiscount: (it as any).subtotalAfterDiscount,
+      lineDiscountValue: it.lineDiscountValue,
+      lineDiscountType: it.lineDiscountType,
+      lineDiscountSource: it.lineDiscountSource || 'NONE',
+      subtotalBeforeDiscount: it.subtotalBeforeDiscount,
+      discountAmount: it.discountAmount,
+      subtotalAfterDiscount: it.subtotalAfterDiscount,
     })),
     notes: invoice.notes,
     terms: invoice.terms,
@@ -246,9 +257,9 @@ const EditInvoicePage: React.FC = () => {
     prochaineDateRecurrence: formatDateForInput((invoice as unknown as { prochaineDateRecurrence?: string }).prochaineDateRecurrence),
     dateFinRecurrence: formatDateForInput((invoice as unknown as { dateFinRecurrence?: string }).dateFinRecurrence),
     // Global discount fields
-    globalDiscountValue: (invoice as any).globalDiscountValue,
-    globalDiscountType: (invoice as any).globalDiscountType,
-    globalDiscountNote: (invoice as any).globalDiscountNote,
+    globalDiscountValue: invoice.globalDiscountValue,
+    globalDiscountType: invoice.globalDiscountType,
+    globalDiscountNote: invoice.globalDiscountNote,
   };
 
   return (
