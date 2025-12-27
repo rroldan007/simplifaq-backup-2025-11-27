@@ -73,7 +73,7 @@ interface OllamaChatResponse {
 const PIERRE_CONFIG = {
   // Remote Ollama for LLM inference
   remoteOllamaUrl: process.env.PIERRE_OLLAMA_URL || 'http://ia.simplifaq.cloud:11434',
-  remoteOllamaModel: process.env.PIERRE_OLLAMA_MODEL || 'llama3.2:3b',
+  remoteOllamaModel: process.env.PIERRE_OLLAMA_MODEL || 'mistral:7b',
   
   // Local API base URL for tool execution
   localApiUrl: process.env.PIERRE_LOCAL_API_URL || 'http://localhost:3001/api',
