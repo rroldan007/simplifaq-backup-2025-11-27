@@ -80,11 +80,12 @@ export const getClients = async (req: Request, res: Response): Promise<void> => 
 
     // Add search functionality
     if (search && typeof search === 'string') {
+      // SQLite doesn't support 'insensitive' mode
       whereClause.OR = [
-        { companyName: { contains: search, mode: 'insensitive' } },
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { companyName: { contains: search } },
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { email: { contains: search } },
       ];
     }
 

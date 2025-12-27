@@ -53,11 +53,12 @@ function normalizeSkippedSteps(skippedSteps: any): string[] {
 
 /**
  * Helper function to serialize skippedSteps for DB
- * Returns string[] for PostgreSQL (native array support)
+ * Returns JSON string for SQLite or string[] for PostgreSQL
  */
-function serializeSkippedSteps(skippedSteps: string[]): string[] {
-  // PostgreSQL supports native arrays, return as-is
-  return skippedSteps;
+function serializeSkippedSteps(skippedSteps: string[]): string {
+  // SQLite uses JSON string, PostgreSQL would use native arrays
+  // For dev mode (SQLite), we serialize to JSON string
+  return JSON.stringify(skippedSteps);
 }
 
 /**
