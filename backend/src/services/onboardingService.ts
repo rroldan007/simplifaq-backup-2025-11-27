@@ -55,10 +55,17 @@ function normalizeSkippedSteps(skippedSteps: any): string[] {
  * Helper function to serialize skippedSteps for DB
  * Returns JSON string for SQLite or string[] for PostgreSQL
  */
-function serializeSkippedSteps(skippedSteps: string[]): string {
-  // SQLite uses JSON string, PostgreSQL would use native arrays
-  // For dev mode (SQLite), we serialize to JSON string
-  return JSON.stringify(skippedSteps);
+function serializeSkippedSteps(skippedSteps: string[]): string | string[] {
+  // Check if we're using SQLite (dev) or PostgreSQL (prod)
+  const isSQLite = process.env.DATABASE_URL?.includes('sqlite') || 
+                   process.env.DATABASE_URL?.includes('file:');
+  
+  if (isSQLite) {
+    // SQLite uses JSON string
+    return JSON.stringify(skippedSteps);
+  }
+  // PostgreSQL uses native arrays
+  return skippedSteps;
 }
 
 /**
@@ -164,7 +171,7 @@ export async function skipOnboardingStep(
   const updated = await prisma.userOnboarding.update({
     where: { userId },
     data: {
-      skippedSteps: serializeSkippedSteps(skippedSteps),
+      skippedSteps: serializeSkippedSteps(skippedSteps) as any, // Type depends on DB (SQLite: string, PostgreSQL: string[])
       currentStep: nextStep
     }
   });
