@@ -478,11 +478,51 @@ export class PierreAgentService {
       }
       const token = this.userTokens.get(conversationId);
 
+      // Handle ask_confirmation with pendingAction (create_client or create_product)
+      let actionToExecute = { ...actionData, requiresConfirmation: false };
+      
+      if (actionData.action === 'ask_confirmation' && actionData.payload?.pendingAction) {
+        const pendingAction = actionData.payload.pendingAction as string;
+        const name = actionData.payload.name as string || '';
+        
+        console.log(`[PierreAgent] Executing pending action: ${pendingAction} for "${name}"`);
+        
+        if (pendingAction === 'create_client') {
+          actionToExecute = {
+            action: 'create_client',
+            endpoint: '/api/clients',
+            method: 'POST',
+            payload: {
+              companyName: name,
+              firstName: '',
+              lastName: '',
+              email: `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+              clientType: 'ENTREPRISE'
+            },
+            message: '',
+            requiresConfirmation: false
+          };
+        } else if (pendingAction === 'create_product') {
+          actionToExecute = {
+            action: 'create_product',
+            endpoint: '/api/products',
+            method: 'POST',
+            payload: {
+              name: name,
+              description: `Producto: ${name}`,
+              unitPrice: 0,
+              tvaRate: 8.1,
+              unit: 'unité',
+              isActive: true
+            },
+            message: '',
+            requiresConfirmation: false
+          };
+        }
+      }
+
       // Execute the confirmed action with user token
-      const result = await this.executeAction(userId, {
-        ...actionData,
-        requiresConfirmation: false
-      }, token);
+      const result = await this.executeAction(userId, actionToExecute, token);
 
       return {
         success: true,
