@@ -71,15 +71,15 @@ interface OllamaChatResponse {
 // ============================================================================
 
 const PIERRE_CONFIG = {
-  // Remote Ollama for LLM inference
+  // Remote Ollama for LLM inference (mistral:7b) phi3.5:latest llama3.2:3b
   remoteOllamaUrl: process.env.PIERRE_OLLAMA_URL || 'http://ia.simplifaq.cloud:11434',
-  remoteOllamaModel: process.env.PIERRE_OLLAMA_MODEL || 'mistral:7b',
+  remoteOllamaModel: process.env.PIERRE_OLLAMA_MODEL || 'llama3.2:3b',
   
   // Local API base URL for tool execution
   localApiUrl: process.env.PIERRE_LOCAL_API_URL || 'http://localhost:3001/api',
   
-  // Timeouts
-  ollamaTimeout: Number(process.env.PIERRE_OLLAMA_TIMEOUT || 60000),
+  // Timeouts (120s for cold model loading)
+  ollamaTimeout: Number(process.env.PIERRE_OLLAMA_TIMEOUT || 120000),
   apiTimeout: Number(process.env.PIERRE_API_TIMEOUT || 10000),
 };
 
@@ -494,10 +494,16 @@ export class PierreAgentService {
             method: 'POST',
             payload: {
               companyName: name,
-              firstName: '',
-              lastName: '',
-              email: `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-              clientType: 'ENTREPRISE'
+              email: '',
+              address: {
+                street: 'À compléter',
+                city: 'À compléter',
+                postalCode: '1000',
+                country: 'Switzerland'
+              },
+              language: 'fr',
+              paymentTerms: 30,
+              isActive: true
             },
             message: '',
             requiresConfirmation: false
@@ -510,9 +516,9 @@ export class PierreAgentService {
             payload: {
               name: name,
               description: `Producto: ${name}`,
-              unitPrice: 0,
+              unitPrice: 1, // Must be > 0, user can edit later
               tvaRate: 8.1,
-              unit: 'unité',
+              unit: 'pièce',
               isActive: true
             },
             message: '',
