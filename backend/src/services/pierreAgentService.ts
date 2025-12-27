@@ -73,7 +73,7 @@ interface OllamaChatResponse {
 const PIERRE_CONFIG = {
   // Remote Ollama for LLM inference (mistral:7b) phi3.5:latest llama3.2:3b
   remoteOllamaUrl: process.env.PIERRE_OLLAMA_URL || 'http://ia.simplifaq.cloud:11434',
-  remoteOllamaModel: process.env.PIERRE_OLLAMA_MODEL || 'llama3.2:3b',
+  remoteOllamaModel: process.env.PIERRE_OLLAMA_MODEL || 'phi3.5:latest',
   
   // Local API base URL for tool execution
   localApiUrl: process.env.PIERRE_LOCAL_API_URL || 'http://localhost:3001/api',
@@ -549,6 +549,17 @@ export class PierreAgentService {
   }
 
   /**
+   * Normalize text for fuzzy matching (remove accents, lowercase)
+   */
+  private normalizeText(text: string): string {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics/accents
+      .trim();
+  }
+
+  /**
    * Handle prepare_invoice action - search client and products, then create invoice
    */
   private async handlePrepareInvoice(userId: string, action: PierreAction, userToken?: string): Promise<PierreAction> {
@@ -572,43 +583,61 @@ export class PierreAgentService {
 
       console.log(`[PierreAgent] Preparing invoice for client: ${clientName}, items:`, items);
 
-      // 1. Search for client
-      const clientResponse = await axios.get(`${baseUrl}/api/clients?search=${encodeURIComponent(clientName)}`, {
+      // 1. Get all clients and find matching one (fuzzy search with accent normalization)
+      const clientResponse = await axios.get(`${baseUrl}/api/clients`, {
         headers, timeout: PIERRE_CONFIG.apiTimeout, validateStatus: () => true
       });
 
-      const clients = clientResponse.data?.data?.clients || [];
-      if (clients.length === 0) {
+      const allClients = clientResponse.data?.data?.clients || [];
+      const normalizedClientName = this.normalizeText(clientName);
+      
+      // Find client by fuzzy matching
+      const client = allClients.find((c: Record<string, unknown>) => {
+        const companyMatch = c.companyName && this.normalizeText(String(c.companyName)).includes(normalizedClientName);
+        const firstNameMatch = c.firstName && this.normalizeText(String(c.firstName)).includes(normalizedClientName);
+        const lastNameMatch = c.lastName && this.normalizeText(String(c.lastName)).includes(normalizedClientName);
+        const fullNameMatch = this.normalizeText(`${c.firstName || ''} ${c.lastName || ''}`).includes(normalizedClientName);
+        return companyMatch || firstNameMatch || lastNameMatch || fullNameMatch;
+      });
+
+      if (!client) {
         return { 
           action: 'respond', 
           message: `❌ Cliente "${clientName}" no encontrado. Primero debes crear el cliente.` 
         };
       }
-      const client = clients[0];
       console.log(`[PierreAgent] Found client: ${client.firstName} ${client.lastName} (${client.id})`);
 
-      // 2. Search for each product and build invoice items
+      // 2. Get all products and find matching ones (fuzzy search with accent normalization)
+      const productResponse = await axios.get(`${baseUrl}/api/products`, {
+        headers, timeout: PIERRE_CONFIG.apiTimeout, validateStatus: () => true
+      });
+      const allProducts = productResponse.data?.data?.products || [];
+
       const invoiceItems: Array<{ productId: string; quantity: number; unitPrice: number; tvaRate: number; description: string }> = [];
       const notFoundProducts: string[] = [];
 
       for (const item of items) {
-        const productResponse = await axios.get(`${baseUrl}/api/products?search=${encodeURIComponent(item.productName)}`, {
-          headers, timeout: PIERRE_CONFIG.apiTimeout, validateStatus: () => true
+        const normalizedProductName = this.normalizeText(item.productName);
+        
+        // Find product by fuzzy matching
+        const product = allProducts.find((p: Record<string, unknown>) => {
+          const nameMatch = p.name && this.normalizeText(String(p.name)).includes(normalizedProductName);
+          const descMatch = p.description && this.normalizeText(String(p.description)).includes(normalizedProductName);
+          return nameMatch || descMatch;
         });
 
-        const products = productResponse.data?.data?.products || [];
-        if (products.length === 0) {
+        if (!product) {
           notFoundProducts.push(item.productName);
           continue;
         }
 
-        const product = products[0];
         invoiceItems.push({
-          productId: product.id,
+          productId: product.id as string,
           quantity: item.quantity,
-          unitPrice: product.unitPrice,
-          tvaRate: product.tvaRate,
-          description: product.name
+          unitPrice: product.unitPrice as number,
+          tvaRate: product.tvaRate as number,
+          description: product.name as string
         });
         console.log(`[PierreAgent] Found product: ${product.name} - ${product.unitPrice} CHF`);
       }
