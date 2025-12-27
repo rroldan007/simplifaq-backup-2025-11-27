@@ -68,6 +68,7 @@ backend/uploads/
 *.md
 !README.md
 !CHANGELOG.md
+!PIERRE_SETUP.md
 
 # Backups
 simplifaq-backup-*/

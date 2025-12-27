@@ -9,7 +9,8 @@ import expensesRoutes from './expenses';
 import emailRoutes from './email';
 import csvImportRoutes from './csvImport';
 import entitlementsRoutes from './entitlements';
-import asistenteRoutes from './asistente';
+import asistenteRoutes from './asistente'; // OBSOLETE: Being replaced by Pierre
+import pierreRoutes from './pierre'; // NEW: Pierre AI Assistant
 import settingsRoutes from './settings';
 import uploadRoutes from './upload';
 import auditRoutes from './audit';
@@ -74,8 +75,11 @@ router.use('/expenses', expensesRoutes);
 // Email routes
 router.use('/email', emailRoutes);
 
-// Asistente ADM routes
+// Asistente ADM routes (OBSOLETE - Use Pierre instead)
 router.use('/asistente', asistenteRoutes);
+
+// Pierre AI Assistant routes (NEW)
+router.use('/pierre', pierreRoutes);
 
 // CSV Import routes
 router.use('/csv-import', csvImportRoutes);

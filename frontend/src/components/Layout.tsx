@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useUserDisplay } from '../hooks/useAuth';
 import { Header } from './Header';
 import { SessionWarning } from './SessionWarning';
-import { AIAssistant } from './ai/AIAssistant';
+import { PierreAssistant } from './ai/PierreAssistant';
 import { useFeature } from '../hooks/useFeatureFlags';
 import { cn } from '../utils/cn';
 
@@ -84,7 +84,7 @@ export function Layout({ children }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const aiAssistantEnabled = useFeature('aiAssistant');
+  const pierreAssistantEnabled = useFeature('aiAssistant');
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -407,7 +407,7 @@ export function Layout({ children }: LayoutProps) {
       <SessionWarning />
 
       {/* AI Assistant - Only show if feature is enabled */}
-      {aiAssistantEnabled && <AIAssistant />}
+      {pierreAssistantEnabled && <PierreAssistant />}
     </div>
   );
 }

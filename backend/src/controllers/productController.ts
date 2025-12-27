@@ -94,9 +94,10 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     const where: any = { userId };
 
     if (search) {
+      // SQLite doesn't support 'insensitive' mode, use simple contains
       where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
+        { name: { contains: search as string } },
+        { description: { contains: search as string } },
       ];
     }
 

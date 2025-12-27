@@ -1,3 +1,11 @@
+/**
+ * @deprecated OBSOLETE - Use PierreAssistant.tsx instead
+ * This component uses the old Asistente ADM system which is being replaced
+ * by Pierre AI Assistant with local Ollama integration.
+ * 
+ * Migration: Replace <AIAssistant /> with <PierreAssistant /> in your components
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

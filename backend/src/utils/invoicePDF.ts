@@ -1708,8 +1708,17 @@ function generateQRBillHTML(qrBillData: SwissQRBillData, options: ResolvedPDFOpt
       additionalInformation: qrBillData.billInformation || undefined
     };
 
-    // Generate SVG using official library
-    const qrBill = new SwissQRBill(qrBillInput);
+    // Generate SVG using official library with correct language
+    // Map language code to swissqrbill language format
+    const qrLanguage = language === 'de' ? 'DE' : 
+                       language === 'fr' ? 'FR' : 
+                       language === 'it' ? 'IT' : 
+                       language === 'en' ? 'EN' : 'FR'; // Default to French
+    
+    // @ts-ignore - swissqrbill types are incomplete, but constructor accepts options with language
+    const qrBill = new SwissQRBill(qrBillInput, { language: qrLanguage });
+    
+    console.log(`[generateQRBillHTML] Using language: ${qrLanguage} (from ${language})`);
     
     // Convert to SVG string with appropriate options
     const svg = qrBill.toString();
